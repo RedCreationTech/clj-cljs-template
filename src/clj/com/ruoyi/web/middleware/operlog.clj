@@ -1,10 +1,12 @@
 (ns com.ruoyi.web.middleware.operlog
-  "操作日志中间件：自动记录所有 API 请求到 sys_oper_log 表。"
+  "操作日志中间件：自动记录所有 API 请求到 sys_oper_log 表。
+  本中间件挂在路由器外层(wrap-base),看不到路由级 auth 中间件写入的 :identity,
+  因此操作人从 Authorization 头自行解析(无效/缺失则记为 anonymous)。"
   (:require
    [clojure.tools.logging :as log]
    [clojure.string :as str]
    [cheshire.core :as json]
-   [ring.util.response :as response]))
+   [com.ruoyi.infra.security :as security]))
 
 (def ^:private skip-paths
   "不记录日志的路径"
@@ -37,7 +39,8 @@
       (when (and (str/starts-with? uri "/api/")
                  (not (skip-paths uri))
                  (not (contains? get-methods (:request-method request))))
-        (let [identity (:identity request)
+        (let [identity (or (:identity request)
+                           (some-> (security/extract-token request) security/parse-token))
               log-entry {:title       (str (name (:request-method request)) " " uri)
                          :business_type 0
                          :method      ""

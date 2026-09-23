@@ -48,6 +48,7 @@ System Context(L1)→ Container(L2)→ Component(L3)→ Code(L4),再补充动态
 | 扩展指南 | 新增业务模块、从模板派生新项目 | §10 |
 | 质量保障 | 测试分层、规模约束、覆盖率 | §11 |
 | ADR | 为什么这样设计、曾经放弃过什么 | §12 |
+| 设计债 | 已知与设计不一致之处、建议的接入方式 | §13 |
 
 * 2. System Context(L1)
 
@@ -138,7 +139,7 @@ C4Component
     Component(ids, "infra.datasource", "javax.sql.DataSource 代理", "运行时热切换底层 HikariCP 连接池")
     Component(isec, "infra.security", "buddy", "bcrypt 哈希/校验;JWT 签发/解析;从请求提取 token")
     Component(ionl, "infra.online", "内存 + sys_online 表", "在线用户注册/心跳/注销/强退;token 黑名单;过期清理线程")
-    Component(idp, "infra.data-perm", "SQL 片段生成", "按角色 data_scope(全部/自定义/本部门/本部门及以下)生成过滤条件")
+    Component(idp, "infra.data-perm", "SQL 片段生成", "按角色 data_scope(全部/自定义/本部门/本部门及以下/仅本人)生成过滤 SQL 片段与参数")
     Component(isch, "infra.scheduler + task + cron", "Quartz", "sys_job 表驱动:加载/调度/暂停/恢复/立即执行,写 sys_job_log")
     Component(icache, "infra.cache", "atom", "内存缓存(缓存监控页的数据源)")
     Component(itrace, "integrant.trace + state", "Integrant 包装", "运行时给函数型组件加调用追踪,供 Integrant 监控页展示")
@@ -167,7 +168,7 @@ C4Component
   Rel(mwauth, ionl, "blacklisted? / heartbeat!")
   Rel(dsys, conman, "query-fn :name params")
   Rel(dsys, idb, "insert-and-get-id! / paginate-query")
-  Rel(dsys, idp, "data-perm-filter")
+  Rel(ctrl, idp, "data-perm-filter(仅计算,未拼入 SQL,§13)")
   Rel(conman, db, "JDBC")
   Rel(migratus, db, "DDL")
   Rel(idb, ids, "swap-db!")
@@ -177,15 +178,15 @@ C4Component
 
 ** 4.1 请求管线:中间件顺序
 
-自外向内(请求方向):
+~wrap-base~ 用 ~->~ 把中间件层层包裹,*最后包上的最先看到请求*。按请求进入的顺序(自外向内):
 
 #+begin_src mermaid :file backend-pipeline.png :exports results
 flowchart LR
   U[Undertow] --> H["handler/ring<br/>(reitit ring-handler)"]
-  H --> B["wrap-base<br/>env middleware(env.clj :middleware,dev 下默认为空)<br/>ring-defaults(session/安全头)<br/>wrap-cors + preflight<br/>operlog(写 sys_oper_log)<br/>wrap-query-fn<br/>wrap-json-body"]
+  H --> B["wrap-base(自外向内)<br/>1 wrap-json-body(响应 map→JSON)<br/>2 wrap-query-fn(注入 :components)<br/>3 operlog(计时;响应后写 sys_oper_log)<br/>4 handle-preflight(OPTIONS 直接 200)<br/>5 wrap-cors(响应加 CORS 头)<br/>6 ring-defaults(params/cookies/session/安全头)<br/>7 env middleware(env.clj,dev 下为空)"]
   B --> R["router/core<br/>reitit 路由匹配"]
-  R --> RM["route-data middleware<br/>parameters → muuntaja 协商<br/>coercion(Malli)<br/>exception/wrap-exception"]
-  RM --> AM["auth-middleware<br/>wrap-jwt-auth → require-auth → require-perms"]
+  R --> RM["route-data middleware<br/>parameters → muuntaja 协商/响应格式化<br/>coerce-exceptions → 请求格式化<br/>coerce-response / coerce-request(Malli)<br/>exception/wrap-exception"]
+  RM --> AM["路由组 middleware<br/>auth-middleware {:required? true}<br/>(wrap-jwt-auth → require-auth)"]
   AM --> C[controller]
   C --> D[domain service]
   D --> Q["query-fn (HugSQL)"]
@@ -195,9 +196,18 @@ flowchart LR
 #+end_src
 
 要点:
-- ~operlog~ 只记录 ~/api/*~ 下的非 GET 请求,并跳过登录/验证码等噪音路径;写日志失败只打 warn,不影响业务响应。
-- 认证不是全局的:每个路由组自己声明 ~(auth-mw/auth-middleware {:required? true :perms "system:user:list"})~,所以 ~/api/health~、~/api/auth/login~ 可匿名访问。
+- ~operlog~ 在路由器*外层*,看不到路由级 ~wrap-jwt-auth~ 写入的 ~:identity~,所以它自己从 ~Authorization~ 头解析 JWT 取操作人(缺失/无效记为 ~anonymous~);只记录 ~/api/*~ 下的非 GET 请求,跳过 ~/api/auth/login~ ~/api/health~;写日志失败只打 warn,不影响业务响应。
+- 认证不是全局的:~/system~ 与 ~/tool~ 两个路由组声明 ~(auth-mw/auth-middleware {:required? true})~;~/api/health~、~/api/auth/login~、验证码、通用上传下载可匿名访问。~auth-middleware~ 还支持 ~:perms~(~require-perms~),但模板里目前*没有任何路由使用*,见 §13 设计债。
 - dev 环境下 ~router/core~ 返回一个每次请求都重新构建路由表的函数,配合 ~(user/rroutes)~ 实现路由热重载;prod 下路由表只构建一次。
+- ~ring-defaults~ 的 cookie session 已配置但业务代码不使用 session(API 全靠 Bearer);CSRF 关闭。
+
+可执行:验证中间件包裹顺序与"哪些路由组要求登录"
+
+#+begin_src sh :exports both
+sed -n '/defn wrap-base/,/wrap-json-body/p' src/clj/com/ruoyi/web/middleware/core.clj | grep -E "^\s+(\(|wrap|handle|operlog)" 
+echo "--- 声明了 auth-middleware 的路由组:"
+grep -rn "auth-mw/auth-middleware" src/clj/com/ruoyi/web/routes/*.clj
+#+end_src
 
 ** 4.2 可执行:路由清单(从代码里生成,不是手写)
 
@@ -260,7 +270,7 @@ C4Component
 
 ** 5.1 关键设计点
 
-- *菜单不写死*:侧边栏由 ~/api/auth/getInfo~ 返回的菜单树(按角色过滤)经 ~layout/menu-build~ 转成 antd items;前端只维护 ~page->menu-key~、面包屑、图标这类"路由关键词 → 展示"映射(~layout/menu_data.cljs~)。
+- *菜单不写死*:侧边栏由 ~/api/auth/getInfo~ 返回的菜单树(按角色过滤)经 ~layout/menu-build~ 转成 antd items;前端只维护 ~page->menu-key~、面包屑、图标这类"路由关键词 → 展示"映射(~layout/menu_data.cljs~)。~getInfo~ 同时返回 ~permissions~,目前前端只存不用(按钮显隐未接入,§13)。
 - *多 Tab*:~:navigate~ 事件同时更新 ~:page~、激活/新增 Tab(~events/common~ 的 ~activate-page-tab~)、按页面预取数据(~events/core~ 里的 ~fetch~ 表)。
 - *局部状态用 Hooks,全局状态用 re-frame*,禁止 ~reagent/atom~(AGENTS.md 有完整的 antd 6 适配清单)。
 - *主题与布局设置*持久化在 localStorage(键前缀 ~rouyi-~ / ~ruoyi_~,改名脚本会一并替换)。
@@ -359,6 +369,91 @@ flowchart LR
 grep -rnE "\[com\.ruoyi\.web" src/clj/com/ruoyi/infra src/clj/com/ruoyi/domain && echo "VIOLATION" || echo "OK: infra/domain 不依赖 web 层"
 #+end_src
 
+** 6.5 数据模型(由迁移文件推导)
+
+18 张 ~sys_*~ 表,全部由 ~resources/migrations*/2024061100xx~ 与 ~202406130005~ 建立;通用审计列 ~create_by/create_time/update_by/update_time/remark~,逻辑删除用 ~del_flag~,状态用 ~status~('0' 正常 / '1' 停用)。
+
+#+begin_src mermaid :file data-model.png :exports results
+erDiagram
+  sys_dept ||--o{ sys_user : "dept_id"
+  sys_dept ||--o{ sys_dept : "parent_id / ancestors"
+  sys_user ||--o{ sys_user_role : "user_id"
+  sys_role ||--o{ sys_user_role : "role_id"
+  sys_role ||--o{ sys_role_menu : "role_id"
+  sys_menu ||--o{ sys_role_menu : "menu_id"
+  sys_menu ||--o{ sys_menu : "parent_id"
+  sys_user ||--o{ sys_user_post : "user_id"
+  sys_post ||--o{ sys_user_post : "post_id"
+  sys_dict_type ||--o{ sys_dict_data : "dict_type"
+  sys_job ||--o{ sys_job_log : "job_name+job_group"
+  sys_user ||--o{ sys_online : "user_name(逻辑关联)"
+  sys_user {
+    int user_id PK
+    int dept_id FK
+    string user_name
+    string password "bcrypt"
+    string status
+  }
+  sys_role {
+    int role_id PK
+    string role_key "admin 不做数据权限过滤"
+    string data_scope "1..5"
+  }
+  sys_menu {
+    int menu_id PK
+    int parent_id
+    string menu_type "M 目录 / C 菜单 / F 按钮"
+    string path
+    string component
+    string perms "如 system:user:list"
+  }
+  sys_job {
+    int job_id PK
+    string invoke_target "ns/fn(args)"
+    string cron_expression
+    string status
+  }
+  sys_online {
+    string token_id PK
+    string user_name
+    int last_access_time
+  }
+  sys_config { int config_id PK }
+  sys_notice { int notice_id PK }
+  sys_oper_log { int oper_id PK }
+  sys_login_log { int info_id PK }
+  sys_form_template { int id PK }
+#+end_src
+
+可执行:表清单与两库一致性
+
+#+begin_src sh :exports both
+echo "SQLite:"; grep -h "CREATE TABLE" resources/migrations-sqlite/*.up.sql | sed -E 's/CREATE TABLE (IF NOT EXISTS )?//; s/ *\(.*//' | sort | tr '\n' ' '; echo
+echo "MySQL: "; grep -h "CREATE TABLE" resources/migrations/*.up.sql        | sed -E 's/CREATE TABLE (IF NOT EXISTS )?//; s/ *\(.*//' | sort | tr '\n' ' '; echo
+#+end_src
+
+** 6.6 API 约定(前后端契约)
+
+| 约定 | 内容 | 出处 |
+|------+------+------|
+| 响应信封 | 一律 ~{:code 200 :msg "操作成功" :data …}~;业务失败 ~{:code 500 :msg "…"}~(HTTP 仍 200);未登录 ~401 {:code 401}~;无权限 ~403 {:code 403}~;coercion 失败由 reitit 返回 400 | 各 controller 的 ~ok~ / ~fail~;~middleware.auth~ |
+| 列表响应 | 分页接口 ~:data {:total n :rows [...]}~;树/全量接口 ~:data [...]~。前端 ~:xxx/set-list~ 同时接受两种形状 | ~controllers/system/user.clj~ ~list-users~;~events/posts.cljs~ |
+| 分页参数 | 查询串 ~page~ / ~size~(不是 pageNum/pageSize);后端转成 ~:page-num~ / ~:page-size~ → SQL ~LIMIT :page_size OFFSET :offset~ | AGENTS.md 第 11 条;~infra.db/paginate-query~ |
+| 路径参数 | ~/:id~ 用 Malli ~PathId~ 校验为数字串,controller 再 ~parse-long~ | ~routes/system.clj~ |
+| 认证头 | ~Authorization: Bearer <jwt>~;JWT claims = ~{:user-id :user-name :roles(角色 id 列表) :exp}~,默认 24h | ~infra.security~;~api/transport.cljs~ |
+| 字段命名 | 数据库与 JSON 均 snake_case(~user_name~),Clojure 内部关键字保持 ~:user_name~,不做 camelCase 转换 | 全部 controller / events |
+| 时间 | 字符串 ~yyyy-MM-dd HH:mm:ss~(SQLite TEXT / MySQL TIMESTAMP 均按字符串读写) | 迁移文件 |
+| Swagger | 每个路由带 ~:summary~ / ~:description~ / ~:parameters~;~/api/swagger.json~ + ~/api~ UI | ~routes/api.clj~ |
+
+可执行:抽查响应信封(需后端已在 3000 运行)
+
+#+begin_src sh :exports code :eval never
+TOKEN=$(curl -s -X POST localhost:3000/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"admin123"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["token"])')
+curl -s "localhost:3000/api/system/user?page=1&size=1" -H "Authorization: Bearer $TOKEN" | head -c 120; echo
+curl -s  localhost:3000/api/system/user            # 期望 {"code":401,"msg":"未登录或令牌已过期"}
+#+end_src
+
 * 7. Dynamic Views(动态视图)
 
 ** 7.1 登录与 JWT
@@ -391,28 +486,30 @@ sequenceDiagram
   E->>B: app-db :auth/user + 菜单树 → 渲染主布局
 #+end_src
 
-** 7.2 一次受保护的写请求(含审计与数据权限)
+** 7.2 一次受保护的写请求(含审计)
+
+以「新增岗位」为例。数据权限过滤器(~infra.data-perm~)此处*不*出现——它目前只在用户/参数/字典列表的 controller 里被计算,尚未拼进 SQL(§13)。
 
 #+begin_src mermaid :file dyn-crud.png :exports results
 C4Dynamic
-  title Dynamic — PUT /api/system/user/:id
-  Component(spa, "pages/user + events/users", "re-frame", "dispatch [:users/update …]")
-  Component(mw, "wrap-base", "Ring", "operlog 计时;请求结束后写 sys_oper_log")
-  Component(auth, "auth-middleware", "Ring", "wrap-jwt-auth → require-auth → require-perms \"system:user:edit\"")
-  Component(ctrl, "controllers/system/user", "Clojure", "update")
-  Component(dp, "infra.data-perm", "Clojure", "按当前角色 data_scope 生成部门过滤")
-  Component(svc, "domain/system/user", "Integrant", "update-user!")
-  ComponentDb(db, "DB", "sys_user / sys_user_role / sys_oper_log", "")
-  Rel(spa, mw, "1. PUT /api/system/user/1 (Bearer)")
-  Rel(mw, auth, "2. 路由匹配后进入路由级中间件")
-  Rel(auth, ctrl, "3. :identity 含 user-id/roles/perms")
-  Rel(ctrl, dp, "4. data-perm-filter(identity)")
-  Rel(ctrl, svc, "5. update-user! ctx params")
-  Rel(svc, db, "6. UPDATE + 重写用户角色关联")
-  Rel(svc, ctrl, "7. 返回结果")
-  Rel(ctrl, mw, "8. {:code 200 :msg \"操作成功\"}")
-  Rel(mw, db, "9. INSERT sys_oper_log(uri, 参数, 状态, 耗时)")
-  Rel(mw, spa, "10. JSON 响应 → :users/fetch 刷新列表")
+  title Dynamic — POST /api/system/post
+  Component(spa, "pages/post + events/posts", "re-frame", "dispatch [:posts/create form]")
+  Component(base, "wrap-base", "Ring", "json-body / query-fn 注入 / operlog 计时 / CORS / ring-defaults")
+  Component(rd, "route-data middleware", "reitit", "muuntaja 解析 JSON body → :body-params;Malli 校验")
+  Component(auth, "auth-middleware", "Ring", "wrap-jwt-auth → require-auth(401)")
+  Component(ctrl, "controllers/system/post", "Clojure", "create-post:取 :body-params + 当前用户名")
+  Component(svc, "domain/system/post", "Integrant :app.system/post-service", "create-post!")
+  ComponentDb(db, "DB", "sys_post / sys_oper_log", "")
+  Rel(spa, base, "1. POST /api/system/post (Bearer, JSON)")
+  Rel(base, rd, "2. 路由匹配 → 路由级中间件")
+  Rel(rd, auth, "3. 参数已协商/校验")
+  Rel(auth, ctrl, "4. request 带 :identity {user-id user-name roles}")
+  Rel(ctrl, svc, "5. create-post! ctx params")
+  Rel(svc, db, "6. INSERT sys_post;insert-and-get-id!")
+  Rel(svc, ctrl, "7. 新 id")
+  Rel(ctrl, base, "8. {:code 200 :msg \"操作成功\" :data \"创建成功: 5\"}")
+  Rel(base, db, "9. operlog:解析 Bearer 取操作人 → INSERT sys_oper_log(uri/参数/状态/耗时)")
+  Rel(base, spa, "10. JSON 响应 → :posts/fetch 刷新列表 + antd message")
 #+end_src
 
 ** 7.3 前端导航(URL ↔ 页面 ↔ Tab)
@@ -508,13 +605,22 @@ docker build -t clojure-template .  # 多阶段:clojure:openjdk-17 构建 → zu
 * 9. 横切关注点
 
 ** 9.1 认证与授权
-- *身份*:登录成功签发 JWT(~infra.security/generate-token~,claims 含 user-id / user-name / roles),前端放 localStorage 并以 ~Authorization: Bearer~ 发送;服务端无会话状态。
+- *身份*:登录成功签发 JWT(~infra.security/generate-token~,claims 含 user-id / user-name / roles(角色 id)),前端放 localStorage 并以 ~Authorization: Bearer~ 发送;服务端无会话状态。
 - *登出/强退*:JWT 本身不可撤销,因此 ~infra.online~ 维护 token 黑名单 + ~sys_online~ 表;~wrap-jwt-auth~ 每次请求检查黑名单并更新心跳,过期会话由后台线程清理。
-- *功能权限*:路由声明 ~:perms~,~require-perms~ 用 ~getInfo~ 时计算出的权限集合(角色 → 菜单 ~perms~ 字段)做"任一命中"判断;前端按同一权限集合控制按钮显隐。
-- *数据权限*:角色 ~data_scope~(1 全部 / 2 自定义 / 3 本部门 / 4 本部门及以下 / 5 仅本人)→ ~infra.data-perm/data-perm-filter~ 生成部门过滤 SQL 片段,由需要的查询(用户列表等)拼接。
+- *功能权限(现状)*:后端只区分「匿名可访问」与「必须登录」两档(~/system~、~/tool~ 路由组 ~:required? true~)。~getInfo~ 会按角色 → 菜单 ~perms~ 算出权限集合返回给前端,前端据此*动态生成菜单*;但按钮级 ~perms~ 校验在前后端都还没有落地:~require-perms~ 已实现却无路由使用,且 JWT claims 里没有 perms(需要在 ~wrap-jwt-auth~ 里按角色查询或把 perms 放进 claims),前端也没有按 ~permissions~ 控制按钮显隐。这是模板刻意留出的扩展点,见 §13。
+- *数据权限(现状)*:角色 ~data_scope~(1 全部 / 2 自定义 / 3 本部门 / 4 本部门及以下 / 5 仅本人)→ ~infra.data-perm/data-perm-filter~ 生成 SQL 片段与参数,单测覆盖全部分支;用户/参数/字典列表的 controller 已调用它,但生成的 ~:sql~ 片段尚未拼进 HugSQL 查询,且它按 ~role-key~ 匹配 ~identity~ 里的角色 map,而 JWT 里只有角色 id——所以当前对所有用户都等价于「不过滤」。接入方式见 §13。
+
+可执行:证明"后端没有按钮级权限校验、数据权限未接入 SQL"
+
+#+begin_src sh :exports both
+echo "路由中的 :perms 声明数: $(grep -rn ':perms' src/clj/com/ruoyi/web/routes | wc -l)"
+echo "require-perms 被引用次数(除定义处): $(grep -rn 'require-perms' src/clj | grep -v 'middleware/auth.clj' | wc -l)"
+echo "SQL 中引用 data-perm 参数的行数: $(grep -rn 'data-perm' resources/sql | wc -l)"
+echo "前端引用 permissions 的文件: $(grep -rln 'permissions' src/cljs | grep -v 'api/auth\|events/auth' | wc -l)"
+#+end_src
 
 ** 9.2 审计
-~middleware.operlog~ 记录所有 ~/api~ 非 GET 请求(操作人、URL、参数、状态码、耗时)到 ~sys_oper_log~;登录成功/失败写 ~sys_login_log~;前端"日志管理"页面查询与导出。
+~middleware.operlog~ 记录所有 ~/api~ 非 GET 请求(操作人、URL、参数、状态码、耗时)到 ~sys_oper_log~。它挂在路由器外层,拿不到路由级中间件写入的 ~:identity~,所以自己解析 ~Authorization~ 头取操作人(模板修复前一律记成 ~anonymous~)。登录成功/失败写 ~sys_login_log~;前端"日志管理"页面查询与导出。
 
 ** 9.3 双库兼容(SQLite / MySQL)
 - 两套迁移目录同名同步;DDL 差异(自增、时间类型)分别处理。
@@ -538,7 +644,9 @@ diff <(ls resources/migrations-sqlite | sed 's/\.\(up\|down\)\.sql$//' | sort -u
 
 ** 9.6 错误处理与安全头
 - ~middleware.exception~ 把未捕获异常统一转成 ~{:code 500 :msg …}~,coercion 错误由 reitit 的 ~coerce-exceptions-middleware~ 返回 400。
-- ring-defaults:XSS 保护、~X-Frame-Options: sameorigin~、~nosniff~;CSRF 关闭(纯 Bearer API),CORS 放开(便于前后端分离开发,生产同源部署时可收紧)。
+- ring-defaults:XSS 保护、~X-Frame-Options: sameorigin~、~nosniff~;CSRF 关闭(纯 Bearer API)。
+- CORS:~wrap-cors~ 返回 ~Access-Control-Allow-Origin: *~ 同时 ~Allow-Credentials: true~——浏览器不接受这个组合携带凭据,模板同源部署时无影响;真要跨域请改成回显具体 Origin。
+- 前端错误处理:各 ~reg-fx :api/*~ 的失败回调大多是空函数 ~(fn [_])~,401 也不会自动跳登录;需要统一处理时在 ~api.transport/request~ 的 ~on-error~ 里做(§13)。
 
 * 10. 扩展指南
 
@@ -628,7 +736,32 @@ python3 scripts/check_constraints.py 2>&1 | tail -5
 - *附带修复*:
   - MySQL 迁移补上 ~20260613215630-add-notice-content~(此前只有 SQLite 有该列,MySQL 下新建公告会失败);
   - ~routes/system.clj~ 的 274 行 ~system-routes~ 拆成 19 个路由组函数(路由集合经 Reitit 展开比对完全一致),~scripts/check_constraints.py~ 的函数上限改为与 AGENTS.md 一致的 50 行,现全部通过;
-  - E2E:~navigation.spec.js~ 去掉指向已删除业务模块的 3 条路由并加入 ~/monitor/integrant~;~post-crud.spec.js~ 的弹窗按钮匹配 zh_CN 文案「确 定」。
+  - E2E:~navigation.spec.js~ 去掉指向已删除业务模块的 3 条路由并加入 ~/monitor/integrant~;~post-crud.spec.js~ 的弹窗按钮匹配 zh_CN 文案「确 定」;
+  - ~middleware.operlog~ 挂在路由器外层拿不到 ~:identity~,此前所有操作日志的操作人都是 ~anonymous~;现改为自行解析 Bearer(实测新增岗位后 ~oper_name = admin~)。
+
+* 13. 设计债与扩展点(AS-IS ≠ TO-BE 的地方)
+
+本文其余部分描述的是代码*现在*的样子;下面这些是代码与"理想设计"之间已知的差距,按优先级排列,派生项目按需处理。每条都给出接入位置,便于直接动手。
+
+| # | 事项 | 现状 | 建议做法 | 涉及文件 |
+|---+------+------+----------+----------|
+| 1 | 按钮级权限校验 | ~require-perms~ 无人使用;JWT 无 perms;前端不按 ~permissions~ 控制按钮 | ~wrap-jwt-auth~ 里按 ~:roles~ 查 ~role-service/get-role-perms~ 写入 ~(:identity :perms)~(或签发时放进 claims);路由声明 ~(auth-middleware {:required? true :perms "system:user:add"})~;前端加 ~:auth/has-perm?~ 订阅包住工具栏按钮 | ~middleware/auth.clj~ ~infra/security.clj~ ~routes/system.clj~ ~subs/core.cljs~ |
+| 2 | 数据权限接入 SQL | ~data-perm-filter~ 只算不用;按 ~role-key~ 匹配但 identity 只有角色 id | ~getInfo~/登录时把角色 map(~role-key data-scope dept-id~)放进 identity;HugSQL 用 ~--~snip~~ 或 ~:sql:data-perm-sql~ 把 ~:sql~ 片段拼进 ~list-users~ 等查询 | ~infra/data_perm.clj~ ~resources/sql/system.sql~ ~controllers/system/{user,config,dict}.clj~ |
+| 3 | 前端统一错误处理 | ~:api/*~ 失败回调为空;401 不跳登录 | ~api.transport/request~ 的 ~on-error~ 统一 dispatch ~[:common/api-error resp]~:401 → ~:auth/logout~,其余 → ~antd/error!~ | ~api/transport.cljs~ ~events/common.cljs~ |
+| 4 | 生产安全默认值 | ~JWT_SECRET~ / ~COOKIE_SECRET~ 有内置默认;CORS ~*~ + credentials | 启动时若 ~:prod~ 且未设置则拒绝启动;CORS 回显白名单 Origin | ~infra/security.clj~ ~system.edn~ ~middleware/core.clj~ |
+| 5 | 多实例部署 | token 黑名单、在线心跳、验证码、缓存监控都在进程内存 | 引入 Redis(或改短 token + refresh)时把 ~infra.online~ / ~captcha-store~ / ~infra.cache~ 抽成协议 + 两个实现 | ~infra/online.clj~ ~controllers/captcha.clj~ ~infra/cache.clj~ |
+| 6 | 未使用的 edge | ~:templating/selmer~ 已装配但无模板;~:cronut/scheduler~ 的 ~:schedule []~ 由 ~infra.scheduler~ 动态填充 | 不做服务端渲染可删 selmer 依赖与组件 | ~core.clj~ ~system.edn~ ~deps.edn~ |
+| 7 | 代码生成器落盘路径 | ~controllers/gen.clj~ 硬编码 ~src/clj/com/ruoyi/...~(改名脚本会一起替换) | 从 ~kit.edn~ 的 ~:sanitized~ 读取路径前缀 | ~controllers/gen.clj~ |
+| 8 | 静态检查遗留 | clj-kondo 0 error / 212 warning(未用 require、未用绑定等,源项目遗留) | 逐文件清理;CI 里把 warning 数设为上限 | 全部 |
+| 9 | 文档站 | ~docs/index.html~ 标题与目录仍是源项目文案 | 与 README 同步或生成 | ~docs/index.html~ |
+
+可执行:设计债 1/2/3 的现状指标(全 0 表示尚未接入;接入后应变为非 0)
+
+#+begin_src sh :exports both
+printf "perms 路由声明   %s\n" "$(grep -rn ':perms' src/clj/com/ruoyi/web/routes | wc -l)"
+printf "data-perm in SQL  %s\n" "$(grep -rn 'data-perm' resources/sql | wc -l)"
+printf "统一错误事件      %s\n" "$(grep -rn 'api-error' src/cljs | wc -l)"
+#+end_src
 
 * 附录 A:模板与源项目的差异清单
 
@@ -641,6 +774,7 @@ python3 scripts/check_constraints.py 2>&1 | tail -5
 | 文档 | ~GAP_ANALYSIS.md~ ~REMAINING.md~ ~ROADMAP.md~ ~test/coverage-report.md~ ~docs/pic-field-checklist.md~;README 合成流量章节 | README 重写为模板说明;~CLAUDE.md~ 指向本文;本文 |
 | 工具 | ~.beads/~ ~.agents/~ ~.claude/settings.json~(issue 跟踪钩子)、~test-frontend.mjs~ | ~scripts/rename-project.sh~;~check_constraints.py~ 函数上限 50 |
 | 测试 | ~synthetic_profile_test.clj~、~synthetic-profile.spec.js~、~formal-pages.spec.js~ | ~navigation.spec.js~ / ~post-crud.spec.js~ 修正 |
+| 修复 | | ~middleware/operlog.clj~ 操作人解析;MySQL notice_content 迁移;~routes/system.clj~ 拆分 |
 
 * 附录 B:术语
 

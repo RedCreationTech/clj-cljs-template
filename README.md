@@ -23,7 +23,7 @@
 
 **系统管理**：用户、角色（RBAC + 数据权限）、菜单（树形 + 按钮权限）、部门（树形）、岗位、字典、参数配置、通知公告、文件管理。
 
-**权限控制**：JWT Bearer 认证；菜单/按钮权限（`perms`）；数据权限（全部 / 自定义 / 本部门 / 本部门及以下）；在线用户与强制下线。
+**权限控制**：JWT Bearer 认证；按角色动态下发菜单树与权限标识（`perms`）；在线用户与强制下线。按钮级 `perms` 校验与数据权限（`data_scope` 1~5）的 SQL 片段生成器已就位但尚未接入路由/查询，接入方式见 C4 文档 §13。
 
 **日志审计**：操作日志中间件自动记录所有 API 请求；登录日志记录 IP / 浏览器 / 结果。
 
@@ -198,6 +198,7 @@ Swagger UI：http://localhost:3000/api
 ## 开发约定
 
 - 后端分层：`route -> controller -> domain(service) -> HugSQL query -> db`；组件全部在 `system.edn` 装配。
+- API 契约：响应信封 `{:code :msg :data}`，分页 `{:total :rows}`，参数 `page`/`size`，字段 snake_case（详见 C4 文档 §6.6）。
 - 每个 namespace ≤ 500 行、函数 ≤ 50 行（`scripts/check_constraints.py` 检查）；超限时拆分。
 - SQL 统一放 `resources/sql/*.sql`；两套迁移目录必须同步；共用 SQL 只写两库都支持的语法（如 `INSTR` 代替 `||`）。
 - 前端状态统一 re-frame；组件局部状态用 Hooks，不用 `reagent/atom`；分页参数固定 `page` / `size`。
