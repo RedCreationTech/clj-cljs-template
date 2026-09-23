@@ -1,0 +1,654 @@
+#+TITLE: clojure-template — 架构设计 (C4 Model, 可执行 org 文档)
+#+AUTHOR: clojure-template maintainers
+#+DATE: 2026-09-23
+#+LANGUAGE: zh-CN
+#+OPTIONS: toc:3 num:t ::t |:t ^:nil
+#+PROPERTY: header-args :results output :eval query
+#+PROPERTY: header-args:sh :dir ../..
+#+PROPERTY: header-args:clojure :dir ../..
+#+STARTUP: showall content
+
+#+BEGIN_QUOTE
+本文是模板项目的架构规范载体(org-mode + org-babel),按 C4 模型自顶向下描述:
+System Context(L1)→ Container(L2)→ Component(L3)→ Code(L4),再补充动态视图、部署视图、横切关注点、扩展指南与决策记录(ADR)。
+
+所有 ~#+begin_src~ 代码块都可以执行:
+- ~mermaid~ 块由 ob-mermaid 渲染成图(C4 语法),导出 HTML/PDF 时自动生成;
+- ~sh~ / ~clojure~ 块是"论断即测试":在仓库根目录 ~C-c C-c~ 直接运行,输出即证据,用来保证文档与代码不脱节。
+所有块默认 ~:eval query~(执行前询问),没有会产生副作用的块。
+
+*维护约定*:新增业务模块、改动 ~system.edn~ 装配、改动中间件链或路由聚合时,必须同步更新本文对应小节(见第 10 节的清单)。
+#+END_QUOTE
+
+* 0. 环境准备(babel 语言)
+
+在 Emacs 中配置一次即可:
+
+#+begin_src emacs-lisp :eval never
+(org-babel-do-load-languages 'org-babel-load-languages
+                             '((shell . t) (clojure . t) (mermaid . t) (python . t)))
+;; mermaid 渲染需要 mermaid-cli:npm i -g @mermaid-js/mermaid-cli
+;; clojure 块通过 CIDER(先 cider-jack-in 到本项目的 :dev 别名)或 babashka 执行
+(setq org-babel-clojure-backend 'cider)
+#+end_src
+
+不用 Emacs 也可以:把 ~sh~ 块的内容复制到终端执行;mermaid 块可贴到 https://mermaid.live 预览。
+
+* 1. 阅读指南
+
+| 层级 | 回答的问题 | 本文小节 |
+|------+-----------------------------------------------+----------|
+| L1 System Context | 系统给谁用、和哪些外部系统打交道 | §2 |
+| L2 Container | 系统由哪些可独立运行/部署的单元组成 | §3 |
+| L3 Component | 每个容器内部的主要模块及其职责、依赖 | §4(后端)§5(前端) |
+| L4 Code | 关键命名空间、目录约定、一个模块的垂直切片 | §6 |
+| Dynamic | 关键场景下组件如何协作(登录、CRUD、导航、启动) | §7 |
+| Deployment | 开发/生产环境下容器落在什么基础设施上 | §8 |
+| 横切关注点 | 认证授权、审计、双库兼容、配置、热重载、错误处理 | §9 |
+| 扩展指南 | 新增业务模块、从模板派生新项目 | §10 |
+| 质量保障 | 测试分层、规模约束、覆盖率 | §11 |
+| ADR | 为什么这样设计、曾经放弃过什么 | §12 |
+
+* 2. System Context(L1)
+
+模板本身是一个 *单体管理后台*:浏览器中的管理员通过 SPA 操作;后端只依赖一个关系数据库;开发者通过 nREPL 与运行中的系统交互。没有其它必需的外部系统——这正是模板"干净"的含义,业务外部依赖(短信、对象存储、第三方 API 等)由派生项目按需加入,并在此图追加 ~System_Ext~。
+
+#+begin_src mermaid :file c4-context.png :exports results
+C4Context
+  title System Context — clojure-template 管理后台
+  Person(admin, "管理员 / 业务用户", "在浏览器中登录,管理用户、角色、菜单、字典、任务等")
+  Person(dev, "开发者", "本地运行、nREPL 热重载、代码生成、查看 Swagger")
+  System_Boundary(sys, "clojure-template") {
+    System(app, "管理后台", "Clojure(Kit/Integrant/Reitit/Undertow)+ ClojureScript(Reagent/re-frame/antd)")
+  }
+  SystemDb_Ext(db, "关系数据库", "SQLite(默认,单文件)或 MySQL 8")
+  System_Ext(browser, "浏览器", "Chrome / Edge / Safari,运行 SPA")
+  Rel(admin, browser, "使用")
+  Rel(browser, app, "HTTPS: 静态资源 + REST/JSON(/api/*)")
+  Rel(dev, app, "nREPL :7000 热重载;Swagger UI /api", "TCP / HTTPS")
+  Rel(app, db, "读写 sys_* 表;启动时自动迁移", "JDBC / HikariCP")
+#+end_src
+
+*边界说明*
+- 同一个 JVM 进程同时提供 API 与前端静态文件(同端口 3000),不需要独立的 Web 服务器;生产可在前面放 Nginx 做 TLS/反向代理(见 §8)。
+- 数据库是唯一的状态存储;在线用户、验证码、缓存监控用的是进程内存(见 §9),不引入 Redis。
+
+* 3. Containers(L2)
+
+#+begin_src mermaid :file c4-containers.png :exports results
+C4Container
+  title Container Diagram — clojure-template
+  Person(admin, "管理员", "浏览器")
+  Person(dev, "开发者", "REPL / 编辑器")
+  System_Boundary(sys, "clojure-template") {
+    Container(spa, "Web 前端 (SPA)", "ClojureScript, shadow-cljs, Reagent 2, re-frame, Ant Design 6", "登录、布局(侧边菜单/多 Tab)、系统管理/监控/工具页面;编译产物 resources/public/js/app.js")
+    Container(backend, "后端服务 (JVM)", "Clojure 1.12, Kit, Integrant, Undertow, Reitit, Ring", "REST API(/api)、静态资源、SPA fallback、Swagger、Quartz 调度;端口 3000")
+    Container(nrepl, "nREPL 服务", "kit-nrepl", "开发期热重载入口;端口 7000,仅绑定 127.0.0.1")
+    ContainerDb(db, "数据库", "SQLite 文件 rouyi.db 或 MySQL", "sys_user/role/menu/dept/post/dict/config/notice/log/job/online/form_template")
+    Container(fs, "本地文件", "文件系统", "上传目录(通用上传/头像)、日志 log/、SQLite 文件")
+  }
+  Rel(admin, spa, "访问", "HTTPS")
+  Rel(spa, backend, "REST/JSON,Bearer JWT", "HTTPS")
+  Rel(backend, spa, "提供 index.html 与 js/css", "HTTPS")
+  Rel(dev, nrepl, "(user/rd) (user/rr) …", "nREPL")
+  Rel(nrepl, backend, "同一 JVM 内", "")
+  Rel(backend, db, "conman/HugSQL + Migratus", "JDBC")
+  Rel(backend, fs, "读写", "FS")
+#+end_src
+
+** 3.1 容器清单与技术选型
+
+| 容器 | 技术 | 入口 / 配置 | 生命周期 |
+|------+------+-------------+----------|
+| 后端服务 | Clojure, Kit, Integrant, Undertow, Reitit, Ring, Muuntaja, Malli, Buddy, conman/HugSQL, Migratus, Quartz | ~com.ruoyi.core/-main~;装配见 ~resources/system.edn~ | ~clojure -M:dev -m com.ruoyi.core~ 或 uberjar |
+| Web 前端 | ClojureScript, shadow-cljs, Reagent(函数组件 + Hooks), re-frame, bidi, cljs-ajax, antd 6, React 19 | ~com.ruoyi.frontend.app/init~;构建见 ~shadow-cljs.edn~ | ~npx shadow-cljs watch/release app~ |
+| nREPL | kit-nrepl(Integrant 组件 ~:nrepl/server~) | ~NREPL_PORT~ / ~NREPL_HOST~ | 随后端启动;生产可通过环境变量改端口/绑定 |
+| 数据库 | SQLite(开发默认)/ MySQL 8 | ~JDBC_URL~ + ~MIGRATION_DIR~ | 启动时 ~migrate-on-init?~ 自动迁移 |
+
+** 3.2 可执行:Integrant 组件即容器内的"装配清单"
+
+后端所有可替换的部件都在 ~system.edn~ 里声明,下面这段直接从文件里列出组件 key(应与 §4 的组件图一致):
+
+#+begin_src sh :exports both
+grep -E '^\s*:[a-z][a-z0-9.-]*/[a-z-]+' resources/system.edn | sed -E 's/^\s*(:[^ ]+).*/\1/' | sort -u
+#+end_src
+
+* 4. Components(L3)— 后端
+
+后端是一条固定的请求管线:~Undertow → Ring handler → 基础中间件链 → Reitit 路由 → 路由级中间件(认证/权限/协商/异常)→ Controller → Domain Service(Integrant 组件)→ HugSQL query-fn → DB~。Controller 只做"请求 ↔ 领域服务"的翻译,领域服务不知道 HTTP。
+
+#+begin_src mermaid :file c4-backend-components.png :exports results
+C4Component
+  title Component Diagram — 后端 (JVM)
+  Container_Boundary(web, "web 层 (com.ruoyi.web)") {
+    Component(handler, "handler", "Reitit ring-handler", "静态资源、Swagger UI、SPA fallback、路由器(dev 每次请求重建)")
+    Component(mwcore, "middleware.core", "Ring", "wrap-base: ring-defaults(会话/安全头) + CORS + operlog + query-fn 注入 + JSON body")
+    Component(mwauth, "middleware.auth", "Ring", "wrap-jwt-auth / require-auth / require-perms:解析 Bearer JWT,黑名单校验,在线心跳")
+    Component(mwexc, "middleware.exception", "Ring", "统一异常 -> {:code :msg} JSON")
+    Component(mwfmt, "middleware.formats", "Muuntaja", "JSON/Transit 内容协商")
+    Component(routes, "routes.api + routes.*", "Reitit 数据路由", "/api 聚合:auth, system, gen, common, captcha;Malli 参数校验;Swagger 元数据")
+    Component(ctrl, "controllers.*", "Clojure fn", "auth, register, captcha, common, health, monitor, job, gen, system/*(user role menu dept dict …)")
+  }
+  Container_Boundary(domain, "领域层 (com.ruoyi.domain)") {
+    Component(dsys, "domain.system + system/*", "Integrant :app.system/*-service", "user/role/menu/dept/post/dict/config/log/form-template/online/gen 领域服务(CRUD、树、授权、审计)")
+    Component(dgen, "domain.gen", "Clojure", "按表结构生成 SQL/domain/controller/routes/前端 api-page-events-subs 代码")
+  }
+  Container_Boundary(infra, "基础设施 (com.ruoyi.infra / integrant)") {
+    Component(idb, "infra.db", "next.jdbc", "detect-db-type、insert-and-get-id!、分页、SQLite<->MySQL 语法适配、元数据查询、run-migrations!、swap-db!")
+    Component(ids, "infra.datasource", "javax.sql.DataSource 代理", "运行时热切换底层 HikariCP 连接池")
+    Component(isec, "infra.security", "buddy", "bcrypt 哈希/校验;JWT 签发/解析;从请求提取 token")
+    Component(ionl, "infra.online", "内存 + sys_online 表", "在线用户注册/心跳/注销/强退;token 黑名单;过期清理线程")
+    Component(idp, "infra.data-perm", "SQL 片段生成", "按角色 data_scope(全部/自定义/本部门/本部门及以下)生成过滤条件")
+    Component(isch, "infra.scheduler + task + cron", "Quartz", "sys_job 表驱动:加载/调度/暂停/恢复/立即执行,写 sys_job_log")
+    Component(icache, "infra.cache", "atom", "内存缓存(缓存监控页的数据源)")
+    Component(itrace, "integrant.trace + state", "Integrant 包装", "运行时给函数型组件加调用追踪,供 Integrant 监控页展示")
+  }
+  Container_Boundary(edge, "Kit edges(第三方组件)") {
+    Component(undertow, ":server/http", "kit-undertow", "HTTP 服务器")
+    Component(conman, ":db.sql/connection / query-fn", "kit-sql-conman + HugSQL", "HikariCP 连接池;resources/sql/*.sql 编译为 query-fn")
+    Component(migratus, ":db.sql/migrations", "kit-sql-migratus", "按 MIGRATION_DIR 执行 up/down 迁移")
+    Component(quartz, ":cronut/scheduler", "kit-quartz", "Quartz Scheduler 实例")
+    Component(nrepl, ":nrepl/server", "kit-nrepl", "nREPL")
+  }
+  ContainerDb(db, "数据库", "SQLite / MySQL", "")
+  Rel(undertow, handler, "请求")
+  Rel(handler, mwcore, "包裹")
+  Rel(mwcore, routes, "路由匹配")
+  Rel(routes, mwauth, "受保护路由")
+  Rel(routes, mwexc, "统一异常")
+  Rel(routes, mwfmt, "内容协商")
+  Rel(routes, ctrl, "handler = (partial ctrl/fn services)")
+  Rel(ctrl, dsys, "调用")
+  Rel(ctrl, dgen, "代码生成")
+  Rel(ctrl, isch, "任务管理")
+  Rel(ctrl, ionl, "在线用户/登录登出")
+  Rel(ctrl, isec, "登录签发 JWT")
+  Rel(mwauth, isec, "parse-token")
+  Rel(mwauth, ionl, "blacklisted? / heartbeat!")
+  Rel(dsys, conman, "query-fn :name params")
+  Rel(dsys, idb, "insert-and-get-id! / paginate-query")
+  Rel(dsys, idp, "data-perm-filter")
+  Rel(conman, db, "JDBC")
+  Rel(migratus, db, "DDL")
+  Rel(idb, ids, "swap-db!")
+  Rel(isch, quartz, "schedule/pause/resume")
+  Rel(itrace, handler, "set-ring-handler!(追踪开关)")
+#+end_src
+
+** 4.1 请求管线:中间件顺序
+
+自外向内(请求方向):
+
+#+begin_src mermaid :file backend-pipeline.png :exports results
+flowchart LR
+  U[Undertow] --> H["handler/ring<br/>(reitit ring-handler)"]
+  H --> B["wrap-base<br/>env middleware(env.clj :middleware,dev 下默认为空)<br/>ring-defaults(session/安全头)<br/>wrap-cors + preflight<br/>operlog(写 sys_oper_log)<br/>wrap-query-fn<br/>wrap-json-body"]
+  B --> R["router/core<br/>reitit 路由匹配"]
+  R --> RM["route-data middleware<br/>parameters → muuntaja 协商<br/>coercion(Malli)<br/>exception/wrap-exception"]
+  RM --> AM["auth-middleware<br/>wrap-jwt-auth → require-auth → require-perms"]
+  AM --> C[controller]
+  C --> D[domain service]
+  D --> Q["query-fn (HugSQL)"]
+  Q --> DB[(DB)]
+  R -. 未匹配且非 /api .-> SPA["SPA fallback:<br/>返回 index.html"]
+  R -. /api/* 未匹配 .-> N404[404]
+#+end_src
+
+要点:
+- ~operlog~ 只记录 ~/api/*~ 下的非 GET 请求,并跳过登录/验证码等噪音路径;写日志失败只打 warn,不影响业务响应。
+- 认证不是全局的:每个路由组自己声明 ~(auth-mw/auth-middleware {:required? true :perms "system:user:list"})~,所以 ~/api/health~、~/api/auth/login~ 可匿名访问。
+- dev 环境下 ~router/core~ 返回一个每次请求都重新构建路由表的函数,配合 ~(user/rroutes)~ 实现路由热重载;prod 下路由表只构建一次。
+
+** 4.2 可执行:路由清单(从代码里生成,不是手写)
+
+用 Reitit 直接展开 ~routes.api~,输出"方法 路径";改动路由后重跑一遍,把结果与 README 的 API 概览对照。
+
+#+begin_src sh :exports both
+clojure -M:dev -e '
+(require (quote [com.ruoyi.web.routes.api]) (quote [integrant.core :as ig]) (quote [reitit.core :as r]) (quote [clojure.string :as str]))
+(let [route-fn (ig/init-key :reitit.routes/api {:base-path "/api"})
+      router   (r/router (route-fn) {:conflicts nil})]
+  (doseq [[path data] (r/routes router)]
+    (println (format "%-16s %s" (str/join "," (map name (filter #{:get :post :put :delete} (keys data)))) path))))' 2>/dev/null
+#+end_src
+
+** 4.3 可执行:领域服务与 Integrant 的对应关系
+
+每个 ~:app.system/*-service~ 组件在 ~domain/system.clj~ 里用 ~defmethod ig/init-key~ 注册;下面列出注册点,应与 §3.2 的组件 key 一一对应:
+
+#+begin_src sh :exports both
+grep -n "defmethod ig/init-key" src/clj/com/ruoyi/domain/*.clj src/clj/com/ruoyi/web/*.clj src/clj/com/ruoyi/web/routes/api.clj src/clj/com/ruoyi/integrant/*.clj
+#+end_src
+
+* 5. Components(L3)— 前端
+
+前端是标准的 re-frame 单向数据流:~页面组件 → dispatch 事件 → 事件处理器(更新 app-db / 触发 :api/* 效果)→ api 层发 HTTP → 成功/失败事件写回 app-db → 订阅驱动重渲染~。路由用 bidi 匹配 URL,与 ~history.pushState~ 手动集成(不依赖 accountant)。
+
+#+begin_src mermaid :file c4-frontend-components.png :exports results
+C4Component
+  title Component Diagram — Web 前端 (SPA)
+  Container_Boundary(spa, "com.ruoyi.frontend") {
+    Component(app, "app", "Reagent root", "init: initialize-db → 主题加载 → 路由初始化 → 有 token 则 fetch-info → 渲染;ConfigProvider(主题/中文 locale) + antd App(message 上下文)")
+    Component(cfg, "config", "常量", "app-name / app-subtitle / welcome-text / repo-url —— 品牌信息唯一来源")
+    Component(router, "router", "bidi + popstate", "routes 路由表、page-names、navigate!(pushState)、init-routes!")
+    Component(db, "db", "re-frame app-db 初始值", "page/tabs/auth/theme/layout-settings + 各领域列表状态(items/total/query-params/…)")
+    Component(events, "events + events/*", "re-frame reg-event-*/reg-fx", "core(导航/多 Tab)、auth、theme、common(页签元数据/布局设置)、users/roles/depts/posts/dicts/configs/notices/menus/logs/jobs/monitor/gen/profile/formbuilder")
+    Component(subs, "subs + subs/*", "re-frame reg-sub", "core(page/auth/theme)、system、monitor、config、gen")
+    Component(api, "api + api/*", "cljs-ajax", "transport(api-base、token 注入、统一 request)+ 各领域 api(auth users roles … monitor);api.cljs 重导出旧公共名")
+    Component(antd, "antd", "r/adapt-react-class", "Ant Design 组件适配、message 实例(use-app-message)、Form.useForm 等")
+    Component(layout, "pages.layout + layout/*", "Reagent", "主布局:Sider 菜单(menu-build 按后端菜单树动态生成)、Header(header)、多 Tab(tabs)、面包屑/标题(menu-data)、页面分发(page-view)")
+    Component(pages, "pages/*", "Reagent 函数组件", "login、dashboard、user(拆分 columns/search/form_modal/dept_tree)、role、menu、dept、post、dict、config、notice、oper_log、login_log、online、job、server、cache、datasource、integrant、gen、swagger、form_builder、file_manager、profile")
+    Component(comps, "components/*", "Reagent", "page-card、page-search、page-toolbar、pagination、search-input、status-tag、dict-tag、dept-tree-select、icon-picker、form-field/section、action-menu、error-boundary、theme-switcher、layout-settings、right-toolbar")
+    Component(theme, "theme", "antd theme 算法", "light/dark/compact、主色、字号、组件尺寸 → ConfigProvider :theme")
+  }
+  Container(backend, "后端 /api", "Reitit", "")
+  Rel(app, router, "init-routes!")
+  Rel(app, layout, "登录后渲染")
+  Rel(app, theme, "theme-config")
+  Rel(layout, cfg, "app-name")
+  Rel(layout, pages, "render-page(page)")
+  Rel(pages, comps, "复用")
+  Rel(pages, antd, "组件")
+  Rel(pages, events, "dispatch")
+  Rel(pages, subs, "subscribe")
+  Rel(events, db, "更新")
+  Rel(events, api, "reg-fx :api/*")
+  Rel(events, router, ":router/navigate! 效果 → pushState")
+  Rel(subs, db, "读取")
+  Rel(api, backend, "HTTP JSON,Authorization: Bearer")
+#+end_src
+
+** 5.1 关键设计点
+
+- *菜单不写死*:侧边栏由 ~/api/auth/getInfo~ 返回的菜单树(按角色过滤)经 ~layout/menu-build~ 转成 antd items;前端只维护 ~page->menu-key~、面包屑、图标这类"路由关键词 → 展示"映射(~layout/menu_data.cljs~)。
+- *多 Tab*:~:navigate~ 事件同时更新 ~:page~、激活/新增 Tab(~events/common~ 的 ~activate-page-tab~)、按页面预取数据(~events/core~ 里的 ~fetch~ 表)。
+- *局部状态用 Hooks,全局状态用 re-frame*,禁止 ~reagent/atom~(AGENTS.md 有完整的 antd 6 适配清单)。
+- *主题与布局设置*持久化在 localStorage(键前缀 ~rouyi-~ / ~ruoyi_~,改名脚本会一并替换)。
+
+** 5.2 可执行:前端规模速览
+
+#+begin_src sh :exports both
+echo "pages:      $(find src/cljs/com/ruoyi/frontend/pages -name '*.cljs' | wc -l)"
+echo "components: $(find src/cljs/com/ruoyi/frontend/components -name '*.cljs' | wc -l)"
+echo "events:     $(grep -rho 'reg-event-\(db\|fx\)' src/cljs | wc -l)   fx: $(grep -rho 'reg-fx' src/cljs | wc -l)"
+echo "subs:       $(grep -rho 'reg-sub' src/cljs | wc -l)"
+echo "routes:     $(grep -c '" :' src/cljs/com/ruoyi/frontend/router.cljs)"
+#+end_src
+
+* 6. Code(L4)
+
+** 6.1 目录与命名空间约定
+
+| 路径 | 职责 | 约定 |
+|------+------+------|
+| ~src/clj/com/ruoyi/core.clj~ | 入口;require 所有 edge/domain/routes 以触发 ~ig/init-key~ 注册 | 新组件的命名空间必须在这里 require |
+| ~src/clj/com/ruoyi/config.clj~ | 读取 ~system.edn~(aero:~#env~ ~#profile~ ~#or~ ~#ig/ref~) | 配置只从环境变量和 profile 注入 |
+| ~src/clj/com/ruoyi/infra/*~ | 与业务无关的技术能力 | 不依赖 ~domain~ / ~web~ |
+| ~src/clj/com/ruoyi/domain/*~ | 领域服务:输入 map、输出 map,可脱离 HTTP 测试 | 通过 ~{:query-fn :db}~ 上下文访问数据库 |
+| ~src/clj/com/ruoyi/web/routes/*~ | Reitit 数据路由 + Swagger 元数据 + Malli 参数 | 每个模块一个文件,在 ~routes/api.clj~ 聚合 |
+| ~src/clj/com/ruoyi/web/controllers/*~ | Ring handler:~(partial ctrl/fn services)~ 形式注入服务 | 只做参数提取、调用服务、组装响应 |
+| ~resources/sql/*.sql~ | HugSQL 查询(~-- :name~) | 两库通用语法;库特定变体加后缀并在 Clojure 层选择 |
+| ~resources/migrations{,-sqlite}/~ | Migratus 迁移 | 两目录同名同步维护 |
+| ~env/{dev,prod}/clj/com/ruoyi/env.clj~ | 环境差异(dev 中间件、日志文案) | 通过 ~:extra-paths~ 选择 |
+| ~env/dev/clj/user.clj~ | REPL 助手:~rd rm rroutes ra rr reset-db migrate~ | 新增领域命名空间时加进 ~reload-domain~ |
+| ~src/cljs/com/ruoyi/frontend/*~ | 见 §5 | 每个领域:~api/x.cljs~ + ~events/x.cljs~ + ~pages/x.cljs~(+ ~subs/~) |
+| ~test/clj/com/ruoyi/**~ | clojure.test;~test_utils.clj~ 提供启动测试系统、ring-mock 请求、登录 token 等 | 文件名 ~*_test.clj~ |
+| ~tests/e2e/*.spec.js~ | Playwright | 依赖已启动的后端(3000) |
+
+** 6.2 一个模块的垂直切片(以「岗位 post」为例)
+
+从数据库到页面,一个功能横跨 8 个文件,这也是新增模块时要照抄的骨架:
+
+#+begin_src mermaid :file vertical-slice.png :exports results
+flowchart TB
+  subgraph DB["数据"]
+    M["migrations*/…-create-sys-post.up.sql<br/>建表 sys_post"]
+    S["resources/sql/system.sql<br/>-- :name list-posts / create-post! / …"]
+  end
+  subgraph BE["后端"]
+    D["domain/system/post.clj<br/>list-posts / create-post! / update-post! / delete-post!"]
+    C["web/controllers/system/post.clj<br/>list / create / update / delete / export"]
+    R["web/routes/system.clj → [\"/post\" …]<br/>auth-middleware + perms system:post:*"]
+    SYS["system.edn :app.system/post-service<br/>+ :reitit.routes/api :post-service"]
+  end
+  subgraph FE["前端"]
+    A["api/posts.cljs<br/>list-posts / create-post / …"]
+    E["events/posts.cljs<br/>:posts/fetch :posts/create …"]
+    P["pages/post.cljs<br/>搜索栏 + 工具栏 + 表格 + 弹窗"]
+    RT["router.cljs \"system/post\" :post<br/>layout/menu_data + page_view + events/common"]
+  end
+  M --> S --> D --> C --> R
+  SYS -. 装配 .-> D
+  SYS -. 注入 .-> R
+  R <-. HTTP .-> A
+  A --> E --> P --> RT
+#+end_src
+
+** 6.3 可执行:验证垂直切片的文件都在
+
+#+begin_src sh :exports both
+for f in resources/migrations-sqlite/202406110007-create-sys-post.up.sql \
+         src/clj/com/ruoyi/domain/system/post.clj \
+         src/clj/com/ruoyi/web/controllers/system/post.clj \
+         src/cljs/com/ruoyi/frontend/api/posts.cljs \
+         src/cljs/com/ruoyi/frontend/events/posts.cljs \
+         src/cljs/com/ruoyi/frontend/pages/post.cljs \
+         test/clj/com/ruoyi/web/controllers/system/post_test.clj \
+         tests/e2e/post-crud.spec.js; do
+  printf "%-70s %s\n" "$f" "$([ -f "$f" ] && echo OK || echo MISSING)"
+done
+grep -n '"/post"' src/clj/com/ruoyi/web/routes/system.clj
+grep -n ':post ' src/cljs/com/ruoyi/frontend/router.cljs src/cljs/com/ruoyi/frontend/pages/layout/menu_data.cljs
+#+end_src
+
+** 6.4 命名空间依赖方向(允许的箭头)
+
+#+begin_src mermaid :file ns-deps.png :exports results
+flowchart LR
+  core --> web.routes --> web.controllers --> domain --> infra
+  web.routes --> web.middleware --> infra
+  web.handler --> web.middleware
+  domain -. 禁止 .-> web.controllers
+  infra -. 禁止 .-> domain
+#+end_src
+
+可执行检查:~infra~ 与 ~domain~ 不得 require ~web~:
+
+#+begin_src sh :exports both
+# 只看 require 向量,排除 domain.gen 里作为代码模板出现的字符串
+grep -rnE "\[com\.ruoyi\.web" src/clj/com/ruoyi/infra src/clj/com/ruoyi/domain && echo "VIOLATION" || echo "OK: infra/domain 不依赖 web 层"
+#+end_src
+
+* 7. Dynamic Views(动态视图)
+
+** 7.1 登录与 JWT
+
+#+begin_src mermaid :file dyn-login.png :exports results
+sequenceDiagram
+  autonumber
+  participant B as 浏览器(login 页)
+  participant E as events/auth
+  participant API as /api/auth
+  participant C as controllers/auth
+  participant S as infra.security
+  participant O as infra.online
+  participant DB as DB
+  B->>API: GET /captchaImage
+  API-->>B: {uuid, img}(验证码存内存 atom,含过期时间)
+  B->>E: dispatch [:auth/login {username password captcha uuid}]
+  E->>API: POST /auth/login
+  API->>C: login
+  C->>C: 校验验证码(命中后即删除)
+  C->>DB: find-user-by-name
+  C->>S: verify-password(bcrypt)
+  C->>S: generate-token(user-id, user-name, role-ids)
+  C->>O: register!(token, user, ip) → sys_online
+  C->>DB: create-login-log!(成功/失败都记)
+  C-->>E: {code 200, data {token}}
+  E->>E: :auth/login-success → localStorage ruoyi_token
+  E->>API: GET /auth/getInfo (Authorization: Bearer)
+  API-->>E: {user, roles, permissions, menus}
+  E->>B: app-db :auth/user + 菜单树 → 渲染主布局
+#+end_src
+
+** 7.2 一次受保护的写请求(含审计与数据权限)
+
+#+begin_src mermaid :file dyn-crud.png :exports results
+C4Dynamic
+  title Dynamic — PUT /api/system/user/:id
+  Component(spa, "pages/user + events/users", "re-frame", "dispatch [:users/update …]")
+  Component(mw, "wrap-base", "Ring", "operlog 计时;请求结束后写 sys_oper_log")
+  Component(auth, "auth-middleware", "Ring", "wrap-jwt-auth → require-auth → require-perms \"system:user:edit\"")
+  Component(ctrl, "controllers/system/user", "Clojure", "update")
+  Component(dp, "infra.data-perm", "Clojure", "按当前角色 data_scope 生成部门过滤")
+  Component(svc, "domain/system/user", "Integrant", "update-user!")
+  ComponentDb(db, "DB", "sys_user / sys_user_role / sys_oper_log", "")
+  Rel(spa, mw, "1. PUT /api/system/user/1 (Bearer)")
+  Rel(mw, auth, "2. 路由匹配后进入路由级中间件")
+  Rel(auth, ctrl, "3. :identity 含 user-id/roles/perms")
+  Rel(ctrl, dp, "4. data-perm-filter(identity)")
+  Rel(ctrl, svc, "5. update-user! ctx params")
+  Rel(svc, db, "6. UPDATE + 重写用户角色关联")
+  Rel(svc, ctrl, "7. 返回结果")
+  Rel(ctrl, mw, "8. {:code 200 :msg \"操作成功\"}")
+  Rel(mw, db, "9. INSERT sys_oper_log(uri, 参数, 状态, 耗时)")
+  Rel(mw, spa, "10. JSON 响应 → :users/fetch 刷新列表")
+#+end_src
+
+** 7.3 前端导航(URL ↔ 页面 ↔ Tab)
+
+#+begin_src mermaid :file dyn-nav.png :exports results
+sequenceDiagram
+  participant U as 用户
+  participant L as layout(菜单/Tab)
+  participant EV as events/core
+  participant R as router
+  participant P as page-view
+  U->>L: 点击菜单 system/post
+  L->>EV: dispatch [:navigate :post]
+  EV->>EV: activate-page-tab(新增/激活 Tab)
+  EV->>EV: 按 fetch 表 dispatch [:posts/fetch {}]
+  EV->>R: :router/navigate! → history.pushState("/system/post")
+  R-->>P: 订阅 :page 变化 → render-page :post → [post/post-page]
+  U->>R: 浏览器后退(popstate)
+  R->>EV: dispatch [:navigate <匹配到的页面>]
+#+end_src
+
+** 7.4 后端启动顺序(Integrant 拓扑)
+
+#+begin_src mermaid :file dyn-startup.png :exports results
+flowchart LR
+  env[":system/env<br/>(profile)"] --> conn[":db.sql/connection<br/>HikariCP"]
+  conn --> mig[":db.sql/migrations<br/>migrate-on-init?"]
+  conn --> qf[":db.sql/query-fn<br/>加载 sql/*.sql"]
+  qf --> svc[":app.system/*-service"]
+  conn --> svc
+  mig --> job[":app.system/job-scheduler<br/>从 sys_job 加载任务"]
+  qz[":cronut/scheduler<br/>Quartz"] --> job
+  svc --> api[":reitit.routes/api"]
+  api --> routes[":router/routes<br/>(refset :reitit/routes)"]
+  routes --> rc[":router/core"]
+  rc --> ring[":handler/ring"]
+  ring --> http[":server/http<br/>Undertow :3000"]
+  nrepl[":nrepl/server :7000"]
+#+end_src
+
+Integrant 按 ~#ig/ref~ 依赖自动排序;~:app.system/job-scheduler~ 显式依赖 ~:db.sql/migrations~ 是为了保证 ~sys_job~ 表已存在。停止顺序相反(~ig/halt!~)。
+
+* 8. Deployment(部署视图)
+
+#+begin_src mermaid :file c4-deployment.png :exports results
+C4Deployment
+  title Deployment — 开发 / 生产
+  Deployment_Node(devbox, "开发机", "macOS / Linux / Windows") {
+    Deployment_Node(jvm1, "JVM", "clojure -M:dev -m com.ruoyi.core") {
+      Container(be1, "后端 + nREPL", "3000 / 7000", "静态文件直接读 resources/public")
+    }
+    Deployment_Node(node1, "Node.js", "npx shadow-cljs watch app") {
+      Container(fe1, "shadow-cljs 编译器", "增量编译 → resources/public/js", "")
+    }
+    ContainerDb(sqlite, "rouyi.db", "SQLite 文件", "")
+  }
+  Deployment_Node(prod, "生产主机 / 容器", "Linux, JDK 17+") {
+    Deployment_Node(nginx, "Nginx(可选)", "TLS 终止 / 反向代理", "") {
+      Container(rp, "reverse proxy", "443 → 3000", "")
+    }
+    Deployment_Node(jvm2, "JVM", "java -jar rouyi-standalone.jar") {
+      Container(be2, "uberjar", "含前端 release 产物", "PORT / JDBC_URL / MIGRATION_DIR / COOKIE_SECRET / JWT_SECRET 由环境变量注入")
+    }
+  }
+  Deployment_Node(dbhost, "数据库服务器", "MySQL 8") {
+    ContainerDb(mysql, "myapp", "utf8mb4", "")
+  }
+  Rel(be1, sqlite, "JDBC")
+  Rel(rp, be2, "HTTP")
+  Rel(be2, mysql, "JDBC/HikariCP")
+#+end_src
+
+** 8.1 环境变量一览
+
+| 变量 | 默认 | 说明 |
+|------+------+------|
+| ~PORT~ / ~HTTP_HOST~ | 3000 / 0.0.0.0 | HTTP 监听 |
+| ~NREPL_PORT~ / ~NREPL_HOST~ | 7000 / 127.0.0.1 | nREPL |
+| ~JDBC_URL~ | ~jdbc:sqlite:rouyi.db~ | 换 MySQL 时填 ~jdbc:mysql://…~ |
+| ~MIGRATION_DIR~ | ~migrations-sqlite~ | MySQL 填 ~migrations~ |
+| ~COOKIE_SECRET~ | 内置示例值 | 生产必须覆盖(16 字节) |
+| ~JWT_SECRET~ | 内置示例值 | 生产必须覆盖(见 ~infra/security.clj~) |
+
+** 8.2 可执行:构建生产包
+
+#+begin_src sh :exports code :eval never
+npx shadow-cljs release app        # 前端 → resources/public/js/app.js(压缩)
+clojure -T:build all               # clean → pom → 复制 src/resources/env/prod → 编译 → uberjar
+ls -la target/*-standalone.jar
+docker build -t clojure-template .  # 多阶段:clojure:openjdk-17 构建 → zulu alpine 运行
+#+end_src
+
+* 9. 横切关注点
+
+** 9.1 认证与授权
+- *身份*:登录成功签发 JWT(~infra.security/generate-token~,claims 含 user-id / user-name / roles),前端放 localStorage 并以 ~Authorization: Bearer~ 发送;服务端无会话状态。
+- *登出/强退*:JWT 本身不可撤销,因此 ~infra.online~ 维护 token 黑名单 + ~sys_online~ 表;~wrap-jwt-auth~ 每次请求检查黑名单并更新心跳,过期会话由后台线程清理。
+- *功能权限*:路由声明 ~:perms~,~require-perms~ 用 ~getInfo~ 时计算出的权限集合(角色 → 菜单 ~perms~ 字段)做"任一命中"判断;前端按同一权限集合控制按钮显隐。
+- *数据权限*:角色 ~data_scope~(1 全部 / 2 自定义 / 3 本部门 / 4 本部门及以下 / 5 仅本人)→ ~infra.data-perm/data-perm-filter~ 生成部门过滤 SQL 片段,由需要的查询(用户列表等)拼接。
+
+** 9.2 审计
+~middleware.operlog~ 记录所有 ~/api~ 非 GET 请求(操作人、URL、参数、状态码、耗时)到 ~sys_oper_log~;登录成功/失败写 ~sys_login_log~;前端"日志管理"页面查询与导出。
+
+** 9.3 双库兼容(SQLite / MySQL)
+- 两套迁移目录同名同步;DDL 差异(自增、时间类型)分别处理。
+- 共用 SQL 只用两库都支持的语法(~INSTR~ 代替 ~||~ 拼接,~LIMIT :size OFFSET :offset~)。
+- 函数名不同(~last_insert_rowid()~ vs ~LAST_INSERT_ID()~)提供命名变体,由 ~infra.db/detect-db-type~ 在 Clojure 层选择;元数据查询(~PRAGMA~ / ~information_schema~)也在 Clojure 层分支。
+- ~infra.datasource~ 让连接池可在运行时热切换,用于"连接池监视/数据源切换"演示与测试。
+
+可执行:两套迁移目录必须成对:
+
+#+begin_src sh :exports both
+diff <(ls resources/migrations-sqlite | sed 's/\.\(up\|down\)\.sql$//' | sort -u) \
+     <(ls resources/migrations        | sed 's/\.\(up\|down\)\.sql$//' | sort -u) \
+  && echo "OK: 两套迁移同名同步"
+#+end_src
+
+** 9.4 配置注入
+~system.edn~ 是唯一装配点:~#profile~ 区分 dev/test/prod,~#env~ 读环境变量,~#or~ 给默认值,~#ig/ref~ 声明依赖。业务代码里不直接读环境变量(仅 ~infra.security~ 读 ~JWT_SECRET~),测试通过 ~{:profile :test}~ 起一套独立系统(~test_utils.clj~)。
+
+** 9.5 热重载
+~env/dev/clj/user.clj~ 提供 ~rd~(领域)~rm~(中间件)~rroutes~(路由,需 ~rr~ 生效)~ra~(全部)~rr~(Integrant halt → prep → go)~reset-db~ ~migrate~;SQL 文件、~system.edn~、组件结构变更需要 ~rr~。前端由 shadow-cljs watch 增量编译并热加载(~:after-load app/reload~)。
+
+** 9.6 错误处理与安全头
+- ~middleware.exception~ 把未捕获异常统一转成 ~{:code 500 :msg …}~,coercion 错误由 reitit 的 ~coerce-exceptions-middleware~ 返回 400。
+- ring-defaults:XSS 保护、~X-Frame-Options: sameorigin~、~nosniff~;CSRF 关闭(纯 Bearer API),CORS 放开(便于前后端分离开发,生产同源部署时可收紧)。
+
+* 10. 扩展指南
+
+** 10.1 新增业务模块清单(以 ~example~ 为例)
+
+| # | 层 | 文件 / 位置 | 动作 |
+|---+----+-------------+------|
+| 1 | 迁移 | ~resources/migrations-sqlite/<ts>-create-example.{up,down}.sql~ 与 ~resources/migrations/~ | 建表;菜单用 ~INSERT INTO sys_menu~ 并给 admin 角色 ~sys_role_menu~ |
+| 2 | SQL | ~resources/sql/example.sql~ | HugSQL;加入 ~system.edn~ ~:db.sql/query-fn :filenames~ |
+| 3 | 领域 | ~src/clj/com/ruoyi/domain/example.clj~ | 纯函数 + ~defmethod ig/init-key :app.example/service~ |
+| 4 | 装配 | ~resources/system.edn~ | 登记 ~:app.example/service~;在 ~:reitit.routes/api~ 注入 ~:example-service~ |
+| 5 | 控制器 | ~src/clj/com/ruoyi/web/controllers/example.clj~ | 请求 → 服务 → 响应 |
+| 6 | 路由 | ~src/clj/com/ruoyi/web/routes/example.clj~;~routes/api.clj~ 的 ~api-routes~ 追加 | 声明 ~auth-middleware~ 与 ~:perms~、Malli 参数、Swagger tag |
+| 7 | 入口 | ~src/clj/com/ruoyi/core.clj~;~env/dev/clj/user.clj~ ~reload-domain~ | require 新命名空间 |
+| 8 | 前端 API | ~src/cljs/com/ruoyi/frontend/api/example.cljs~(可在 ~api.cljs~ 重导出) | 基于 ~api.transport/request~ |
+| 9 | 前端事件 | ~events/example.cljs~ + 在 ~events.cljs~ require;~db.cljs~ 加初始状态 | ~reg-event-fx~ + ~reg-fx :api/*~ |
+| 10 | 页面 | ~pages/example/*.cljs~ | 复用 ~components/*~;函数组件 + Hooks |
+| 11 | 登记 | ~router.cljs~(路由 + page-names)、~layout/menu_data.cljs~(menu-key/面包屑/图标)、~layout/page_view.cljs~(分发)、~events/common.cljs~(Tab 元数据)、~events/core.cljs~(预取表,可选) | 各加一行 |
+| 12 | 测试 | ~test/clj/com/ruoyi/.../example_test.clj~、~tests/e2e/example.spec.js~ | 后端用 ~test_utils~ 起系统 + ring-mock;E2E 走真实页面 |
+| 13 | 文档 | 本文 §2/§3/§4/§5 对应图追加组件;README API 概览 | |
+
+也可用「系统工具 → 代码生成」按表结构自动产出第 2、3、5、6、8、9、10 步的骨架再手工调整。
+
+** 10.2 从模板派生新项目
+
+#+begin_src sh :exports code :eval never
+git clone <template> my-app && cd my-app
+./scripts/rename-project.sh com.acme.myapp myapp   # 命名空间 + 项目名 + 目录移动
+# 改品牌:src/cljs/<ns>/frontend/config.cljs(app-name / repo-url)
+rm -f *.db && clojure -M:test && npm install && npx shadow-cljs compile app
+rm -rf .git && git init && git add -A && git commit -m "init from clojure-template"
+#+end_src
+
+* 11. 质量保障
+
+| 层 | 工具 | 命令 | 说明 |
+|----+------+------+------|
+| 单元 / 集成 | clojure.test + ring-mock + test_utils | ~clojure -M:test~ | 起一套 :test profile 的 Integrant 系统(SQLite),控制器测试走真实路由与中间件 |
+| 覆盖率 | cloverage | ~clojure -M:coverage~ | ~target/coverage/index.html~ |
+| 端到端 | Playwright | ~npm run test:e2e~ | 需后端已在 3000 运行;串行(共享 SQLite) |
+| 规模约束 | ~scripts/check_constraints.py~ | ~python3 scripts/check_constraints.py~ | 命名空间 ≤500 行、函数 ≤50 行 |
+| 静态检查 | clj-kondo / clojure-lsp | ~clj-kondo --lint src test~ | 未使用 var、arity 等 |
+
+可执行:跑后端测试并只看汇总行
+
+#+begin_src sh :exports both
+rm -f rouyi.db && clojure -M:test 2>&1 | grep -E "^Ran |failures"
+#+end_src
+
+可执行:规模约束
+
+#+begin_src sh :exports both
+python3 scripts/check_constraints.py 2>&1 | tail -5
+#+end_src
+
+* 12. 架构决策记录(ADR)
+
+** ADR-001 后端选用 Kit + Integrant(而非 Luminus/Pedestal)
+- *决策*:用 Kit 的 edge 组件(undertow/conman/migratus/quartz/nrepl)+ Integrant 装配。
+- *理由*:数据驱动的组件图便于测试与热重载(~rr~);edge 组件可按需增删;~system.edn~ 让"系统由什么组成"一目了然(§3.2 可直接列出)。
+- *后果*:所有新能力都要以组件形式登记;学习成本集中在 Integrant 的 ~init-key/halt-key!~ 与 ~#ig/ref~。
+
+** ADR-002 默认 SQLite,同步维护 MySQL 迁移
+- *决策*:开发/测试零配置用 SQLite;生产可切 MySQL;两套迁移目录同名同步,共用 SQL 只写交集语法。
+- *理由*:模板要"clone 即跑";管理后台的 SQL 复杂度不高,交集语法够用。
+- *后果*:每次改表要改两处(§9.3 有可执行检查);库特定函数需在 Clojure 层分支。
+
+** ADR-003 无状态 JWT + 在线表/黑名单
+- *决策*:JWT 承载身份与角色,权限在 ~getInfo~ 时计算;登出/强退靠内存黑名单 + ~sys_online~。
+- *理由*:前后端分离、多实例友好;RuoYi 的"在线用户/强退"功能需要可撤销性。
+- *后果*:多实例部署时黑名单不共享,需要引入 Redis 或改为短 token + 刷新;单实例模板不引入。
+
+** ADR-004 前端:Reagent 函数组件 + Hooks + re-frame,禁用 reagent/atom
+- *决策*:全局状态 re-frame,局部状态 React Hooks;组件按"页面 → 子组件文件"拆分以满足 ≤500/≤50 行约束。
+- *理由*:与 React 19 / antd 6 生态一致(Form.useForm、App.useApp 等都是 Hooks);避免 ratom 与 Hooks 混用的重渲染陷阱。
+- *后果*:AGENTS.md 维护一份 antd 6 适配清单;所有页面必须走 ~re-frame~ 事件而不是直接调 api。
+
+** ADR-005 保留 ~com.ruoyi~ 命名空间,用脚本改名
+- *决策*:模板源码保持 ~com.ruoyi~ / ~rouyi~ 命名,派生项目执行 ~scripts/rename-project.sh~ 一次性改名。
+- *理由*:模板自身可持续演进并被上游同步;改名是确定性文本替换 + 目录移动,脚本比手工可靠。
+- *后果*:培训教材 ~docs/training~ 与 RuoYi-Vue 对照文档保持原名;脚本需在两个平台(macOS/Linux)可用(用 perl 而非 sed -i)。
+
+** ADR-006 从 quicktracking-demo/admin 剥离「合成流量」模块形成模板
+- *决策*:删除 synthetic / formal-backend 两个业务域(后端 domain/routes/controllers/scheduler、前端 api/pages、迁移、SQL、E2E、~../tools/clj~ 外部路径与 chime 依赖),以及早期已废弃的「方案智能编制」业务迁移;新增 ~frontend/config.cljs~ 集中品牌信息、~scripts/rename-project.sh~、本文档。
+- *理由*:合成流量是特定客户场景,与通用管理后台无关;外部 ~:paths~ 使模板无法独立编译。
+- *验证*:剥离后 ~clojure -M:test~ 350 tests / 860 assertions 全部通过;~npx shadow-cljs compile app~ 0 warnings;Playwright ~auth~ / ~navigation~(19 页)/ ~post-crud~ 全部通过;~grep -rni "synthetic|formal|流量" src resources test tests~ 为空。
+- *附带修复*:
+  - MySQL 迁移补上 ~20260613215630-add-notice-content~(此前只有 SQLite 有该列,MySQL 下新建公告会失败);
+  - ~routes/system.clj~ 的 274 行 ~system-routes~ 拆成 19 个路由组函数(路由集合经 Reitit 展开比对完全一致),~scripts/check_constraints.py~ 的函数上限改为与 AGENTS.md 一致的 50 行,现全部通过;
+  - E2E:~navigation.spec.js~ 去掉指向已删除业务模块的 3 条路由并加入 ~/monitor/integrant~;~post-crud.spec.js~ 的弹窗按钮匹配 zh_CN 文案「确 定」。
+
+* 附录 A:模板与源项目的差异清单
+
+| 类别 | 已删除 | 已新增 / 修改 |
+|------+--------+---------------|
+| 后端 | ~domain/{synthetic,formal_backend}.clj~、~infra/synthetic_scheduler.clj~、~web/{controllers,routes}/{synthetic,formal_backend}.clj~ | ~core.clj~ / ~routes/api.clj~ / ~system.edn~ 去引用,并留出模块登记点注释 |
+| 前端 | ~api/{synthetic,formal}.cljs~、~pages/{synthetic,formal}/*~ | ~config.cljs~(品牌);~router~ / ~menu_data~ / ~page_view~ / ~events/common~ / ~api.cljs~ 去引用;~db.cljs~ 删除废弃的 ~:projects~ 状态 |
+| 数据 | ~sql/synthetic.sql~、~2026092*~ 迁移、~2024061300[1-4]~ / ~202606150002~ / ~202606150010~ 业务迁移 | MySQL ~20260613215630-add-notice-content~ |
+| 配置 | ~deps.edn~ 外部 ~:paths~、~jarohen/chime~、未使用的 ~h2~;~deps-cov.edn~;~formal-backend.edn(.example)~;~deploy.sh~(含固定主机) | ~.gitignore~ 重写 |
+| 文档 | ~GAP_ANALYSIS.md~ ~REMAINING.md~ ~ROADMAP.md~ ~test/coverage-report.md~ ~docs/pic-field-checklist.md~;README 合成流量章节 | README 重写为模板说明;~CLAUDE.md~ 指向本文;本文 |
+| 工具 | ~.beads/~ ~.agents/~ ~.claude/settings.json~(issue 跟踪钩子)、~test-frontend.mjs~ | ~scripts/rename-project.sh~;~check_constraints.py~ 函数上限 50 |
+| 测试 | ~synthetic_profile_test.clj~、~synthetic-profile.spec.js~、~formal-pages.spec.js~ | ~navigation.spec.js~ / ~post-crud.spec.js~ 修正 |
+
+* 附录 B:术语
+
+| 术语 | 含义 |
+|------+------|
+| Edge | Kit 对第三方基础设施(HTTP 服务器、连接池、迁移、调度、nREPL)的 Integrant 组件封装 |
+| query-fn | conman 把 ~resources/sql/*.sql~ 编译成的函数:~(query-fn :list-users {:page 1})~ |
+| perms | 菜单/按钮权限标识,形如 ~system:user:list~,同时用于后端路由与前端按钮显隐 |
+| data_scope | 角色的数据权限范围:1 全部 / 2 自定义部门 / 3 本部门 / 4 本部门及以下 / 5 仅本人 |
+| Tab | 前端主布局中的多页签,~app-db :tabs~;~:navigate~ 事件负责激活/新增 |
+| rr / rd | ~user.clj~ 中的热重载助手:整系统重启 / 领域层重载 |

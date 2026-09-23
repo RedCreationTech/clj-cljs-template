@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>管理系统</title>
+  <link rel="stylesheet" href="/css/quill.snow.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      width: 100%;
+      color: #606266;
+      font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 14px;
+      background: #fff;
+    }
+    #app { height: 100%; }
+    .ant-layout, .ant-layout-content {
+      background: #fff !important;
+    }
+    .ant-input,
+    .ant-select-single .ant-select-selector,
+    .ant-picker {
+      min-height: 34px;
+      border-color: #dcdfe6 !important;
+      border-radius: 4px !important;
+      color: #606266;
+      box-shadow: none !important;
+    }
+    .ant-input::placeholder,
+    .ant-select-selection-placeholder,
+    .ant-picker-input > input::placeholder {
+      color: #c0c4cc !important;
+    }
+    .ant-input:hover,
+    .ant-select-selector:hover,
+    .ant-picker:hover {
+      border-color: #c0c4cc !important;
+    }
+    .ant-input:focus,
+    .ant-input-focused,
+    .ant-select-focused .ant-select-selector,
+    .ant-picker-focused {
+      border-color: #409eff !important;
+    }
+    .ant-btn {
+      border-radius: 4px;
+      box-shadow: none;
+    }
+    /* 列表页表格 */
+    .ant-layout-content > div > .ant-table-wrapper,
+    .ant-layout-content > div > div > .ant-table-wrapper {
+      padding: 0 22px;
+      background: #fff;
+    }
+    .ant-table-cell { white-space: nowrap; }
+    .ant-table-wrapper .ant-table {
+      color: #606266;
+      font-size: 14px;
+      background: #fff;
+    }
+    .ant-table-wrapper .ant-table-thead > tr > th {
+      height: 44px;
+      padding: 10px 8px;
+      background: #f8f8f9 !important;
+      color: #606266;
+      font-size: 14px;
+      font-weight: 700;
+      text-align: center !important;
+      border-bottom: 1px solid #ebeef5;
+      white-space: nowrap;
+    }
+    .ant-table-wrapper .ant-table-tbody > tr > td {
+      height: 54px;
+      padding: 10px 8px;
+      color: #606266;
+      font-size: 14px;
+      font-weight: 400;
+      text-align: center !important;
+      border-bottom: 1px solid #ebeef5;
+    }
+    .ant-table-wrapper .ant-table-tbody > tr:hover > td {
+      background: #fff;
+    }
+    .ant-table-wrapper .ant-table-tbody > tr > td.ruoyi-tree-name-cell {
+      text-align: left !important;
+      padding-left: 12px;
+    }
+    .ruoyi-tree-name-cell .ant-table-row-indent {
+      display: inline-block;
+      width: 24px !important;
+    }
+    .ruoyi-tree-name-cell .ant-table-row-expand-icon {
+      margin-right: 12px;
+    }
+    .ant-table-wrapper .ant-table-tbody > tr > td.ruoyi-menu-sort-cell {
+      color: #606266;
+      font-size: 14px;
+      text-align: center !important;
+    }
+    .ant-table-wrapper .ant-btn-link {
+      height: 24px;
+      padding: 0 6px;
+      color: #409eff;
+      font-size: 14px;
+      font-weight: 400;
+    }
+    .ant-table-wrapper .ant-btn-link.ant-btn-dangerous {
+      color: #409eff;
+    }
+    .ant-table-wrapper .ant-pagination {
+      margin: 16px 0 12px 0;
+      padding-right: 22px;
+      color: #606266;
+      font-size: 14px;
+    }
+    .ant-pagination .ant-pagination-total-text {
+      margin-right: 10px;
+    }
+    .ant-pagination .ant-pagination-item,
+    .ant-pagination .ant-pagination-prev,
+    .ant-pagination .ant-pagination-next {
+      min-width: 38px;
+      height: 32px;
+      line-height: 30px;
+      border-radius: 4px;
+    }
+    .ant-pagination .ant-pagination-item-active {
+      background: #409eff;
+      border-color: #409eff;
+    }
+    .ant-pagination .ant-pagination-item-active a {
+      color: #fff;
+    }
+    .ant-pagination .ant-select-single .ant-select-selector {
+      min-height: 32px;
+    }
+    .ruoyi-menu-action-cell {
+      min-width: 300px;
+    }
+    .ruoyi-menu-actions {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      white-space: nowrap;
+    }
+    .ruoyi-menu-actions .ant-btn-link {
+      padding: 0;
+    }
+    .ruoyi-row-export-button {
+      height: 32px;
+      padding: 0 14px;
+      border: 1px solid #dcdfe6;
+      border-radius: 4px;
+      background: #fff;
+      color: #303133;
+      font-size: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .ruoyi-row-export-button:hover {
+      color: #409eff;
+      border-color: #c6e2ff;
+      background: #fff;
+    }
+    .ruoyi-status-tag {
+      min-width: 54px;
+      height: 28px;
+      margin: 0;
+      padding: 0 12px;
+      border: 1px solid #d9ecff;
+      border-radius: 4px;
+      background: #ecf5ff;
+      color: #409eff;
+      font-size: 14px;
+      line-height: 26px;
+      text-align: center;
+    }
+    .ant-tag-success,
+    .ant-tag-green,
+    .ant-tag-blue {
+      border-color: #d9ecff !important;
+      background: #ecf5ff !important;
+      color: #409eff !important;
+    }
+    .ant-tag-error,
+    .ant-tag-red {
+      border-color: #fde2e2 !important;
+      background: #fef0f0 !important;
+      color: #f56c6c !important;
+    }
+    .ant-tag-warning,
+    .ant-tag-orange,
+    .ant-tag-gold {
+      border-color: #faecd8 !important;
+      background: #fdf6ec !important;
+      color: #e6a23c !important;
+    }
+    .ruoyi-menu-type-tag {
+      min-width: 42px;
+      height: 24px;
+      margin: 0;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 4px;
+      background: #f4f4f5;
+      color: #606266;
+      font-size: 13px;
+      line-height: 24px;
+      text-align: center;
+    }
+    .ant-table-row-expand-icon {
+      width: 18px;
+      height: 18px;
+      border: 1px solid #dcdfe6;
+      border-radius: 50%;
+      color: #909399;
+      line-height: 16px;
+      vertical-align: -2px;
+    }
+    .ant-table-row-expand-icon-expanded,
+    .ant-table-row-expand-icon-collapsed {
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <!-- BPMN.js - 流程设计器 -->
+  <script src="https://unpkg.com/bpmn-js@17.11.1/dist/bpmn-modeler.development.js"></script>
+  <script src="/js/app.js?v=11"></script>
+</body>
+</html>

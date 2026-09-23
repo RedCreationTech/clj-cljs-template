@@ -1,0 +1,168 @@
+{:system/env
+ #profile {:dev  :dev
+           :test :test
+           :prod :prod}
+
+ :nrepl/server
+ {:port #long #or [#env NREPL_PORT 7000]
+  :bind #or [#env NREPL_HOST "127.0.0.1"]}
+
+ :server/http
+ {:port    #long #or [#env PORT 3000]
+  :host    #or [#env HTTP_HOST "0.0.0.0"]
+  :handler #ig/ref :handler/ring}
+
+ :handler/ring
+ {:router                #ig/ref :router/core
+  :api-path              "/api"
+  :query-fn              #ig/ref :db.sql/query-fn
+  :cookie-secret         #or [#env COOKIE_SECRET "KWGRWFTDVZAHISQO"]
+  :site-defaults-config  {:params    {:urlencoded true
+                                      :multipart  true
+                                      :nested     true
+                                      :keywordize true}
+                          :cookies   true
+                          :session   {:flash true
+                                      :cookie-name "com.ruoyi"
+                                      :cookie-attrs {:max-age     86400
+                                                     :http-only   true
+                                                     :same-site   :strict}}
+                          :security  {:anti-forgery   false
+                                      :xss-protection {:enable? true, :mode :block}
+                                      :frame-options  :sameorigin
+                                      :content-type-options :nosniff}
+                          :static    {:resources "public"}
+                          :responses {:not-modified-responses true
+                                      :absolute-redirects     true
+                                      :content-types          true
+                                      :default-charset        "utf-8"}}}
+
+ :app.system/user-service
+ {:query-fn #ig/ref :db.sql/query-fn
+  :db       #ig/ref :db.sql/connection}
+
+ :app.system/role-service
+ {:query-fn #ig/ref :db.sql/query-fn
+  :db       #ig/ref :db.sql/connection}
+
+ :app.system/menu-service
+ {:query-fn #ig/ref :db.sql/query-fn
+  :db       #ig/ref :db.sql/connection}
+
+ :app.system/dept-service
+ {:query-fn #ig/ref :db.sql/query-fn
+  :db       #ig/ref :db.sql/connection}
+
+ :app.system/post-service
+ {:query-fn #ig/ref :db.sql/query-fn
+  :db       #ig/ref :db.sql/connection}
+
+ :app.system/dict-service
+ {:query-fn #ig/ref :db.sql/query-fn
+  :db       #ig/ref :db.sql/connection}
+
+ :app.system/config-service
+ {:query-fn #ig/ref :db.sql/query-fn
+  :db       #ig/ref :db.sql/connection}
+
+ :app.system/form-template-service
+ {:query-fn #ig/ref :db.sql/query-fn
+  :db       #ig/ref :db.sql/connection}
+
+ :app.system/log-service
+ {:query-fn #ig/ref :db.sql/query-fn
+  :db       #ig/ref :db.sql/connection}
+
+ :app.system/online-service
+ {:query-fn #ig/ref :db.sql/query-fn
+  :db       #ig/ref :db.sql/connection}
+
+ :app.system/gen-service
+ {:query-fn #ig/ref :db.sql/query-fn
+  :db       #ig/ref :db.sql/connection}
+
+ ;; 业务模块的 Integrant 组件在此登记,例如:
+ ;; :app.example/service
+ ;; {:query-fn #ig/ref :db.sql/query-fn
+ ;;  :db       #ig/ref :db.sql/connection}
+
+ :app.system/job-scheduler
+ {:scheduler  #ig/ref :cronut/scheduler
+  :query-fn   #ig/ref :db.sql/query-fn
+  :migrations #ig/ref :db.sql/migrations
+  :db         #ig/ref :db.sql/connection}
+
+ :reitit.routes/api
+ {:base-path      "/api"
+  :env            #ig/ref :system/env
+  :query-fn       #ig/ref :db.sql/query-fn
+  :datasource     #ig/ref :db.sql/connection
+  :user-service   #ig/ref :app.system/user-service
+  :role-service   #ig/ref :app.system/role-service
+  :menu-service   #ig/ref :app.system/menu-service
+  :dept-service   #ig/ref :app.system/dept-service
+  :post-service   #ig/ref :app.system/post-service
+  :dict-service   #ig/ref :app.system/dict-service
+  :config-service       #ig/ref :app.system/config-service
+  :form-template-service #ig/ref :app.system/form-template-service
+  :log-service          #ig/ref :app.system/log-service
+  :online-service       #ig/ref :app.system/online-service
+  :gen-service    #ig/ref :app.system/gen-service
+  ;; 业务模块的 service 在此注入给路由,例如 :example-service #ig/ref :app.example/service
+  }
+
+ :router/routes
+ {:routes #ig/refset :reitit/routes}
+
+ :router/core
+ {:routes #ig/ref :router/routes
+  :env #ig/ref :system/env}
+
+ :cronut/scheduler
+ {:schedule []}
+
+ :templating/selmer
+ {}
+
+ :db.sql/connection
+ #profile {:dev  {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:rouyi.db"]
+                  :init-size  1
+                  :min-idle   1
+                  :max-idle   1
+                  :max-active 1
+                  :connection-test-query "SELECT 1"
+                  :validation-timeout 3000}
+           :test {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:rouyi.db"]
+                  :init-size  1
+                  :min-idle   1
+                  :max-idle   1
+                  :max-active 1
+                  :connection-test-query "SELECT 1"
+                  :validation-timeout 3000}
+           :prod {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:rouyi.db"]
+                  :init-size  1
+                  :min-idle   1
+                  :max-idle   1
+                  :max-active 1
+                  :connection-test-query "SELECT 1"
+                  :validation-timeout 3000}}
+
+ :db.sql/query-fn
+ {:conn      #ig/ref :db.sql/connection
+  :options   {}
+  :filenames ["queries.sql" "sql/system.sql" "sql/log.sql" "sql/job.sql" "sql/gen.sql" "sql/generated.sql"]
+  :env       #ig/ref :system/env}
+
+ :db.sql/migrations
+ #profile {:dev  {:store            :database
+                  :db               {:datasource #ig/ref :db.sql/connection}
+                  :migrate-on-init? true
+                  :migration-dir    #or [#env MIGRATION_DIR "migrations-sqlite"]}
+           :test {:store            :database
+                  :db               {:datasource #ig/ref :db.sql/connection}
+                  :migrate-on-init? true
+                  :migration-dir    #or [#env MIGRATION_DIR "migrations-sqlite"]}
+           :prod {:store            :database
+                  :db               {:datasource #ig/ref :db.sql/connection}
+                  :migrate-on-init? true
+                  :migration-dir    #or [#env MIGRATION_DIR "migrations-sqlite"]}}}

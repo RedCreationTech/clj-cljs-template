@@ -1,0 +1,30 @@
+# ─── Clojure / JVM ────────────────────────────────────────────
+.cpcache/
+.nrepl-port
+target/
+*.jar
+*.class
+.clj-kondo/.cache/
+.lsp/.cache/
+
+# ─── ClojureScript / Node ─────────────────────────────────────
+.shadow-cljs/
+node_modules/
+resources/public/js/
+
+# ─── 本地数据库 / 日志 ─────────────────────────────────────────
+*.db
+*.log
+/log/
+/logs/
+
+# ─── 测试产物 ─────────────────────────────────────────────────
+test-results/
+playwright-report/
+
+# ─── 编辑器 / AI 助手本地文件 ───────────────────────────────────
+.DS_Store
+CLAUDE.local.md
+.pi/
+.runtime/
+/.codex/

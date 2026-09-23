@@ -1,0 +1,105 @@
+(ns com.ruoyi.frontend.events.notices
+  "通知公告事件。"
+  (:require
+   [com.ruoyi.frontend.events.common :as ec]
+   [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.db :as db]
+   [com.ruoyi.frontend.router :as router]
+   [re-frame.core :as rf]))
+
+(rf/reg-event-fx :notices/search
+                 (fn [{:keys [db]} [_ params]]
+                   {:db (assoc-in db [:notices :loading?] true)
+                    :api/list-notices-search params}))
+
+(rf/reg-fx :api/list-notices-search
+           (fn [params]
+             (api/list-notices {}
+                               (fn [result]
+                                 (when (= 200 (:code result))
+                                   (let [data (:data result)
+                                         items (if (sequential? data) data (:rows data []))
+                                         filtered (cond->> items
+                                                    (:notice_name params)
+                                                    (filter #(clojure.string/includes?
+                                                              (or (:notice_name %) "")
+                                                              (:notice_name params))))]
+                                     (rf/dispatch [:notices/set-list {:rows filtered :total (count filtered)}]))))
+                               (fn [_]))))
+
+(rf/reg-event-fx :notices/fetch
+                 (fn [{:keys [db]} [_ params]]
+                   {:db (assoc-in db [:notices :loading?] true)
+                    :api/list-notices params}))
+
+(rf/reg-fx :api/list-notices
+           (fn [params]
+             (api/list-notices params
+                               (fn [result]
+                                 (when (= 200 (:code result))
+                                   (rf/dispatch [:notices/set-list (:data result)])))
+                               (fn [_] (antd/error! "网络错误")))))
+
+(rf/reg-event-db :notices/set-list
+                 (fn [db [_ data]]
+                   (let [items (if (sequential? data) data (:rows data []))
+                         total (if (sequential? data) (count data) (:total data 0))]
+                     (assoc db :notices {:items items :total total :loading? false
+                                         :modal-visible? false :editing nil :form-data {}}))))
+
+(rf/reg-event-db :notices/open-modal
+                 (fn [db _]
+                   (assoc db :notices {:items (get-in db [:notices :items] [])
+                                       :total (get-in db [:notices :total] 0)
+                                       :loading? false
+                                       :modal-visible? true :editing nil :form-data {}})))
+
+(rf/reg-event-db :notices/close-modal
+                 (fn [db _]
+                   (assoc-in db [:notices :modal-visible?] false)))
+
+(rf/reg-event-db :notices/edit
+                 (fn [db [_ item]]
+                   (-> db
+                       (assoc-in [:notices :modal-visible?] true)
+                       (assoc-in [:notices :editing] item)
+                       (assoc-in [:notices :form-data] item))))
+
+(rf/reg-event-fx :notices/submit
+                 (fn [{:keys [db]} [_ values]]
+                   (let [editing (get-in db [:notices :editing])]
+                     (if editing
+                       {:api/update-notice [(:notice_id editing) values]}
+                       {:api/create-notice values}))))
+
+(rf/reg-fx :api/create-notice
+           (fn [params]
+             (api/create-notice params
+                                (fn [result]
+                                  (when (= 200 (:code result))
+                                    (antd/success! "创建成功")
+                                    (rf/dispatch [:notices/fetch {}])))
+                                (fn [_] (antd/error! "网络错误")))))
+
+(rf/reg-fx :api/update-notice
+           (fn [[id params]]
+             (api/update-notice id params
+                                (fn [result]
+                                  (when (= 200 (:code result))
+                                    (antd/success! "更新成功")
+                                    (rf/dispatch [:notices/fetch {}])))
+                                (fn [_] (antd/error! "网络错误")))))
+
+(rf/reg-event-fx :notices/delete
+                 (fn [_ [_ id]]
+                   {:api/delete-notice id}))
+
+(rf/reg-fx :api/delete-notice
+           (fn [id]
+             (api/delete-notice id
+                                (fn [result]
+                                  (when (= 200 (:code result))
+                                    (antd/success! "删除成功")
+                                    (rf/dispatch [:notices/fetch {}])))
+                                (fn [_] (antd/error! "网络错误")))))

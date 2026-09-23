@@ -1,0 +1,264 @@
+(ns com.ruoyi.frontend.pages.job
+  "定时任务管理页面。"
+  (:require
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]
+   [re-frame.core :as rf]
+   ["@ant-design/icons" :refer [PlusOutlined EditOutlined DeleteOutlined PlayCircleOutlined FileTextOutlined SearchOutlined ReloadOutlined]]
+   [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.components.page-search :as page-search]
+   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]))
+
+(defn- status-tag [status]
+  [antd/tag {:color (if (= status "0") "green" "red")}
+   (if (= status "0") "正常" "暂停")])
+
+;; ─── 表单操作辅助 ──────────────────────────────────────────────────────
+
+(defn- open-edit-form! [{:keys [record set-form-name! set-form-group! set-form-target!
+                                set-form-cron! set-form-remark! set-editing-record! set-show-form!]}]
+  (set-form-name! (:job_name record ""))
+  (set-form-group! (:job_group record "DEFAULT"))
+  (set-form-target! (:invoke_target record ""))
+  (set-form-cron! (:cron_expression record ""))
+  (set-form-remark! (:remark record ""))
+  (set-editing-record! record)
+  (set-show-form! true))
+
+(defn- open-add-form! [{:keys [set-editing-record! set-form-name! set-form-group!
+                               set-form-target! set-form-cron! set-form-remark! set-show-form!]}]
+  (set-editing-record! nil)
+  (set-form-name! "")
+  (set-form-group! "DEFAULT")
+  (set-form-target! "")
+  (set-form-cron! "")
+  (set-form-remark! "")
+  (set-show-form! true))
+
+(defn- close-form! [{:keys [set-show-form! set-editing-record! set-form-name!
+                            set-form-group! set-form-target! set-form-cron! set-form-remark!]}]
+  (set-show-form! false)
+  (set-editing-record! nil)
+  (set-form-name! "")
+  (set-form-group! "DEFAULT")
+  (set-form-target! "")
+  (set-form-cron! "")
+  (set-form-remark! ""))
+
+(defn- submit-form! [{:keys [editing-record form-name form-group form-target form-cron form-remark] :as ctx}]
+  (let [data {:job_name form-name :job_group form-group
+              :invoke_target form-target :cron_expression form-cron
+              :remark form-remark :status "0" :misfire_policy "3" :concurrent "1"}]
+    (if editing-record
+      (rf/dispatch [:jobs/update (:job_id editing-record) data])
+      (rf/dispatch [:jobs/create data]))
+    (close-form! ctx)))
+
+(defn- show-log! [{:keys [job-name set-log-job-name! set-show-log!]}]
+  (set-log-job-name! job-name)
+  (rf/dispatch [:job-logs/fetch {:job_name job-name}])
+  (set-show-log! true))
+
+;; ─── 表格列 ──────────────────────────────────────────────────────
+
+(defn- job-columns [on-edit on-show-log]
+  #js [#js {:title "任务ID" :dataIndex "job_id" :key "job_id" :width 80}
+       #js {:title "任务名称" :dataIndex "job_name" :key "job_name"}
+       #js {:title "任务组" :dataIndex "job_group" :key "job_group"}
+       #js {:title "调用目标" :dataIndex "invoke_target" :key "invoke_target"}
+       #js {:title "Cron表达式" :dataIndex "cron_expression" :key "cron_expression"}
+       #js {:title "状态" :dataIndex "status" :key "status" :width 80
+            :render (fn [v] (r/as-element [status-tag v]))}
+       #js {:title "操作" :key "action" :width 280
+            :render (fn [_ ^js record]
+                      (r/as-element
+                       [antd/space
+                        [antd/button {:type "link" :size "small"
+                                      :icon (r/as-element [:> EditOutlined])
+                                      :onClick #(on-edit (js->clj record :keywordize-keys true))}
+                         "编辑"]
+                        [antd/popconfirm {:title "确认删除该任务？"
+                                          :onConfirm #(rf/dispatch [:jobs/delete (.-job_id record)])}
+                         [antd/button {:type "link" :danger true :size "small"
+                                       :icon (r/as-element [:> DeleteOutlined])}
+                          "删除"]]
+                        [antd/button {:type "link" :size "small"
+                                      :disabled (= (.-status record) "0")
+                                      :onClick #(rf/dispatch [:jobs/update (.-job_id record) {:status "0"}])}
+                         "恢复"]
+                        [antd/button {:type "link" :size "small"
+                                      :disabled (= (.-status record) "1")
+                                      :onClick #(rf/dispatch [:jobs/update (.-job_id record) {:status "1"}])}
+                         "暂停"]
+                        [antd/button {:type "link" :size "small"
+                                      :icon (r/as-element [:> FileTextOutlined])
+                                      :onClick #(on-show-log (.-job_name record))}
+                         "日志"]
+                        [antd/popconfirm {:title "确认立即执行一次该任务？"
+                                          :onConfirm #(rf/dispatch [:jobs/run-once (.-job_id record)])}
+                         [antd/button {:type "link" :size "small"
+                                       :icon (r/as-element [:> PlayCircleOutlined])}
+                          "执行"]]]))}])
+
+(defn- job-log-columns []
+  (clj->js
+   [{:title "日志ID" :dataIndex "job_log_id" :width 80}
+    {:title "任务名称" :dataIndex "job_name"}
+    {:title "任务组" :dataIndex "job_group"}
+    {:title "调用目标" :dataIndex "invoke_target"}
+    {:title "执行信息" :dataIndex "job_message"}
+    {:title "状态" :dataIndex "status" :width 80
+     :render (fn [v] (r/as-element [antd/tag {:color (if (= v "0") "green" "red")} (if (= v "0") "成功" "失败")]))}
+    {:title "执行时间" :dataIndex "create_time"}]))
+
+;; ─── 搜索栏 ──────────────────────────────────────────────────────
+
+(defn- job-search [{:keys [job-name job-group set-job-name! set-job-group!]}]
+  [page-search/page-search {:visible? true}
+   [page-search/search-row
+    [page-search/search-item
+     "任务名称"
+     [antd/input {:placeholder "请输入任务名称"
+                  :style page-search/input-style
+                  :value job-name
+                  :onChange #(set-job-name! (-> % .-target .-value))}]]
+    [page-search/search-item
+     "任务组名"
+     [antd/input {:placeholder "请输入任务组名"
+                  :style page-search/input-style
+                  :value job-group
+                  :onChange #(set-job-group! (-> % .-target .-value))}]]
+    [page-search/search-actions
+     [page-toolbar/search-button {:icon (r/as-element [:> SearchOutlined])
+                                  :on-click #(rf/dispatch [:jobs/search {:job_name job-name :job_group job-group}])}]
+     [page-toolbar/reset-button {:icon (r/as-element [:> ReloadOutlined])
+                                 :on-click #(do (set-job-name! "")
+                                                (set-job-group! "")
+                                                (rf/dispatch [:jobs/fetch {}]))}]]]])
+
+;; ─── 工具栏 ──────────────────────────────────────────────────────
+
+(defn- job-toolbar [{:keys [job-name job-group setters]}]
+  [page-toolbar/page-toolbar
+   {:left [page-toolbar/toolbar-left
+           [page-toolbar/toolbar-button {:kind :add
+                                         :icon (r/as-element [:> PlusOutlined])
+                                         :on-click #(open-add-form! setters)
+                                         :label "新增"}]]
+    :right [page-toolbar/toolbar-right
+            [page-toolbar/round-tool-button {:title "搜索"
+                                             :icon (r/as-element [:> SearchOutlined])
+                                             :on-click #(rf/dispatch [:jobs/search {:job_name job-name :job_group job-group}])}]
+            [page-toolbar/round-tool-button {:title "刷新"
+                                             :icon (r/as-element [:> ReloadOutlined])
+                                             :on-click #(rf/dispatch [:jobs/fetch {}])}]]}])
+
+;; ─── 新增/编辑弹窗 ──────────────────────────────────────────────────────
+
+(defn- job-form-modal [{:keys [open? editing-record] :as ctx}]
+  [antd/modal {:title (if editing-record "编辑任务" "新增任务")
+               :open open?
+               :onOk #(submit-form! ctx)
+               :onCancel #(close-form! ctx)
+               :destroyOnHidden true}
+   [antd/form {:layout "vertical"}
+    [antd/form-item {:label "任务名称" :required true}
+     [antd/input {:value (:form-name ctx) :onChange #((:set-form-name! ctx) (-> % .-target .-value))}]]
+    [antd/form-item {:label "任务组" :required true}
+     [antd/select {:value (:form-group ctx) :onChange #((:set-form-group! ctx) %)}
+      [antd/select-option {:value "DEFAULT"} "默认"]
+      [antd/select-option {:value "SYSTEM"} "系统"]]]
+    [antd/form-item {:label "调用目标" :required true}
+     [antd/input {:value (:form-target ctx) :onChange #((:set-form-target! ctx) (-> % .-target .-value))}]]
+    [antd/form-item {:label "Cron表达式" :required true}
+     [antd/input {:value (:form-cron ctx) :onChange #((:set-form-cron! ctx) (-> % .-target .-value))}]]
+    [antd/form-item {:label "备注"}
+     [antd/text-area {:value (:form-remark ctx) :rows 3
+                      :onChange #((:set-form-remark! ctx) (-> % .-target .-value))}]]]])
+
+;; ─── 日志抽屉 ──────────────────────────────────────────────────────
+
+(defn- job-log-drawer [{:keys [open? job-name loading? items total on-close]}]
+  [antd/drawer {:title (str "任务日志 - " job-name)
+                :open open?
+                :onClose on-close
+                :style {:width 800}
+                :destroyOnHidden true}
+   [antd/table {:scroll #js {:x "max-content"} :rowKey "job_log_id"
+                :rowSelection #js {}
+                :loading loading?
+                :columns (job-log-columns)
+                :dataSource (clj->js items)
+                :pagination {:pageSize 10 :total total}}]])
+
+;; ─── 视图组合 ──────────────────────────────────────────────────────
+
+(defn- job-view [{:keys [setters form-fields job-name job-group set-job-name! set-job-group!
+                         items total loading? on-edit on-show-log show-form? editing-record
+                         log-items log-total log-loading? show-log? log-job-name set-show-log!]}]
+  [:div
+   ;; 搜索栏
+   [job-search {:job-name job-name :job-group job-group
+                :set-job-name! set-job-name! :set-job-group! set-job-group!}]
+   ;; 工具栏
+   [job-toolbar {:job-name job-name :job-group job-group :setters setters}]
+   ;; 表格
+   [antd/table {:scroll #js {:x "max-content"} :rowKey "job_id"
+                :rowSelection #js {}
+                :loading loading?
+                :columns (job-columns on-edit on-show-log)
+                :dataSource (clj->js items)
+                :pagination {:pageSize 10 :total total}}]
+   ;; 新增/编辑弹窗
+   [job-form-modal (merge setters form-fields
+                          {:open? show-form? :editing-record editing-record})]
+   ;; 日志抽屉
+   [job-log-drawer {:open? show-log? :job-name log-job-name :loading? log-loading?
+                    :items log-items :total log-total :on-close #(set-show-log! false)}]])
+
+;; ─── 主页面 ──────────────────────────────────────────────────────
+
+(defn job-page []
+  (let [[show-form? set-show-form!] (hooks/use-state false)
+        [job-name set-job-name!] (hooks/use-state "")
+        [job-group set-job-group!] (hooks/use-state "")
+        [editing-record set-editing-record!] (hooks/use-state nil)
+        [show-log? set-show-log!] (hooks/use-state false)
+        [log-job-name set-log-job-name!] (hooks/use-state "")
+        ;; Form fields
+        [form-name set-form-name!] (hooks/use-state "")
+        [form-group set-form-group!] (hooks/use-state "DEFAULT")
+        [form-target set-form-target!] (hooks/use-state "")
+        [form-cron set-form-cron!] (hooks/use-state "")
+        [form-remark set-form-remark!] (hooks/use-state "")
+        setters {:set-show-form! set-show-form!
+                 :set-editing-record! set-editing-record!
+                 :set-form-name! set-form-name!
+                 :set-form-group! set-form-group!
+                 :set-form-target! set-form-target!
+                 :set-form-cron! set-form-cron!
+                 :set-form-remark! set-form-remark!}
+        form-fields {:form-name form-name :form-group form-group
+                     :form-target form-target :form-cron form-cron :form-remark form-remark}
+        on-edit (fn [record] (open-edit-form! (assoc setters :record record)))
+        on-show-log (fn [j] (show-log! {:job-name j :set-log-job-name! set-log-job-name! :set-show-log! set-show-log!}))]
+    (hooks/use-effect
+     (fn []
+       (rf/dispatch [:jobs/fetch {}])
+       js/undefined)
+     [])
+    (let [items @(rf/subscribe [:jobs/items])
+          total @(rf/subscribe [:jobs/total])
+          loading? @(rf/subscribe [:jobs/loading?])
+          log-items @(rf/subscribe [:job-logs/items])
+          log-total @(rf/subscribe [:job-logs/total])
+          log-loading? @(rf/subscribe [:job-logs/loading?])]
+      [job-view {:setters setters :form-fields form-fields
+                 :job-name job-name :job-group job-group
+                 :set-job-name! set-job-name! :set-job-group! set-job-group!
+                 :items items :total total :loading? loading?
+                 :on-edit on-edit :on-show-log on-show-log
+                 :show-form? show-form? :editing-record editing-record
+                 :log-items log-items :log-total log-total :log-loading? log-loading?
+                 :show-log? show-log? :log-job-name log-job-name
+                 :set-show-log! set-show-log!}])))
