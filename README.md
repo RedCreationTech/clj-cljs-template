@@ -1,6 +1,6 @@
 # clojure-template — Clojure / ClojureScript 全栈管理系统模板
 
-一个可直接复用的 **Clojure 后端 + ClojureScript 前端** 管理后台起步模板。后端基于 **Kit 框架**（Integrant + Reitit + Ring + Undertow），前端基于 **shadow-cljs + Reagent + re-frame + Ant Design 6**，内置 RuoYi 风格的用户/角色/菜单/部门/字典/日志/定时任务/代码生成等通用能力。
+一个可直接复用的 **Clojure 后端 + ClojureScript 前端** 管理后台起步模板。后端基于 **Kit 框架**（Integrant + Reitit + Ring + Undertow），前端基于 **shadow-cljs + Reagent + re-frame + Ant Design 6**，内置 RuoYi 风格的用户/角色/菜单/部门/字典/日志/定时任务等通用能力，并用 `bb new-module` 一条命令生成新的业务模块。
 
 克隆后三条命令就能得到一个带业务模块、可运行的新项目：`bb rename` 改名 → `bb new-module` 生成业务模块 → `bb dev` 启动。所有日常任务都通过 babashka 统一入口（`bb tasks` 查看），macOS / Linux / Windows 通用，CI 也只调用这些任务。架构说明见 [`docs/architecture/c4-model.org`](docs/architecture/c4-model.org)（C4 模型，org-mode 可执行文档；[HTML 版](docs/architecture/c4-model.html)）。
 
@@ -32,7 +32,7 @@
 
 **系统监控**：服务器（CPU / 内存 / JVM / 磁盘）、HikariCP 连接池、内存缓存、Integrant 组件依赖图与函数调用追踪、定时任务。
 
-**开发工具**：`bb new-module` 业务模块脚手架（命令行，生成即可运行并自动登记）、页面内代码生成器（按已有表结构生成骨架）、Swagger UI、表单构建器。
+**开发工具**：`bb new-module` 业务模块脚手架（命令行，生成即可运行并自动登记）、Swagger UI、表单构建器。
 
 ---
 
@@ -61,7 +61,7 @@
 │   ├── core.clj                 # 入口：密钥校验 → 加载 edge / domain / routes → 启动 Integrant
 │   ├── config.clj               # 读取 system.edn（aero）
 │   ├── infra/                   # 基础设施：db 抽象、clock(:now 本地时间)、kv(共享键值)、json(统一编码)、security(JWT)、secrets、online(会话)、login-guard(限流)、files、cache、scheduler
-│   ├── domain/                  # 领域服务（system/*：user, role, menu, dept, ...；gen）
+│   ├── domain/                  # 领域服务（system/*：user, role, menu, dept, ...）
 │   ├── web/handler.clj          # Ring handler / 路由器 / SPA fallback
 │   ├── web/middleware/          # auth、operlog、exception、formats、core
 │   ├── web/routes/              # Reitit 路由（api.clj 聚合）
@@ -227,7 +227,7 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 5. **前端**：`api/example.cljs` → `events/example.cljs` → `pages/example.cljs`（按钮用 `:perm` / `perm/when-allowed` 按权限显示）；在 `router.cljs`、`pages/layout/menu_data.cljs`、`pages/layout/page_view.cljs`、`events.cljs`、`events/common.cljs` 各登记一行。
 6. **测试**：`test/clj/.../example_test.clj` + `tests/e2e/example.spec.js`。
 
-页面内的代码生成器（系统工具 → 代码生成）适合从**已有表结构**生成骨架供复制参考；新建模块优先用 `bb new-module`。
+模板不再提供页面内的代码生成器（「系统工具 → 代码生成」已移除，见 C4 文档 ADR-012）：它生成的代码不能直接运行，对 `sys_` 表「部署」还会覆盖现有模块。新模块一律用 `bb new-module`。
 
 ---
 
@@ -276,7 +276,6 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 | GET /api/system/job | 定时任务 |
 | GET /api/system/{server,datasource,cache,integrant} | 监控 |
 | GET /api/system/dashboard/stats | 首页统计 |
-| GET /api/tool/gen/{tables,preview} | 代码生成 |
 | GET/POST/PUT/DELETE /api/biz/&lt;module&gt; | `bb new-module` 生成的业务模块 |
 | GET /api/health | 健康检查 |
 

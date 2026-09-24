@@ -2,6 +2,7 @@
   "集成测试 — 启动完整系统并通过 HTTP 请求测试 API。"
   (:require
    [clojure.data.json :as json]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing use-fixtures]]
    [com.ruoyi.test-utils :refer [GET PUT system-fixture system-state]]
    [peridot.core :as p]))
@@ -214,12 +215,18 @@
       (is (pos? (count (get-in all-log-body [:data :rows]))))
       (is (pos? (count (get-in log-body [:data :rows])))))))
 
-;; ─── 代码生成 ──────────────────────────────────────────────────────
+;; ─── 已移除的代码生成器 ──────────────────────────────────────────────
 
-(deftest gen-tables-test
-  (testing "代码生成-表列表 API"
-    (let [resp (GET (handler) "/api/tool/gen/tables" {} (auth-headers (token)))]
-      (is (= 200 (:status resp))))))
+(deftest code-gen-removed-test
+  (testing "页面代码生成器已移除(迁移 20260924000005):接口不存在,菜单与按钮权限也不在了"
+    (is (= 404 (:status (GET (handler) "/api/tool/gen/tables" {} (auth-headers (token))))))
+    (let [menus (->> (parse-json (GET (handler) "/api/system/menu" {} (auth-headers (token))))
+                     (tree-seq coll? seq)
+                     (filter map?)
+                     (filter :menu_id))]
+      (is (seq menus))
+      (is (not-any? #(some-> (:perms %) (str/starts-with? "tool:gen")) menus))
+      (is (not-any? #(= "gen" (:path %)) menus)))))
 
 ;; ─── 导出 ──────────────────────────────────────────────────────────
 

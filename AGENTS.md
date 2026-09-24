@@ -354,14 +354,14 @@ UI 样式权威参考：https://gitee.com/y_project/RuoYi-Vue/tree/master/ruoyi-
 | 10 | 登录日志 | 列表 + 详情弹窗 + 清空/导出 | 🟢 基本完成 |
 | 11 | 在线用户 | 列表 + 强退确认 | 🟢 基本完成 |
 | 12 | 定时任务 | 列表 + 新增/编辑/执行一次/暂停恢复/日志 | 🟢 基本完成 |
-| 13 | 代码生成 | 配置 + 预览 + 部署 + ZIP 下载 | 🟢 基本完成 |
+| 13 | 代码生成 | 已移除页面生成器，改用命令行 `bb new-module`（ADR-012） | ⚪ 不做 |
 | 14 | 系统接口 | Swagger 文档 | 🟢 基本完成 |
 | 15 | 服务监控 | CPU/内存/JVM/磁盘可视化 | 🟢 基本完成 |
 | 16 | 缓存监控 | 内存缓存键值浏览/清除 | 🟢 基本完成 |
 | 17 | 表单构建 | 拖拽设计器 | 🟢 基本完成 |
 | 18 | 连接池监视 | HikariCP 状态监控 | 🟢 基本完成 |
 
-> 🟢 = 基本对齐  🟡 = 部分实现  🔴 = 未实现
+> 🟢 = 基本对齐  🟡 = 部分实现  🔴 = 未实现  ⚪ = 有意不做
 
 ## Development Workflow
 
@@ -437,7 +437,7 @@ DDL 差异无法兼容，因此有两套目录：
 
 4. **元数据/动态查询在 Clojure 层分支**
 
-   `com.ruoyi.infra.db` 里对 `get-tables`、`get-table-columns`、`paginate-query` 等按 `:sqlite` / `:mysql` 分情况处理，不要把 `PRAGMA`、`sqlite_master`、`information_schema` 混进共用 `.sql`。
+   `com.ruoyi.infra.db` 里对 `paginate-query`、`adapt-sql` 等按 `:sqlite` / `:mysql` 分情况处理，不要把 `PRAGMA`、`sqlite_master`、`information_schema` 混进共用 `.sql`。
 
 #### 时间一律由应用生成（不要在 SQL 里取当前时间）
 
@@ -494,7 +494,7 @@ Available helpers (defined in `env/dev/clj/user.clj`):
 
 | Helper | Short | What it reloads |
 |--------|-------|-----------------|
-| `reload-domain` | `rd` | Domain services (user, role, menu, dept, dict, config, log, gen) |
+| `reload-domain` | `rd` | Domain services (user, role, menu, dept, dict, config, log, permission, data-scope) |
 | `reload-middleware` | `rm` | Ring middleware (auth, exception, operlog, core) |
 | `reload-routes` | `rroutes` | Route definitions (needs `rr` to apply) |
 | `reload-controllers` | — | Web controllers |

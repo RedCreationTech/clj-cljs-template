@@ -81,10 +81,6 @@
  {:query-fn #ig/ref :db.sql/query-fn
   :db       #ig/ref :db.sql/connection}
 
- :app.system/gen-service
- {:query-fn #ig/ref :db.sql/query-fn
-  :db       #ig/ref :db.sql/connection}
-
  ;; 业务模块的 Integrant 组件登记在下面的标记之前(bb new-module 会自动插入;标记行请保留)
  ;; [new-module] components
 
@@ -96,7 +92,6 @@
 
  :reitit.routes/api
  {:base-path      "/api"
-  :env            #ig/ref :system/env
   ;; 认证配置(见 com.ruoyi.web.controllers.auth/default-config);环境变量优先,其次按 profile
   :auth-config    {:token-ttl-minutes #long #or [#env TOKEN_TTL_MINUTES 720]
                    :captcha-enabled?  #boolean #or [#env CAPTCHA_ENABLED #profile {:dev "false" :test "false" :prod "true"}]
@@ -120,7 +115,6 @@
   :form-template-service #ig/ref :app.system/form-template-service
   :log-service          #ig/ref :app.system/log-service
   :online-service       #ig/ref :app.system/online-service
-  :gen-service    #ig/ref :app.system/gen-service
   ;; 业务模块的 service 注入给路由(bb new-module 自动插入;标记行请保留)
   ;; [new-module] route-services
   }
@@ -162,7 +156,7 @@
  :db.sql/query-fn
  {:conn      #ig/ref :db.sql/connection
   :options   {}
-  :filenames ["queries.sql" "sql/system.sql" "sql/log.sql" "sql/job.sql" "sql/gen.sql" "sql/generated.sql"
+  :filenames ["queries.sql" "sql/system.sql" "sql/log.sql" "sql/job.sql"
               ;; [new-module] sql-files
               ]
   :env       #ig/ref :system/env}

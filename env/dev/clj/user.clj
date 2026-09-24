@@ -99,7 +99,6 @@
   (require 'com.ruoyi.domain.system.log :reload)
   (require 'com.ruoyi.domain.system.permission :reload)
   (require 'com.ruoyi.domain.system.data-scope :reload)
-  (require 'com.ruoyi.domain.gen :reload)
   ;; [new-module] reload-domain
   (log/info "Domain services reloaded."))
 
@@ -120,7 +119,6 @@
   (require 'com.ruoyi.web.routes.auth :reload)
   (require 'com.ruoyi.web.routes.system :reload)
   (require 'com.ruoyi.web.routes.monitor :reload)
-  (require 'com.ruoyi.web.routes.gen :reload)
   (require 'com.ruoyi.web.routes.api :reload)
   (require 'com.ruoyi.web.handler :reload)
   (log/info "Routes reloaded. Run (user/reset-system) to apply."))
@@ -132,7 +130,6 @@
   (require 'com.ruoyi.web.controllers.auth :reload)
   (require 'com.ruoyi.web.controllers.job :reload)
   (require 'com.ruoyi.web.controllers.monitor :reload)
-  (require 'com.ruoyi.web.controllers.gen :reload)
   (require 'com.ruoyi.web.controllers.system.user :reload)
   (require 'com.ruoyi.web.controllers.system.role :reload)
   (require 'com.ruoyi.web.controllers.system.menu :reload)

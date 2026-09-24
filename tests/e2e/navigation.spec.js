@@ -22,7 +22,6 @@ const cases = [
   { path: '/monitor/server', text: 'CPU' },
   { path: '/monitor/cache', text: '缓存名称' },
   { path: '/monitor/datasource', text: '连接池' },
-  { path: '/monitor/gen', text: '生成' },
   { path: '/monitor/swagger', text: 'Swagger' },
   { path: '/tool/build', text: '表单' },
   { path: '/monitor/integrant', text: 'Integrant' },

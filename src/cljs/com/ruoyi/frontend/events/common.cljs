@@ -23,7 +23,6 @@
    :cache {:label "缓存监控" :icon "cache"}
    :datasource {:label "连接池监视" :icon "database"}
    :build {:label "表单构建" :icon "build"}
-   :gen {:label "代码生成" :icon "code"}
    :swagger {:label "系统接口" :icon "swagger"}
    :profile {:label "个人中心" :icon "profile"}
    ;; [new-module] tab-meta

@@ -27,7 +27,6 @@
         "monitor/cache" :cache
         "monitor/datasource" :datasource
         "monitor/integrant" :integrant
-        "monitor/gen" :gen
         "monitor/swagger" :swagger
         "tool/build" :build
         "system/user/profile" :profile
@@ -63,7 +62,6 @@
    :cache "缓存监控"
    :datasource "数据监控"
    :integrant "Integrant 依赖"
-   :gen "代码生成"
    :swagger "系统接口"
    :build "表单构建"
    :profile "个人中心"

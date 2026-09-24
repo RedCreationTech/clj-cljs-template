@@ -21,7 +21,6 @@
    :cache "monitor/cache"
    :datasource "monitor/datasource"
    :integrant "monitor/integrant"
-   :gen "monitor/gen"
    :swagger "monitor/swagger"
    :build "tool/build"
    :profile "system/user/profile"
@@ -47,7 +46,6 @@
    :cache ["首页" "系统监控" "缓存监控"]
    :datasource ["首页" "系统监控" "连接池监视"]
    :build ["首页" "系统工具" "表单构建"]
-   :gen ["首页" "系统工具" "代码生成"]
    :swagger ["首页" "系统工具" "系统接口"]
    :profile ["首页" "个人中心"]
    ;; [new-module] breadcrumbs
@@ -74,7 +72,6 @@
    :cache "cache"
    :datasource "database"
    :build "build"
-   :gen "code"
    :swagger "swagger"
    :profile "profile"
    ;; [new-module] icons

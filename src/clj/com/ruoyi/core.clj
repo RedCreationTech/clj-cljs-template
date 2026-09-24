@@ -4,7 +4,6 @@
   (:require
    [clojure.tools.logging :as log]
    [com.ruoyi.config :as config]
-   [com.ruoyi.domain.gen]
    [com.ruoyi.domain.system]
    [com.ruoyi.domain.system.config]
    [com.ruoyi.domain.system.dept]
@@ -22,7 +21,6 @@
    [com.ruoyi.web.middleware.auth]
    [com.ruoyi.web.routes.api]
    [com.ruoyi.web.routes.auth]
-   [com.ruoyi.web.routes.gen]
    [com.ruoyi.web.routes.monitor]
    [com.ruoyi.web.routes.system]
    [integrant.core :as ig]

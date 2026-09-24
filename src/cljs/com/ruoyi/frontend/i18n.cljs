@@ -41,7 +41,6 @@
    "数据监控" "Data Source"
    "连接池监视" "Connection Pool"
    "Integrant 依赖" "Integrant Graph"
-   "代码生成" "Code Generator"
    "系统接口" "API Docs"
    "表单构建" "Form Builder"
    "个人中心" "Profile"

@@ -67,7 +67,7 @@ System Context(L1)→ Container(L2)→ Component(L3)→ Code(L4),再补充动态
 #+begin_src mermaid :file img/c4-context.svg :exports results
 flowchart TB
   admin(["管理员 / 业务用户<br/>[Person]<br/>在浏览器中登录,管理用户、角色、菜单、字典、任务等"]):::person
-  dev(["开发者<br/>[Person]<br/>本地运行、nREPL 热重载、代码生成、查看 Swagger"]):::person
+  dev(["开发者<br/>[Person]<br/>本地运行、nREPL 热重载、bb new-module 生成模块、查看 Swagger"]):::person
   browser["浏览器<br/>[External]<br/>Chrome / Edge / Safari,运行 SPA"]:::ext
   subgraph SYS["clojure-template"]
     app["管理后台<br/>[Software System]<br/>Clojure(Kit / Integrant / Reitit / Undertow)<br/>+ ClojureScript(Reagent / re-frame / antd)"]:::system
@@ -145,16 +145,15 @@ flowchart TB
     direction TB
     handler["handler<br/>[Reitit ring-handler]<br/>静态资源 · Swagger UI · SPA fallback<br/>路由器(dev 每请求重建)"]:::comp
     mwcore["middleware.core<br/>[Ring]<br/>wrap-base:ring-defaults + CORS 白名单 +<br/>静态资源 no-cache + operlog(敏感字段打码)+<br/>query-fn 注入 + JSON body"]:::comp
-    routes["routes.api + routes.*<br/>[Reitit 数据路由]<br/>/api 聚合:auth · system · monitor · gen · common · captcha<br/>:auth? / :perms 声明 · Malli 参数校验 · Swagger 元数据"]:::comp
+    routes["routes.api + routes.*<br/>[Reitit 数据路由]<br/>/api 聚合:auth · system · monitor · common · captcha<br/>:auth? / :perms 声明 · Malli 参数校验 · Swagger 元数据"]:::comp
     mwfmt["middleware.formats + exception<br/>[Muuntaja / Ring]<br/>JSON/Transit 协商(JSON 用 infra.json 的 mapper)·<br/>统一异常 → {:code :msg}"]:::comp
     mwauth["middleware.auth<br/>[Ring + reitit :compile]<br/>wrap-jwt-auth:Bearer JWT · 会话校验即心跳(sys_online)<br/>authorize:按路由数据 :auth? / :perms → 401 / 403"]:::comp
-    ctrl["controllers.*<br/>[Clojure fn]<br/>auth(登录 / 续期 / 登出 / 登录页配置)· register · captcha ·<br/>common(上传校验 · 头像)· health(含 DB)· monitor · job · gen · system/*<br/>params/query:查询参数 → 关键字键"]:::comp
+    ctrl["controllers.*<br/>[Clojure fn]<br/>auth(登录 / 续期 / 登出 / 登录页配置)· register · captcha ·<br/>common(上传校验 · 头像)· health(含 DB)· monitor · job · system/*<br/>params/query:查询参数 → 关键字键"]:::comp
   end
   subgraph DOM["领域层 (com.ruoyi.domain)"]
     direction TB
     dsys["domain.system + system/*<br/>[Integrant :app.system/*-service]<br/>user / role / menu / dept / post / dict / config /<br/>log / form-template / online 领域服务"]:::comp
     dperm["domain.system.permission + data-scope<br/>[Clojure]<br/>用户 → 启用角色 → 菜单 perms(admin = *:*:*)<br/>data_scope 1~5 → 可见部门 / 本人(多角色并集)"]:::comp
-    dgen["domain.gen<br/>[Clojure]<br/>按表结构生成 SQL / domain / controller /<br/>routes / 前端 api-page-events-subs"]:::comp
   end
   subgraph INFRA["基础设施 (com.ruoyi.infra / integrant)"]
     direction TB
@@ -177,7 +176,6 @@ flowchart TB
   end
   undertow --> handler --> mwcore --> routes --> mwfmt --> mwauth --> ctrl
   ctrl --> dsys
-  ctrl --> dgen
   ctrl --> isch
   ctrl --> ionl
   ctrl --> isec
@@ -196,7 +194,6 @@ flowchart TB
   mwcore -. "operlog 自行解析 Bearer" .-> isec
   dsys -- "query-fn :name params" --> conman
   dsys --> idb
-  dgen --> idb
   conman --> DB
   migratus -- DDL --> DB
   isch --> quartz
@@ -281,13 +278,13 @@ flowchart TB
     cfg["config<br/>[常量]<br/>app-name / app-subtitle / welcome-text / repo-url / docs-url"]:::comp
     router["router<br/>[bidi + popstate]<br/>routes 路由表 · page-names · navigate!(pushState)"]:::comp
     db["db<br/>[re-frame app-db 初始值]<br/>page / tabs / auth / theme / layout-settings<br/>+ 各领域列表状态"]:::comp
-    events["events + events/*<br/>[re-frame reg-event-* / reg-fx]<br/>core(导航 / 多 Tab) · auth · theme · common · feedback(:api/error)<br/>users / roles / depts / posts / dicts / configs /<br/>notices(含铃铛) / menus / logs / jobs / monitor / gen / profile / formbuilder"]:::comp
-    subs["subs + subs/*<br/>[re-frame reg-sub]<br/>core · system · monitor · config · gen"]:::comp
+    events["events + events/*<br/>[re-frame reg-event-* / reg-fx]<br/>core(导航 / 多 Tab) · auth · theme · common · feedback(:api/error)<br/>users / roles / depts / posts / dicts / configs /<br/>notices(含铃铛) / menus / logs / jobs / monitor / profile / formbuilder"]:::comp
+    subs["subs + subs/*<br/>[re-frame reg-sub]<br/>core · system · monitor · config"]:::comp
     api["api/*<br/>[cljs-ajax / fetch]<br/>transport(带令牌 · 过半续期 · 401 回登录页 ·<br/>其它失败统一 :api/error · 上传 :body · download!)<br/>token · errors(纯函数)· 各领域 api"]:::comp
     infra["i18n · storage · perm<br/>[纯 cljs]<br/>tr(中文原文为键,en-US 词典)<br/>localStorage 唯一入口(ruoyi_ 前缀)<br/>permitted? / when-allowed(按钮权限)"]:::comp
     antd["antd<br/>[r/adapt-react-class]<br/>组件适配 · message 实例 · Form.useForm"]:::comp
     layout["pages.layout + layout/*<br/>[Reagent]<br/>Sider 菜单(menu-build 按后端菜单树生成)<br/>Header + header-tools(菜单搜索 · 通知铃铛)· 多 Tab(tabs) ·<br/>面包屑(menu-data) · 页面分发(page-view)"]:::comp
-    pages["pages/*<br/>[Reagent 函数组件]<br/>login · dashboard · user/* · role · menu · dept · post · dict ·<br/>config · notice · oper_log · login_log · online · job · server ·<br/>cache · datasource · integrant · gen · swagger · form_builder · file_manager · profile"]:::comp
+    pages["pages/*<br/>[Reagent 函数组件]<br/>login · dashboard · user/* · role · menu · dept · post · dict ·<br/>config · notice · oper_log · login_log · online · job · server ·<br/>cache · datasource · integrant · swagger · form_builder · file_manager · profile"]:::comp
     comps["components/*<br/>[Reagent]<br/>page-card · page-search · page-toolbar · pagination ·<br/>search-input · status-tag · dict-tag · dept-tree-select ·<br/>icon-picker · form-field/section · action-menu ·<br/>error-boundary · theme-switcher · layout-settings · right-toolbar"]:::comp
     theme["theme<br/>[antd theme 算法]<br/>light / dark / compact · 主色 · 字号 · 组件尺寸"]:::comp
   end
@@ -426,7 +423,7 @@ flowchart LR
 可执行检查: ~infra~ 与 ~domain~ 不得 require ~web~:
 
 #+begin_src sh :exports both
-# 只看 require 向量,排除 domain.gen 里作为代码模板出现的字符串
+# 只看 require 向量
 grep -rnE "\[com\.ruoyi\.web" src/clj/com/ruoyi/infra src/clj/com/ruoyi/domain && echo "VIOLATION" || echo "OK: infra/domain 不依赖 web 层"
 #+end_src
 
@@ -837,9 +834,9 @@ bb e2e tests/e2e/customer.spec.js                      # 生成的端到端用�
 
 | # | 层 | 新建 / 修改 | 说明 |
 |---+----+-------------+------|
-| 1 | 按钮级权限校验 | *已解决*(ADR-010):路由数据 ~:auth?~ / ~:perms~ + ~authorize~ ;权限按请求实时计算;各模块按钮菜单已补齐;前端按 ~permissions~ 显隐按钮 | — | — |
-| 2 | 数据权限接入 SQL | *已解决*(ADR-010): ~domain.system.data-scope~ + 固定写法的 SQL 参数,已接入用户管理(列表、导出、单条读写);自定义部门存 ~sys_role_dept~ 。其它按部门归属的业务表需要时照此接入 | 业务表加 ~dept_id~ / ~create_by~ 列后复用 ~sql-params~ 与 ~allows?~ | ~domain/system/data_scope.clj~ |
-| 3 | 前端统一错误处理 | *已解决*(ADR-010): ~api.transport~ 对 403 / 5xx / 网络断开 / 业务码非 200 统一提示并复位 loading;带令牌下载统一走 ~t/download!~ | — | — |
+| 1 | 迁移 | ~resources/migrations{-sqlite,}/<ts>-create-biz-<m>.{up,down}.sql~ | 建表 ~biz_<m>~ ;共享的「业务管理」目录菜单(不存在才建,派生表代替 ~DUAL~ )+ 模块菜单与按钮菜单( ~biz:<m>:list/query/add/edit/remove~ ),授权 admin 角色;down 删除菜单(目录空了一并删除)与表 |
+| 2 | SQL | ~resources/sql/<m>.sql~ | 分页列表 / 计数 / 详情 / 新增 / 全量更新 / 删除,只用两库交集语法;时间写 ~:now~ |
+| 3 | 领域 | ~domain/<m>.clj~ | 纯函数 + ~defmethod ig/init-key :app.<m>/service~ ;新增走 ~infra.db/insert-and-get-id!~ |
 | 4 | 控制器 / 路由 | ~web/controllers/<m>.clj~ 、 ~web/routes/<m>.clj~ | ~/api/biz/<m>~ 与 ~/:id~ ;要求登录;Malli 校验 query/body/path 并生成 Swagger |
 | 5 | 测试 | ~test/clj/.../web/controllers/<m>_test.clj~ 、 ~tests/e2e/<m>.spec.js~ | 未登录 401、增删改查、参数校验 400;E2E 新增 → 修改 → 删除 |
 | 6 | 前端 | ~api/<m>.cljs~ 、 ~events/<m>.cljs~ 、 ~pages/<m>.cljs~ | 状态在 ~app-db~ 的 ~:<m>~ 下;搜索、分页表格、新增/编辑弹窗(Form.useForm)、删除确认 |
@@ -865,9 +862,9 @@ grep -rn --include='*.clj' --include='*.cljs' --include='*.edn' ';; \[new-module
 
 | # | 层 | 文件 / 位置 | 动作 |
 |---+----+-------------+------|
-| 1 | 按钮级权限校验 | *已解决*(ADR-010):路由数据 ~:auth?~ / ~:perms~ + ~authorize~ ;权限按请求实时计算;各模块按钮菜单已补齐;前端按 ~permissions~ 显隐按钮 | — | — |
-| 2 | 数据权限接入 SQL | *已解决*(ADR-010): ~domain.system.data-scope~ + 固定写法的 SQL 参数,已接入用户管理(列表、导出、单条读写);自定义部门存 ~sys_role_dept~ 。其它按部门归属的业务表需要时照此接入 | 业务表加 ~dept_id~ / ~create_by~ 列后复用 ~sql-params~ 与 ~allows?~ | ~domain/system/data_scope.clj~ |
-| 3 | 前端统一错误处理 | *已解决*(ADR-010): ~api.transport~ 对 403 / 5xx / 网络断开 / 业务码非 200 统一提示并复位 loading;带令牌下载统一走 ~t/download!~ | — | — |
+| 1 | 迁移 | ~resources/migrations-sqlite/<ts>-create-example.{up,down}.sql~ 与 ~resources/migrations/~ | 建表;菜单与按钮菜单(F)用 ~INSERT INTO sys_menu~ 登记并给 admin 角色 ~sys_role_menu~ ;多条语句用 ~--;;~ 分隔; ~bb lint:migrations~ 、 ~bb db:roundtrip~ 验证 |
+| 2 | SQL | ~resources/sql/example.sql~ | HugSQL,写时间用 ~:now~ ;加入 ~system.edn~ ~:db.sql/query-fn :filenames~ |
+| 3 | 领域 | ~src/clj/com/ruoyi/domain/example.clj~ | 纯函数 + ~defmethod ig/init-key :app.example/service~ |
 | 4 | 装配 | ~resources/system.edn~ | 登记 ~:app.example/service~ ;在 ~:reitit.routes/api~ 注入 ~:example-service~ |
 | 5 | 控制器 | ~src/clj/com/ruoyi/web/controllers/example.clj~ | 请求 → 服务 → 响应;列表查询参数用 ~controllers.params/query~ ;按部门归属的数据用 ~domain.system.data-scope~ 过滤 |
 | 6 | 路由 | ~src/clj/com/ruoyi/web/routes/example.clj~ ; ~routes/api.clj~ 的 ~api-routes~ 追加 | 路由组 ~:auth? true~ 、各接口 ~:perms~ 、Malli 参数、Swagger tag |
@@ -876,10 +873,10 @@ grep -rn --include='*.clj' --include='*.cljs' --include='*.edn' ';; \[new-module
 | 9 | 前端事件 | ~events/example.cljs~ + 在 ~events.cljs~ require | ~reg-event-fx~ + ~reg-fx~ ;状态放 ~app-db~ 的模块键下 |
 | 10 | 页面 | ~pages/example.cljs~ (复杂页面拆成 ~pages/example/*.cljs~ ) | 复用 ~components/*~ ;函数组件 + Hooks;首屏数据在页面的 ~use-effect~ 里 dispatch;按钮 ~:perm~ / ~perm/when-allowed~ |
 | 11 | 登记 | ~router.cljs~ (路由 + page-names)、 ~layout/menu_data.cljs~ (menu-key/面包屑/图标)、 ~layout/page_view.cljs~ (分发)、 ~events/common.cljs~ (Tab 元数据) | 各加一行 |
-| 12 | 脚手架生成的路由只校验登录 | *已解决*(ADR-010):生成的路由声明 ~biz:<模块>:list/query/add/edit/remove~ ,迁移生成对应按钮菜单并授权 admin,页面按权限显示按钮 | — | — |
+| 12 | 测试 | ~test/clj/com/ruoyi/.../example_test.clj~ 、 ~tests/e2e/example.spec.js~ | 后端用 ~test_utils/system-fixture~ 起系统 + peridot;E2E 走真实页面 |
 | 13 | 文档 | 本文 §2/§3/§4/§5 对应图追加组件;README API 概览 | |
 
-页面内的「系统工具 → 代码生成」按 *已有表结构* 产出第 2、3、5、6、8、9、10 步的骨架,适合给存量表做参考;新建模块优先 ~bb new-module~ 。
+模板不提供页面内的代码生成器(「系统工具 → 代码生成」已按 ADR-012 移除);新模块用 ~bb new-module~ ,结构特殊的模块照本清单手工写。
 
 ** 10.3 从模板派生新项目
 
@@ -993,7 +990,7 @@ bb lint:migrations 2>&1 | tail -1
 | 4 | 生产安全默认值 | *已解决*:prod 密钥强制(ADR-008);CORS 改为白名单(ADR-009) | — | — |
 | 5 | 多实例部署 | *基本解决*(ADR-011):会话、验证码、登录失败计数与锁定、续期宽限都在数据库( ~sys_online~ / ~sys_kv~ ),多实例共享;仍在进程内:Quartz 调度(每个实例都会触发)、缓存监控演示数据 | 定时任务改用 Quartz JDBC JobStore 集群模式,或只让一个实例调度(§9.7) | ~infra/scheduler.clj~ ~domain/system.clj~ ~controllers/job.clj~ |
 | 6 | 未使用的依赖 | *已解决*(ADR-011):删除 selmer(组件与依赖)、cheshire(JSON 统一用 jsonista)、clj-time、buddy-auth、kit-postgres; ~:cronut/scheduler~ 的 ~:schedule []~ 由 ~infra.scheduler~ 动态填充,保留 | — | — |
-| 7 | 两套代码生成 | 页面内生成器已修正(路径随命名空间、deploy 仅 dev、两库迁移、文件名下划线,ADR-009),但模板与 ~bb new-module~ 是两套,风格不一致 | 长期把页面生成器改为调用 ~bb/tasks/scaffold~ 的模板(按已有表结构生成字段规格) | ~domain/gen.clj~ ~controllers/gen.clj~ |
+| 7 | 两套代码生成 | *已解决*(ADR-012):删除页面代码生成器,只保留 ~bb new-module~ (CI 每次生成模块并完整验证) | 需要「从已有表生成模块」时,给脚手架加读取表结构转字段规格的入口,仍走同一套模板 | ~bb/tasks/scaffold/~ |
 | 8 | 静态检查遗留 | *已解决*(ADR-008) | 保持零 warning | ~.clj-kondo/config.edn~ |
 | 9 | 文档站 | *已解决*:标题、快速开始与目录已更新为模板与 bb 命令 | — | ~docs/index.html~ |
 | 10 | 验证码可绕过 | *已解决*(ADR-009):开启时空验证码判失败;E2E 在 dev profile(默认关闭)下运行 | — | — |
@@ -1040,7 +1037,7 @@ printf "统一错误事件派发   %s\n" "$(grep -c ':api/error' src/cljs/com/ru
 - *决策*:
   - *会话*:令牌加 ~:jti~ ,会话以 ~sys_online~ 为准(心跳命中即有效),登出、强退、空闲超时删除会话行即令牌失效;取消进程内存黑名单。 ~/api/auth/refresh~ 滑动续期(会话改挂到新 ~jti~ ,旧令牌 30 秒宽限),前端在令牌过半时自动续期、收到 401 统一回登录页。 ~:exp~ 改为 JWT 标准的 Unix 秒。
   - *登录*:验证码开关(prod 默认开)、按用户名失败限流、统一失败提示与等时校验;自助注册默认关闭并只接受用户名与密码; ~/api/auth/config~ 把验证码开关与(仅开发环境的)演示账号告诉登录页。
-  - *其它后端*:CORS 白名单(默认同源)、健康检查含数据库(不可用返回 503)、页面代码生成器的 deploy 仅限 dev 且路径随命名空间、 ~MIGRATION_DIR~ 按 ~JDBC_URL~ 推导、静态资源 ~no-cache~ 协商缓存、操作日志敏感字段打码、上传下载要求登录并防目录穿越、代码生成器的表名先按标识符校验再拼进 ~PRAGMA~ 。
+  - *其它后端*:CORS 白名单(默认同源)、健康检查含数据库(不可用返回 503)、页面代码生成器的 deploy 仅限 dev 且路径随命名空间(该生成器后由 ADR-012 整体移除)、 ~MIGRATION_DIR~ 按 ~JDBC_URL~ 推导、静态资源 ~no-cache~ 协商缓存、操作日志敏感字段打码、上传下载要求登录并防目录穿越、代码生成器的表名先按标识符校验再拼进 ~PRAGMA~ 。
   - *前端*:删除 116 个函数的 ~api.cljs~ 门面,调用方直接引用领域命名空间; ~storage~ 作为 localStorage 唯一入口; ~i18n/tr~ 以中文原文为键,外壳(登录、头部、菜单、Tab、面包屑、通用工具栏、分页)与脚手架页面已接入,英文界面可切换; ~index.html~ 的内联样式移到 ~css/app.css~ ,删除未使用的 bpmn-js 外部脚本,页面颜色改用 ~--app-*~ 变量,暗色主题整体可用;登录页与主布局共用 antd ~App~ ,切换时提示不丢失。
   - *测试*: ~test/cljs~ + shadow-cljs ~:node-test~ ( ~bb test:cljs~ ,纳入 ~bb ci~ 与 CI);后端测试进程里 bcrypt 用最低强度、集成测试复用登录令牌,整套从约 38 秒降到约 30 秒。
   - *命名*:项目名 ~rouyi~ 统一为 ~ruoyi~ (用 ~bb rename com.ruoyi ruoyi~ 自举完成);localStorage 键统一为 ~ruoyi_<名称>~ 。
@@ -1095,17 +1092,33 @@ printf "统一错误事件派发   %s\n" "$(grep -c ':api/error' src/cljs/com/ru
   - 暗色主题截图检查。
 - *未做*:定时任务的多实例调度(§9.7、§13 #5)、业务页面国际化(#14)、两套代码生成器合并(#7)。
 
+** ADR-012 移除页面代码生成器,只保留 ~bb new-module~
+- *背景*:模板里有两套代码生成。一套是命令行的 ~bb new-module~ ,CI 每次都生成一个模块并跑 lint、测试、两库往返、编译与 E2E;另一套是页面「系统工具 → 代码生成」,按已有表结构生成代码,可以预览、下载 ZIP,开发环境下还能「部署到项目」。把页面生成器的产物真正拿来运行后发现它不可用:
+  - 控制器模板里的换行写成了 ~\\n~ ,生成的文件只有一行,加载即报 ns 语法错误。
+  - 前端的 api / events / subs 片段没有 ns 声明,事件用了不存在的效果,页面只是占位;路由片段含字面的 ~...~ 、未定义的 ~PathId~ 和重复路径,不带 ~:perms~ ,组件与路由都要手工接。
+  - SQL 没有分页、筛选与数据范围,新增要求客户端传 ~create_time~ 。
+  - 迁移的类型映射粗糙,MySQL 版会生成执行不了的 ~VARCHAR(255) DEFAULT CURRENT_TIMESTAMP~ ;它给已经存在的表生成建表迁移,down 却是 ~DROP TABLE~ ,回滚会删掉真实数据。
+  - 对 ~sys_~ 表「部署」会覆盖同名系统模块的源码(例如 ~sys_post~ 覆盖岗位管理的前后端文件),生成的查询名还会顶掉 ~system.sql~ 里的同名查询。
+  - 生成配置弹窗(包路径、模块名、作者、表前缀)后端并不使用。
+  原有测试只断言「返回了字符串、写出了文件」,从没编译过生成物,所以问题一直没有暴露。
+- *决策*:整体删除,不修。它唯一独有的能力是「从已有表推出字段」;需要时应作为 ~bb new-module~ 的一个入口复用同一套模板,而不是维护第二套字符串模板。删除的内容:
+  - 后端: ~domain.gen~ 、 ~controllers.gen~ 、 ~routes.gen~ 、 ~:app.system/gen-service~ 、 ~sql/gen.sql~ 、 ~sql/generated.sql~ 、 ~system.sql~ 里只支持 SQLite 的 ~gen-tables~ / ~gen-columns~ ,以及只为它服务的 ~infra.db/get-tables~ / ~get-table-columns~ 。
+  - 前端:页面、事件、订阅、接口,路由 / 菜单 / Tab 的登记,首页快捷入口(换成「定时任务」);npm 依赖 ~react-syntax-highlighter~ ,release 包从约 7.1MB 降到约 5.4MB。
+  - 数据:迁移 ~20260924000005-remove-code-gen-menu~ 删除「代码生成」菜单与 ~tool:gen:*~ 按钮权限。已有的库在启动时自动执行,down 可以恢复。
+- *附带修复*:本文 §10.1 / §10.2 两张清单表的前几行,在第 6 批更新 §13 时被误替换成了设计债条目,已恢复。
+- *验证*: ~bb test~ 在 SQLite 与 MySQL 8.0 上都是 366 tests / 1046 assertions 全过,其中新增的回归测试确认 ~/api/tool/gen/*~ 返回 404、菜单里不再有代码生成;两库迁移往返;lint、格式、规模约束通过;release 0 warning;Playwright 31 个用例连续两轮全过;已有的开发库重启后菜单自动移除;脚手架冒烟(生成模块 → lint、两库上的生成测试、前端编译)通过。
+
 * 附录 A:模板与源项目的差异清单
 
 | 类别 | 已删除 | 已新增 / 修改 |
 |------+--------+---------------|
-| 后端 | ~domain/{synthetic,formal_backend}.clj~ 、 ~infra/synthetic_scheduler.clj~ 、 ~web/{controllers,routes}/{synthetic,formal_backend}.clj~ | ~core.clj~ / ~routes/api.clj~ / ~system.edn~ 去引用,并留出模块登记点注释;模板新增 ~infra/{clock,kv,json}.clj~ (ADR-011) |
-| 前端 | ~api/{synthetic,formal}.cljs~ 、 ~pages/{synthetic,formal}/*~ | ~config.cljs~ (品牌); ~router~ / ~menu_data~ / ~page_view~ / ~events/common~ / ~api.cljs~ 去引用; ~db.cljs~ 删除废弃的 ~:projects~ 状态 |
-| 数据 | ~sql/synthetic.sql~ 、源项目的 ~2026092*~ 迁移、 ~2024061300[1-4]~ / ~202606150002~ / ~202606150010~ 业务迁移 | MySQL ~20260613215630-add-notice-content~ ;模板新增 ~20260924000001-add-button-perms~ (按钮菜单)、 ~20260924000002-create-sys-role-dept~ (自定义数据范围)、 ~20260924000003-create-sys-kv~ (共享临时状态)、 ~20260924000004-create-sys-notice-read~ (通知已读);共用查询的时间改为 ~:now~ |
-| 配置 | ~deps.edn~ 外部 ~:paths~ 、 ~jarohen/chime~ 、未使用的 ~h2~ 、 ~selmer~ 、 ~cheshire~ 、 ~clj-time~ 、 ~buddy-auth~ 、 ~kit-postgres~; ~deps-cov.edn~; ~formal-backend.edn(.example)~; ~deploy.sh~ (含固定主机) | ~.gitignore~ 重写 |
+| 后端 | ~domain/{synthetic,formal_backend}.clj~ 、 ~infra/synthetic_scheduler.clj~ 、 ~web/{controllers,routes}/{synthetic,formal_backend}.clj~;模板移除页面代码生成器 ~domain/gen.clj~ 、 ~web/{controllers,routes}/gen.clj~ 、 ~:app.system/gen-service~ (ADR-012) | ~core.clj~ / ~routes/api.clj~ / ~system.edn~ 去引用,并留出模块登记点注释;模板新增 ~infra/{clock,kv,json}.clj~ (ADR-011) |
+| 前端 | ~api/{synthetic,formal}.cljs~ 、 ~pages/{synthetic,formal}/*~;模板移除 ~{api,events,subs,pages}/gen.cljs~ (ADR-012) | ~config.cljs~ (品牌); ~router~ / ~menu_data~ / ~page_view~ / ~events/common~ / ~api.cljs~ 去引用; ~db.cljs~ 删除废弃的 ~:projects~ 状态 |
+| 数据 | ~sql/synthetic.sql~ 、源项目的 ~2026092*~ 迁移、 ~2024061300[1-4]~ / ~202606150002~ / ~202606150010~ 业务迁移;模板移除 ~sql/gen.sql~ 、 ~sql/generated.sql~ ,迁移 ~20260924000005-remove-code-gen-menu~ 删除代码生成菜单 | MySQL ~20260613215630-add-notice-content~ ;模板新增 ~20260924000001-add-button-perms~ (按钮菜单)、 ~20260924000002-create-sys-role-dept~ (自定义数据范围)、 ~20260924000003-create-sys-kv~ (共享临时状态)、 ~20260924000004-create-sys-notice-read~ (通知已读);共用查询的时间改为 ~:now~ |
+| 配置 | ~deps.edn~ 外部 ~:paths~ 、 ~jarohen/chime~ 、未使用的 ~h2~ 、 ~selmer~ 、 ~cheshire~ 、 ~clj-time~ 、 ~buddy-auth~ 、 ~kit-postgres~; ~deps-cov.edn~; ~formal-backend.edn(.example)~; ~deploy.sh~ (含固定主机);npm ~react-syntax-highlighter~ | ~.gitignore~ 重写 |
 | 文档 | ~GAP_ANALYSIS.md~ ~REMAINING.md~ ~ROADMAP.md~ ~test/coverage-report.md~ ~docs/pic-field-checklist.md~;README 合成流量章节 | README 重写为模板说明; ~CLAUDE.md~ 指向本文;本文 |
 | 工具 | ~.beads/~ ~.agents/~ ~.claude/settings.json~ (issue 跟踪钩子)、 ~test-frontend.mjs~ 、 ~Makefile~ 、 ~start_dev.sh~ 、 ~scripts/*.sh~ / ~*.py~ (由 bb 任务取代) | ~bb.edn~ + ~bb/tasks/~ ( ~dev~ / ~lint~ / ~rename~ / ~new-module~ )、 ~.github/workflows/ci.yml~ 、 ~docker-compose.yml~ 、 ~scripts/db.clj~ 、 ~LICENSE~ 、 ~.editorconfig~ 、 ~.cljfmt.edn~ 、 ~.clj-kondo/config.edn~ |
-| 测试 | ~synthetic_profile_test.clj~ 、 ~synthetic-profile.spec.js~ 、 ~formal-pages.spec.js~ | ~navigation.spec.js~ / ~post-crud.spec.js~ 修正 |
+| 测试 | ~synthetic_profile_test.clj~ 、 ~synthetic-profile.spec.js~ 、 ~formal-pages.spec.js~;模板移除 ~gen_test.clj~ (两个),改为验证代码生成已移除的回归测试 | ~navigation.spec.js~ / ~post-crud.spec.js~ 修正 |
 | 修复 | | ~middleware/operlog.clj~ 操作人解析;MySQL notice_content 迁移; ~routes/system.clj~ 拆分;注册提权、文件上传下载目录穿越、令牌永不过期、登出不失效等安全问题(ADR-009);修改用户后无法登录、个人资料越权修改、头像路径穿越、列表搜索失效等问题(ADR-010);两库时间不一致、多实例状态不共享、通知详情报错等问题(ADR-011) |
 
 * 附录 B:术语

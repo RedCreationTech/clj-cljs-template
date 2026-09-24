@@ -1,7 +1,7 @@
 (ns com.ruoyi.frontend.pages.dashboard
   "仪表盘首页 — 统计卡片 + 快捷入口 + 系统信息。"
   (:require
-   ["@ant-design/icons" :refer [CloudOutlined CodeOutlined DatabaseOutlined FileTextOutlined
+   ["@ant-design/icons" :refer [CloudOutlined DatabaseOutlined FileTextOutlined
                                 MenuOutlined SafetyOutlined ScheduleOutlined SettingOutlined
                                 TeamOutlined UserOutlined]]
    [clojure.string]
@@ -139,7 +139,7 @@
     [quick-link {:title "部门管理" :icon TeamOutlined :color "#f5222d" :route :dept}]
     [quick-link {:title "字典管理" :icon DatabaseOutlined :color "#722ed1" :route :dict}]
     [quick-link {:title "参数设置" :icon SettingOutlined :color "#13c2c2" :route :config}]
-    [quick-link {:title "代码生成" :icon CodeOutlined :color "#eb2f96" :route :gen}]
+    [quick-link {:title "定时任务" :icon ScheduleOutlined :color "#eb2f96" :route :job}]
     [quick-link {:title "系统接口" :icon CloudOutlined :color "#2f54eb" :route :swagger}]]])
 
 (defn- recent-ops-card [recent-ops]

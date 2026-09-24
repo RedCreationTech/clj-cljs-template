@@ -7,7 +7,6 @@
    [com.ruoyi.web.routes.auth :as auth]
    [com.ruoyi.web.routes.captcha :as captcha]
    [com.ruoyi.web.routes.common :as common]
-   [com.ruoyi.web.routes.gen :as gen]
    [com.ruoyi.web.routes.monitor :as monitor]
    [com.ruoyi.web.routes.system :as system]
    [integrant.core :as ig]
@@ -47,7 +46,6 @@
    (system/system-routes opts)
    (monitor/monitor-routes opts)
    (common/common-routes opts)
-   (gen/gen-routes opts)
    (captcha/captcha-routes opts)
    ;; 业务模块的路由组追加在标记之前(bb new-module 自动插入;标记行请保留)
    ;; [new-module] routes

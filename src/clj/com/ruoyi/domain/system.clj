@@ -1,7 +1,6 @@
 (ns com.ruoyi.domain.system
   "系统管理 Integrant 组件注册。"
   (:require
-   [com.ruoyi.domain.gen :as gen]
    [com.ruoyi.infra.kv :as kv]
    [com.ruoyi.infra.online :as online]
    [com.ruoyi.infra.scheduler :as scheduler]
@@ -58,15 +57,6 @@
   [_ _]
   ;; 系统停止后连接池已关闭,切回内存实现(单元测试、REPL 里继续可用)
   (kv/use-store! (kv/memory-store)))
-
-(defmethod ig/init-key :app.system/gen-service
-  [_ {:keys [query-fn db]}]
-  (let [ctx {:query-fn query-fn :db db}]
-    {:query-fn query-fn
-     :db db
-     :list-tables (partial gen/list-tables ctx)
-     :table-columns (partial gen/table-columns ctx)
-     :generate-code (partial gen/generate-code ctx)}))
 
 (defmethod ig/init-key :app.system/job-scheduler
   [_ {:keys [scheduler query-fn migrations]}]

@@ -64,7 +64,7 @@
       (is (= 403 (status (PUT (handler) "/api/system/user/1/resetPwd" {:password "hacked1"} viewer))))
       (is (= 403 (status (GET (handler) "/api/system/role" {} viewer))))
       (is (= 403 (status (GET (handler) "/api/system/server" {} viewer))))
-      (is (= 403 (status (GET (handler) "/api/tool/gen/tables" {} viewer)))))
+      (is (= 403 (status (GET (handler) "/api/system/job" {} viewer)))))
     (testing "满足任一即可:用户页的部门树可以用 system:user:list 读取"
       (is (= 200 (status (GET (handler) "/api/system/dept" {} viewer)))))
     (testing "没声明 :perms 的接口登录即可"
