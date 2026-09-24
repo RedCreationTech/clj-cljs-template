@@ -75,6 +75,7 @@
 ├── scripts/                     # rename-project.sh、check_constraints.py
 └── docs/
     ├── architecture/c4-model.org  # C4 架构文档（Context/Container/Component/Code + 动态/部署视图）
+    ├── architecture/c4-model.html # 上面 org 的自包含 HTML 版（图内联 SVG + 证据块实际输出），由 build-html.py 生成
     ├── index.html                 # 项目文档站
     └── training/                  # 5 节入门课程（Clojure 基础 -> 前端状态 -> 后端请求流 -> 基础设施）
 ```
