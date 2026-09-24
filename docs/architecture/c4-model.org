@@ -82,8 +82,8 @@ C4Container
   Person(admin, "管理员", "浏览器")
   Person(dev, "开发者", "REPL / 编辑器")
   System_Boundary(sys, "clojure-template") {
-    Container(spa, "Web 前端 (SPA)", "ClojureScript, shadow-cljs, Reagent 2, re-frame, Ant Design 6", "登录、布局(侧边菜单/多 Tab)、系统管理/监控/工具页面;编译产物 resources/public/js/app.js")
-    Container(backend, "后端服务 (JVM)", "Clojure 1.12, Kit, Integrant, Undertow, Reitit, Ring", "REST API(/api)、静态资源、SPA fallback、Swagger、Quartz 调度;端口 3000")
+    Container(spa, "Web 前端 (SPA)", "ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0, re-frame 1.4, React 19.3, Ant Design 6.6", "登录、布局(侧边菜单/多 Tab)、系统管理/监控/工具页面;编译产物 resources/public/js/app.js")
+    Container(backend, "后端服务 (JVM)", "JDK 21, Clojure 1.12.6, Kit 1.0, Integrant, Undertow, Reitit 0.11, Ring 1.15", "REST API(/api)、静态资源、SPA fallback、Swagger、Quartz 调度;端口 3000")
     Container(nrepl, "nREPL 服务", "kit-nrepl", "开发期热重载入口;端口 7000,仅绑定 127.0.0.1")
     ContainerDb(db, "数据库", "SQLite 文件 rouyi.db 或 MySQL", "sys_user/role/menu/dept/post/dict/config/notice/log/job/online/form_template")
     Container(fs, "本地文件", "文件系统", "上传目录(通用上传/头像)、日志 log/、SQLite 文件")
@@ -101,8 +101,8 @@ C4Container
 
 | 容器 | 技术 | 入口 / 配置 | 生命周期 |
 |------+------+-------------+----------|
-| 后端服务 | Clojure, Kit, Integrant, Undertow, Reitit, Ring, Muuntaja, Malli, Buddy, conman/HugSQL, Migratus, Quartz | ~com.ruoyi.core/-main~;装配见 ~resources/system.edn~ | ~clojure -M:dev -m com.ruoyi.core~ 或 uberjar |
-| Web 前端 | ClojureScript, shadow-cljs, Reagent(函数组件 + Hooks), re-frame, bidi, cljs-ajax, antd 6, React 19 | ~com.ruoyi.frontend.app/init~;构建见 ~shadow-cljs.edn~ | ~npx shadow-cljs watch/release app~ |
+| 后端服务 | JDK 21, Clojure 1.12.6, Kit 1.0, Integrant, Undertow, Reitit 0.11, Ring 1.15, Muuntaja 0.6, Malli 0.20, Buddy 3, conman/HugSQL, Migratus, Quartz 2.5, HikariCP 7, sqlite-jdbc 3.53, MySQL Connector/J 26.7 | ~com.ruoyi.core/-main~;装配见 ~resources/system.edn~ | ~clojure -M:dev -m com.ruoyi.core~ 或 uberjar |
+| Web 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0(函数组件 + Hooks), re-frame 1.4, bidi, cljs-ajax, antd 6.6, React 19.3 | ~com.ruoyi.frontend.app/init~;构建见 ~shadow-cljs.edn~ | ~npx shadow-cljs watch/release app~ |
 | nREPL | kit-nrepl(Integrant 组件 ~:nrepl/server~) | ~NREPL_PORT~ / ~NREPL_HOST~ | 随后端启动;生产可通过环境变量改端口/绑定 |
 | 数据库 | SQLite(开发默认)/ MySQL 8 | ~JDBC_URL~ + ~MIGRATION_DIR~ | 启动时 ~migrate-on-init?~ 自动迁移 |
 
@@ -566,7 +566,7 @@ C4Deployment
     }
     ContainerDb(sqlite, "rouyi.db", "SQLite 文件", "")
   }
-  Deployment_Node(prod, "生产主机 / 容器", "Linux, JDK 17+") {
+  Deployment_Node(prod, "生产主机 / 容器", "Linux, JDK 21") {
     Deployment_Node(nginx, "Nginx(可选)", "TLS 终止 / 反向代理", "") {
       Container(rp, "reverse proxy", "443 → 3000", "")
     }
@@ -599,7 +599,7 @@ C4Deployment
 npx shadow-cljs release app        # 前端 → resources/public/js/app.js(压缩)
 clojure -T:build all               # clean → pom → 复制 src/resources/env/prod → 编译 → uberjar
 ls -la target/*-standalone.jar
-docker build -t clojure-template .  # 多阶段:clojure:openjdk-17 构建 → zulu alpine 运行
+docker build -t clojure-template .  # 多阶段:clojure:temurin-21-tools-deps 构建 → eclipse-temurin:21-jre-alpine 运行
 #+end_src
 
 * 9. 横切关注点
@@ -689,6 +689,7 @@ rm -rf .git && git init && git add -A && git commit -m "init from clojure-templa
 | 端到端 | Playwright | ~npm run test:e2e~ | 需后端已在 3000 运行;串行(共享 SQLite) |
 | 规模约束 | ~scripts/check_constraints.py~ | ~python3 scripts/check_constraints.py~ | 命名空间 ≤500 行、函数 ≤50 行 |
 | 静态检查 | clj-kondo / clojure-lsp | ~clj-kondo --lint src test~ | 未使用 var、arity 等 |
+| 依赖新鲜度 | maven-metadata.xml / ~npm outdated~ | 见 ADR-007 的做法 | 升级后必须重跑上面四层 |
 
 可执行:跑后端测试并只看汇总行
 
@@ -754,6 +755,8 @@ python3 scripts/check_constraints.py 2>&1 | tail -5
 | 7 | 代码生成器落盘路径 | ~controllers/gen.clj~ 硬编码 ~src/clj/com/ruoyi/...~(改名脚本会一起替换) | 从 ~kit.edn~ 的 ~:sanitized~ 读取路径前缀 | ~controllers/gen.clj~ |
 | 8 | 静态检查遗留 | clj-kondo 0 error / 212 warning(未用 require、未用绑定等,源项目遗留) | 逐文件清理;CI 里把 warning 数设为上限 | 全部 |
 | 9 | 文档站 | ~docs/index.html~ 标题与目录仍是源项目文案 | 与 README 同步或生成 | ~docs/index.html~ |
+| 10 | 验证码可绕过 | ~controllers/auth.clj~ 在 ~captcha~ 为空时直接放行(E2E 依赖这一点) | 加 ~CAPTCHA_ENABLED~ 开关(prod 默认开、test profile 关),空验证码在开启时判失败 | ~controllers/auth.clj~ ~system.edn~ ~tests/e2e/auth-helper.js~ |
+| 11 | 时间戳时区 | SQLite ~CURRENT_TIMESTAMP~ 写的是 UTC,前端按本地时间解析 → 仪表盘"最近操作"显示"8 小时前" | 统一用 Clojure 层生成 ~yyyy-MM-dd HH:mm:ss~ 本地时间传参(两库一致),或前端按 UTC 解析 | ~resources/sql/*.sql~ ~middleware/operlog.clj~ ~pages/dashboard.cljs~ |
 
 可执行:设计债 1/2/3 的现状指标(全 0 表示尚未接入;接入后应变为非 0)
 
@@ -762,6 +765,11 @@ printf "perms 路由声明   %s\n" "$(grep -rn ':perms' src/clj/com/ruoyi/web/ro
 printf "data-perm in SQL  %s\n" "$(grep -rn 'data-perm' resources/sql | wc -l)"
 printf "统一错误事件      %s\n" "$(grep -rn 'api-error' src/cljs | wc -l)"
 #+end_src
+
+** ADR-007 依赖升级到 2026-09 最新稳定版
+- *决策*:后端 27 个坐标、前端 9 个 npm 包与 re-frame 一次性升到最新稳定版(不取 alpha/beta/rc):Clojure 1.12.6、Reitit 0.11.0、Ring 1.15.5、Malli 0.20.1、Cheshire 6.2.0、Logback 1.6.3、HikariCP 7.1.0、Quartz 2.5.2、sqlite-jdbc 3.53.4.0、MySQL Connector/J 26.7.0(MySQL 自 2026-07 起改用年份版本号)、tools.build 0.10.14、nREPL 1.7.0 / cider-nrepl 0.62.2;shadow-cljs 3.5.3、re-frame 1.4.7、React 19.3.0、antd 6.6.5、@ant-design/icons 6.3.4、dayjs 1.11.23、Playwright 1.63.0;Docker 镜像换成 temurin 21。未升级:Kit 全家桶、Buddy、Reagent 2.0.1、cljs-ajax 0.8.4、bidi 均已是最新;移除未使用的 ~venantius/accountant~。
+- *验证*:~clojure -M:test~ 350/860 全过;~shadow-cljs compile/release~ 0 warnings;Playwright auth / navigation(19)/ post-crud 全过;登录后遍历 6 个页面浏览器控制台 0 warning/error。
+- *注意*:HikariCP 7 与 Quartz 2.5 是通过顶层坐标覆盖 kit-sql-conman(hikari-cp 3.0.1 → HikariCP 5)与 cronut(Quartz 2.3)的传递依赖,~clojure -Stree~ 可见 ~:use-top~;若 Kit 后续升级请以 Kit 的版本为准。顺手修正 SQLite ~create-sys-notice~ 迁移缺少 ~--;;~ 分隔符导致的 Migratus 警告。
 
 * 附录 A:模板与源项目的差异清单
 

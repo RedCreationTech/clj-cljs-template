@@ -28,3 +28,6 @@ CLAUDE.local.md
 .pi/
 .runtime/
 /.codex/
+
+# Python 缓存(scripts/check_constraints.py)
+__pycache__/

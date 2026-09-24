@@ -488,7 +488,7 @@ java -jar target/rouyi-standalone.jar  # Run (port 3000, SQLite)
 
 ### E2E 测试 (Playwright)
 
-已接入 Playwright 对主要功能做端到端验证，默认跑在 `http://localhost:3000`。
+已接入 Playwright（1.63）对主要功能做端到端验证，默认跑在 `http://localhost:3000`。
 
 ```bash
 # 安装浏览器（首次）

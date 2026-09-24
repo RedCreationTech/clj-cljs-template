@@ -10,12 +10,12 @@
 
 | 层级 | 技术 |
 |------|------|
-| 后端 | Clojure 1.12, Kit, Integrant, Reitit, Ring, Undertow, next.jdbc / conman (HugSQL), Migratus |
-| 数据库 | SQLite（默认，零配置）；MySQL（切换环境变量即可） |
+| 后端 | Clojure 1.12.6, Kit 1.0.x, Integrant, Reitit 0.11, Ring 1.15, Undertow, next.jdbc / conman (HugSQL), Migratus, Malli 0.20, HikariCP 7 |
+| 数据库 | SQLite 3.53（默认，零配置）；MySQL（Connector/J 26.7，切换环境变量即可） |
 | 安全 | Buddy（JWT + bcrypt），图片验证码，XSS/Frame 防护 |
-| 前端 | ClojureScript, shadow-cljs, Reagent 2 (函数组件 + Hooks), re-frame, React 19, Ant Design 6 |
-| 任务调度 | Quartz（`sys_job` 表驱动，支持暂停/恢复/立即执行） |
-| 工具链 | Clojure CLI (`deps.edn`), tools.build, babashka (`bb.edn`), Playwright (E2E), cloverage |
+| 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0 (函数组件 + Hooks), re-frame 1.4, React 19.3, Ant Design 6.6 |
+| 任务调度 | Quartz 2.5（`sys_job` 表驱动，支持暂停/恢复/立即执行） |
+| 工具链 | Clojure CLI (`deps.edn`), tools.build 0.10, babashka (`bb.edn`), Playwright 1.63 (E2E), cloverage, clj-kondo |
 
 ---
 
@@ -85,7 +85,7 @@
 
 ### 环境要求
 
-- JDK 17+（推荐 21）
+- JDK 21（Dockerfile 与 CI 以 21 为准；17 也能跑）
 - [Clojure CLI](https://clojure.org/guides/install_clojure)
 - Node.js 18+
 - 可选：babashka（`bb` 任务）、clj-kondo、clojure-lsp
@@ -134,7 +134,7 @@ clojure -T:build all                  # uberjar（含前端静态文件）
 java -jar target/rouyi-standalone.jar # PORT / JDBC_URL / MIGRATION_DIR 等由环境变量注入
 ```
 
-`Dockerfile` 提供多阶段镜像构建；`bb uberjar` / `make uberjar` 等价。
+`Dockerfile` 提供多阶段镜像构建（`clojure:temurin-21-tools-deps` 构建 → `eclipse-temurin:21-jre-alpine` 运行）；`bb uberjar` / `make uberjar` 等价。
 
 ---
 

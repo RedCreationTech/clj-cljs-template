@@ -8,7 +8,7 @@ from pathlib import Path
 from collections import defaultdict
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC_DIRS = [ROOT / "src" / "clj", ROOT / "src" / "cljs"]
+SRC_DIRS = [ROOT / "src" / "clj", ROOT / "src" / "cljs", ROOT / "env", ROOT / "test" / "clj"]  # 源码 + 环境 + 测试
 NS_LIMIT = 500
 FN_LIMIT = 50  # 与 AGENTS.md「函数 ≤ 50 行」一致
 
@@ -124,7 +124,7 @@ def is_defn_form(tokens):
         return False
     # tokens[0] is opening paren, tokens[1] is macro/var type
     name = tokens[1][0]
-    return name in {"defn", "defn-", "defmacro", "defmacro-"}
+    return name in {"defn", "defn-", "defmacro", "defmacro-", "defmethod"}
 
 
 def function_name(tokens):

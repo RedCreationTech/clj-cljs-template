@@ -139,6 +139,41 @@
     (format "<a href=\"file://%s\" target=\"_blank\">%s</a>" path label)
     "未生成"))
 
+(def ^:private html-head
+  "报告页的 <head> 与标题(静态部分)。"
+  (str "<!DOCTYPE html>\n"
+       "<html lang=\"zh-CN\">\n<head>\n"
+       "  <meta charset=\"UTF-8\">\n"
+       "  <title>性能对比报告</title>\n"
+       "  <script src=\"https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js\"></script>\n"
+       "  <style>body{font-family:sans-serif;margin:24px;} h2{margin-top:32px;} .box{background:#f5f5f5;padding:12px;border-radius:8px;margin:12px 0;}</style>\n"
+       "</head>\n<body>\n"
+       "  <h1>Criterium + async-profiler 性能对比</h1>\n"))
+
+(defn- chart-script
+  "两张对数轴柱状图的 Chart.js 脚本。"
+  [gc-bad gc-good ref-bad ref-good]
+  (str "  <script>\n"
+       "    const commonOptions = {\n"
+       "      scales: { y: { type: 'logarithmic', title: { display: true, text: '平均耗时（ns，对数轴）' } } },\n"
+       "      plugins: { legend: { display: false } }\n"
+       "    };\n"
+       "    new Chart(document.getElementById('gcChart'), {\n"
+       "      type: 'bar',\n"
+       "      data: { labels: ['heavy-gc', 'light-gc'],\n"
+       "              datasets: [{ data: [" gc-bad ", " gc-good "],\n"
+       "                           backgroundColor: ['#ff4d4f', '#52c41a'] }] },\n"
+       "      options: commonOptions\n"
+       "    });\n"
+       "    new Chart(document.getElementById('refChart'), {\n"
+       "      type: 'bar',\n"
+       "      data: { labels: ['slow-reflection', 'fast-hinted'],\n"
+       "              datasets: [{ data: [" ref-bad ", " ref-good "],\n"
+       "                           backgroundColor: ['#ff4d4f', '#52c41a'] }] },\n"
+       "      options: commonOptions\n"
+       "    });\n"
+       "  </script>\n"))
+
 (defn- html-template
   [gc-bench reflection-bench]
   (let [gc-bad   (mean->ns (:bad gc-bench))
@@ -147,14 +182,7 @@
         ref-good (mean->ns (:good reflection-bench))
         [gc-bad-path gc-good-path] @last-gc-profiles
         [ref-bad-path ref-good-path] @last-reflection-profiles]
-    (str "<!DOCTYPE html>\n"
-         "<html lang=\"zh-CN\">\n<head>\n"
-         "  <meta charset=\"UTF-8\">\n"
-         "  <title>性能对比报告</title>\n"
-         "  <script src=\"https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js\"></script>\n"
-         "  <style>body{font-family:sans-serif;margin:24px;} h2{margin-top:32px;} .box{background:#f5f5f5;padding:12px;border-radius:8px;margin:12px 0;}</style>\n"
-         "</head>\n<body>\n"
-         "  <h1>Criterium + async-profiler 性能对比</h1>\n"
+    (str html-head
          "  <div class=\"box\">\n"
          "    <p><strong>GC 场景</strong>：heavy-gc = " (fmt-time gc-bad)
          "，light-gc = " (fmt-time gc-good)
@@ -171,26 +199,7 @@
          "  <canvas id=\"refChart\" width=\"500\" height=\"300\"></canvas>\n"
          "  <p>CPU flamegraph（bad）: " (file-link ref-bad-path "slow-reflection") "</p>\n"
          "  <p>CPU flamegraph（good）: " (file-link ref-good-path "fast-hinted") "</p>\n"
-         "  <script>\n"
-         "    const commonOptions = {\n"
-         "      scales: { y: { type: 'logarithmic', title: { display: true, text: '平均耗时（ns，对数轴）' } } },\n"
-         "      plugins: { legend: { display: false } }\n"
-         "    };\n"
-         "    new Chart(document.getElementById('gcChart'), {\n"
-         "      type: 'bar',\n"
-         "      data: { labels: ['heavy-gc', 'light-gc'],\n"
-         "              datasets: [{ data: [" gc-bad ", " gc-good "],\n"
-         "                           backgroundColor: ['#ff4d4f', '#52c41a'] }] },\n"
-         "      options: commonOptions\n"
-         "    });\n"
-         "    new Chart(document.getElementById('refChart'), {\n"
-         "      type: 'bar',\n"
-         "      data: { labels: ['slow-reflection', 'fast-hinted'],\n"
-         "              datasets: [{ data: [" ref-bad ", " ref-good "],\n"
-         "                           backgroundColor: ['#ff4d4f', '#52c41a'] }] },\n"
-         "      options: commonOptions\n"
-         "    });\n"
-         "  </script>\n"
+         (chart-script gc-bad gc-good ref-bad ref-good)
          "</body>\n</html>")))
 
 (defn generate-report

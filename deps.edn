@@ -1,23 +1,23 @@
 {:paths   ["src/clj"
            "resources"]
 
- :deps    {org.clojure/clojure             {:mvn/version "1.12.4"}
+ :deps    {org.clojure/clojure             {:mvn/version "1.12.6"}
 
            ;; Routing
-           metosin/reitit                  {:mvn/version "0.10.1"}
+           metosin/reitit                  {:mvn/version "0.11.0"}
 
            ;; Ring
            metosin/ring-http-response      {:mvn/version "0.9.5"}
-           ring/ring-core                  {:mvn/version "1.15.4"}
-           ring/ring-defaults              {:mvn/version "0.7.0"}
+           ring/ring-core                  {:mvn/version "1.15.5"}
+           ring/ring-defaults              {:mvn/version "0.7.1"}
 
            ;; Logging
-           ch.qos.logback/logback-classic  {:mvn/version "1.5.32"}
+           ch.qos.logback/logback-classic  {:mvn/version "1.6.3"}
 
            ;; Data coercion
            luminus-transit/luminus-transit {:mvn/version "0.1.6"
                                             :exclusions [com.cognitect/transit-clj]}
-           metosin/muuntaja                {:mvn/version "0.6.11"}
+           metosin/muuntaja                {:mvn/version "0.6.12"}
 
            ;; kit Libs
            io.github.kit-clj/kit-core {:mvn/version "1.0.10"}
@@ -36,43 +36,43 @@
            buddy/buddy-sign {:mvn/version "3.6.1-359"}
 
            ;; Validation
-           metosin/malli {:mvn/version "0.17.0"}
+           metosin/malli {:mvn/version "0.20.1"}
 
            ;; JSON
-           cheshire/cheshire {:mvn/version "5.13.0"}
+           cheshire/cheshire {:mvn/version "6.2.0"}
 
            ;; Database
            clj-time/clj-time {:mvn/version "0.15.2"}
-           org.xerial/sqlite-jdbc {:mvn/version "3.45.3.0"}
-           com.mysql/mysql-connector-j {:mvn/version "8.3.0"}
-           com.zaxxer/HikariCP {:mvn/version "5.1.0"}
+           org.xerial/sqlite-jdbc {:mvn/version "3.53.4.0"}
+           com.mysql/mysql-connector-j {:mvn/version "26.7.0"}
+           com.zaxxer/HikariCP {:mvn/version "7.1.0"}
 
            ;; CSV
-           org.clojure/data.csv {:mvn/version "1.1.0"}
-           org.clojure/data.json {:mvn/version "2.4.0"}
+           org.clojure/data.csv {:mvn/version "1.1.1"}
+           org.clojure/data.json {:mvn/version "2.5.2"}
 
            ;; Scheduler
-           org.quartz-scheduler/quartz {:mvn/version "2.3.2"}}
- :aliases {:build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.12"}}
+           org.quartz-scheduler/quartz {:mvn/version "2.5.2"}}
+ :aliases {:build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.14"}}
                    :ns-default build}
 
-           :dev  {:extra-deps  {com.lambdaisland/classpath      {:mvn/version "0.6.58"}
+           :dev  {:extra-deps  {com.lambdaisland/classpath      {:mvn/version "0.9.74"}
                                 criterium/criterium             {:mvn/version "0.4.6"}
                                 expound/expound                 {:mvn/version "0.9.0"}
                                 integrant/repl                  {:mvn/version "0.5.1"}
                                 mvxcvi/cljstyle                 {:mvn/version "0.17.642"}
-                                com.clojure-goes-fast/clj-async-profiler {:mvn/version "1.6.1"}
+                                com.clojure-goes-fast/clj-async-profiler {:mvn/version "1.8.0"}
                                 pjstadig/humane-test-output     {:mvn/version "0.11.0"}
-                                ring/ring-devel                 {:mvn/version "1.15.3"}
+                                ring/ring-devel                 {:mvn/version "1.15.5"}
                                 ring/ring-mock                  {:mvn/version "0.6.2"}
                                 io.github.kit-clj/kit-generator {:mvn/version "0.2.9"}
                                 org.clojure/tools.namespace     {:mvn/version "1.5.1"}}
                   :extra-paths ["env/dev/clj" "env/dev/resources" "test/clj"]
                   :jvm-opts ["-Djdk.attach.allowAttachSelf"]}
-           :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.5.1"}}
+           :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.7.0"}}
                    :main-opts  ["-m" "nrepl.cmdline" "-i"]}
-           :cider {:extra-deps {nrepl/nrepl       {:mvn/version "1.5.1"}
-                                cider/cider-nrepl {:mvn/version "0.58.0"}}
+           :cider {:extra-deps {nrepl/nrepl       {:mvn/version "1.7.0"}
+                                cider/cider-nrepl {:mvn/version "0.62.2"}}
                    :main-opts  ["-m" "nrepl.cmdline" "--middleware" "[cider.nrepl/cider-middleware]" "-i"]}
 
            :test {:extra-deps  {criterium/criterium                  {:mvn/version "0.4.6"}
@@ -82,13 +82,13 @@
                                                                       :git/tag "v0.5.1"
                                                                       :git/sha "dfb30dd"}
                                 pjstadig/humane-test-output          {:mvn/version "0.11.0"}
-                                ring/ring-devel                      {:mvn/version "1.15.3"}
+                                ring/ring-devel                      {:mvn/version "1.15.5"}
                                 ring/ring-mock                       {:mvn/version "0.6.2"}
                                 io.github.kit-clj/kit-generator      {:mvn/version "0.2.9"}
-                                org.clojure/tools.namespace          {:mvn/version "1.5.0"}
+                                org.clojure/tools.namespace          {:mvn/version "1.5.1"}
                                 peridot/peridot                      {:mvn/version "0.5.4"}
                                 org.clj-commons/byte-streams         {:mvn/version "0.3.4"}
-                                com.lambdaisland/classpath           {:mvn/version "0.6.58"}
+                                com.lambdaisland/classpath           {:mvn/version "0.9.74"}
                                 cloverage/cloverage                 {:mvn/version "1.2.4"}}
                   :exec-fn      cognitect.test-runner.api/test
                   :extra-paths ["env/dev/clj" "env/dev/resources" "env/test/resources" "test/clj"]
@@ -99,13 +99,13 @@
                                     expound/expound                      {:mvn/version "0.9.0"}
                                     integrant/repl                       {:mvn/version "0.5.1"}
                                     pjstadig/humane-test-output          {:mvn/version "0.11.0"}
-                                    ring/ring-devel                      {:mvn/version "1.15.3"}
+                                    ring/ring-devel                      {:mvn/version "1.15.5"}
                                     ring/ring-mock                       {:mvn/version "0.6.2"}
                                     io.github.kit-clj/kit-generator      {:mvn/version "0.2.9"}
-                                    org.clojure/tools.namespace          {:mvn/version "1.5.0"}
+                                    org.clojure/tools.namespace          {:mvn/version "1.5.1"}
                                     peridot/peridot                      {:mvn/version "0.5.4"}
                                     org.clj-commons/byte-streams         {:mvn/version "0.3.4"}
-                                    com.lambdaisland/classpath           {:mvn/version "0.6.58"}
+                                    com.lambdaisland/classpath           {:mvn/version "0.9.74"}
                                     cloverage/cloverage                  {:mvn/version "1.2.4"}}
                       :extra-paths ["env/dev/clj" "env/dev/resources" "env/test/resources" "test/clj"]
                       :main-opts   ["-m" "cloverage.coverage"
