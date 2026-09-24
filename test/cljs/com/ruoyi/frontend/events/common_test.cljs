@@ -23,3 +23,22 @@
     (is (= [2 3] (mapv :dept_id (:children (first tree)))))
     (is (= [4] (mapv :dept_id (:children (first (:children (first tree)))))))
     (is (not (contains? (second (:children (first tree))) :children)) "叶子节点没有 :children")))
+
+(deftest stop-all-loading-test
+  (testing "只复位正在 loading 的模块,其它数据不动"
+    (let [db {:configs {:loading? true :items [1]}
+              :users {:loading? false}
+              :auth {:token "t"}
+              :page :config}]
+      (is (= {:configs {:loading? false :items [1]}
+              :users {:loading? false}
+              :auth {:token "t"}
+              :page :config}
+             (ec/stop-all-loading db))))))
+
+(deftest unread-count-test
+  (let [items [{:notice_id 7} {:notice_id 5} {:notice_id 3}]]
+    (is (= 3 (ec/unread-count items nil)) "从没看过:全部未读")
+    (is (= 1 (ec/unread-count items 5)))
+    (is (= 0 (ec/unread-count items 7)))
+    (is (= 0 (ec/unread-count [] 0)))))

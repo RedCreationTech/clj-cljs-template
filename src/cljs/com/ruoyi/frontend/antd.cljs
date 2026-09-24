@@ -67,10 +67,13 @@
     (.success api text)
     (.success message text)))
 
-(defn error! [text]
-  (if-let [^js api @message-api]
-    (.error api text)
-    (.error message text)))
+(defn error!
+  "错误提示;相同文案同时只显示一条(transport 的统一提示与调用方的提示重复时只留一条)。"
+  [text]
+  (let [cfg #js {:type "error" :content text :key (str "error:" text)}]
+    (if-let [^js api @message-api]
+      (.open api cfg)
+      (.open message cfg))))
 
 (defn warning! [text]
   (if-let [^js api @message-api]

@@ -5,6 +5,7 @@
                                 PlusOutlined ReloadOutlined SearchOutlined UploadOutlined]]
    ["antd" :refer [DatePicker]]
    [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.perm :as perm]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
 
@@ -106,33 +107,38 @@
 
 (defn- toolbar-left [{:keys [selected-empty? on-add on-edit-selected on-batch-delete on-import on-export]}]
   [:div {:style {:display "flex" :gap 8}}
-   [antd/button {:type "primary" :ghost true
-                 :style {:height 34 :borderRadius 4 :color "#409eff" :borderColor "#a0cfff" :background "#ecf5ff"}
-                 :icon (r/as-element [:> PlusOutlined])
-                 :on-click on-add}
-    "新增"]
-   [antd/button {:ghost true
-                 :style {:height 34 :borderRadius 4 :color "#67c23a" :borderColor "#b3e19d" :background "#f0f9eb"}
-                 :icon (r/as-element [:> EditOutlined])
-                 :disabled selected-empty?
-                 :on-click on-edit-selected}
-    "修改"]
-   [antd/button {:danger true :ghost true
-                 :style {:height 34 :borderRadius 4 :color "#f56c6c" :borderColor "#fab6b6" :background "#fef0f0"}
-                 :icon (r/as-element [:> DeleteOutlined])
-                 :disabled selected-empty?
-                 :on-click on-batch-delete}
-    "删除"]
-   [antd/button {:ghost true
-                 :style {:height 34 :borderRadius 4 :color "var(--app-text-secondary)" :borderColor "#d3d4d6" :background "#f4f4f5"}
-                 :icon (r/as-element [:> UploadOutlined])
-                 :on-click on-import}
-    "导入"]
-   [antd/button {:ghost true
-                 :style {:height 34 :borderRadius 4 :color "#e6a23c" :borderColor "#f3d19e" :background "#fdf6ec"}
-                 :icon (r/as-element [:> DownloadOutlined])
-                 :on-click on-export}
-    "导出"]])
+   [perm/when-allowed "system:user:add"
+    [antd/button {:type "primary" :ghost true
+                  :style {:height 34 :borderRadius 4 :color "#409eff" :borderColor "#a0cfff" :background "#ecf5ff"}
+                  :icon (r/as-element [:> PlusOutlined])
+                  :on-click on-add}
+     "新增"]]
+   [perm/when-allowed "system:user:edit"
+    [antd/button {:ghost true
+                  :style {:height 34 :borderRadius 4 :color "#67c23a" :borderColor "#b3e19d" :background "#f0f9eb"}
+                  :icon (r/as-element [:> EditOutlined])
+                  :disabled selected-empty?
+                  :on-click on-edit-selected}
+     "修改"]]
+   [perm/when-allowed "system:user:remove"
+    [antd/button {:danger true :ghost true
+                  :style {:height 34 :borderRadius 4 :color "#f56c6c" :borderColor "#fab6b6" :background "#fef0f0"}
+                  :icon (r/as-element [:> DeleteOutlined])
+                  :disabled selected-empty?
+                  :on-click on-batch-delete}
+     "删除"]]
+   [perm/when-allowed "system:user:import"
+    [antd/button {:ghost true
+                  :style {:height 34 :borderRadius 4 :color "var(--app-text-secondary)" :borderColor "#d3d4d6" :background "#f4f4f5"}
+                  :icon (r/as-element [:> UploadOutlined])
+                  :on-click on-import}
+     "导入"]]
+   [perm/when-allowed "system:user:export"
+    [antd/button {:ghost true
+                  :style {:height 34 :borderRadius 4 :color "#e6a23c" :borderColor "#f3d19e" :background "#fdf6ec"}
+                  :icon (r/as-element [:> DownloadOutlined])
+                  :on-click on-export}
+     "导出"]]])
 
 (defn toolbar
   "工具栏。props: :show-search? :columns :selected-empty? :on-add :on-edit-selected

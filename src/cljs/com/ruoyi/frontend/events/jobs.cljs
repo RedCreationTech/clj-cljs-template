@@ -131,6 +131,18 @@
                                       (rf/dispatch [:jobs/fetch {}])))
                                   (fn [_]))))
 
+(rf/reg-event-fx :jobs/change-status
+                 (fn [_ [_ id status]]
+                   {:api/change-job-status [id status]}))
+
+(rf/reg-fx :api/change-job-status
+           (fn [[id status]]
+             (jobs-api/change-job-status id status
+                                         (fn [result]
+                                           (when (= 200 (:code result))
+                                             (rf/dispatch [:jobs/fetch {}])))
+                                         (fn [_]))))
+
 (rf/reg-event-fx :jobs/delete
                  (fn [_ [_ id]]
                    {:api/delete-job id}))
@@ -153,7 +165,7 @@
                                     (fn [result]
                                       (when (= 200 (:code result))
                                         (antd/success! "执行成功")))
-                                    (fn [_] (antd/error! "执行失败")))))
+                                    (fn [_]))))
 
 (rf/reg-event-db :job-logs/set-list
                  (fn [db [_ data]]

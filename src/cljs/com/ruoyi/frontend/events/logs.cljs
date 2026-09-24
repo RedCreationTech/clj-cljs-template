@@ -47,7 +47,7 @@
                                             (rf/dispatch [:oper-logs/fetch {}]))
                                           (when (not= 200 (:code result))
                                             (antd/error! (:msg result))))
-                                        (fn [_] (antd/error! "网络错误")))))
+                                        (fn [_]))))
 
 (rf/reg-fx :api/clear-oper-logs
            (fn [_]
@@ -56,7 +56,7 @@
                 (when (= 200 (:code result))
                   (rf/dispatch [:oper-logs/cleared])
                   (antd/success! "清空成功")))
-              (fn [_] (antd/error! "网络错误")))))
+              (fn [_]))))
 
 (rf/reg-event-fx :oper-logs/cleared
                  (fn [{:keys [db]} _]
@@ -129,12 +129,19 @@
                                              (rf/dispatch [:login-logs/fetch {}]))
                                            (when (not= 200 (:code result))
                                              (antd/error! (:msg result))))
-                                         (fn [_] (antd/error! "网络错误")))))
+                                         (fn [_]))))
 
 (rf/reg-event-fx :login-logs/unlock
-                 (fn [{:keys [db]} [_ username]]
-                   (antd/success! (str "用户 " username " 解锁成功"))
-                   {:db db}))
+                 (fn [_ [_ username]]
+                   {:api/unlock-user username}))
+
+(rf/reg-fx :api/unlock-user
+           (fn [username]
+             (logs-api/unlock-user username
+                                   (fn [result]
+                                     (when (= 200 (:code result))
+                                       (antd/success! (:data result))))
+                                   (fn [_]))))
 
 (rf/reg-fx :api/clear-login-logs
            (fn [_]
@@ -143,7 +150,7 @@
                 (when (= 200 (:code result))
                   (rf/dispatch [:login-logs/cleared])
                   (antd/success! "清空成功")))
-              (fn [_] (antd/error! "网络错误")))))
+              (fn [_]))))
 
 (rf/reg-event-fx :login-logs/cleared
                  (fn [{:keys [db]} _]

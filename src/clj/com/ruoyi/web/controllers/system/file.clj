@@ -34,15 +34,16 @@
     (ok files)))
 
 (defn upload-file
-  "上传文件。文件名只保留安全字符,同名不覆盖。"
-  [_ request]
-  (try
-    (let [{:keys [tempfile filename]} (get-in request [:params :file])]
-      (if-let [target (and tempfile (files/store! upload-dir tempfile filename))]
-        (ok {:name (.getName target) :size (.length target)})
-        (ok 500 "上传失败" nil)))
-    (catch Exception e
-      (ok 500 (.getMessage e) nil))))
+  "上传文件:先按 :upload-config 校验类型与大小;文件名只保留安全字符,同名不覆盖。"
+  [{:keys [upload-config]} request]
+  (let [{:keys [tempfile filename] :as file} (get-in request [:params :file])]
+    (if-let [err (files/upload-error (files/policy upload-config) file)]
+      (ok 400 err nil)
+      (try
+        (let [target (files/store! upload-dir tempfile filename)]
+          (ok {:name (.getName target) :size (.length target)}))
+        (catch Exception e
+          (ok 500 (.getMessage e) nil))))))
 
 (defn- existing-file [request]
   (let [f (files/resolve-in upload-dir (get-in request [:path-params :filename]))]

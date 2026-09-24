@@ -8,6 +8,7 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -81,20 +82,23 @@
   (let [selected-id-string #(str/join "," selected-ids)]
     [page-toolbar/page-toolbar
      {:left [page-toolbar/toolbar-left
-             [antd/popconfirm {:title "确认删除选中的登录日志？"
-                               :onConfirm #(when (seq selected-ids)
-                                             (rf/dispatch [:login-logs/delete (selected-id-string)])
-                                             (set-selected-ids! []))}
-              [page-toolbar/toolbar-button {:kind :delete
-                                            :icon (r/as-element [:> DeleteOutlined])
-                                            :disabled? (empty? selected-ids)
-                                            :label "删除"}]]
-             [antd/popconfirm {:title "确认清空所有登录日志？"
-                               :onConfirm #(rf/dispatch [:login-logs/clear])}
-              [page-toolbar/toolbar-button {:kind :delete
-                                            :icon (r/as-element [:> DeleteOutlined])
-                                            :label "清空"}]]
-             [page-toolbar/toolbar-button {:kind :add
+             [perm/when-allowed "monitor:logininfor:remove"
+              [antd/popconfirm {:title "确认删除选中的登录日志？"
+                                :onConfirm #(when (seq selected-ids)
+                                              (rf/dispatch [:login-logs/delete (selected-id-string)])
+                                              (set-selected-ids! []))}
+               [page-toolbar/toolbar-button {:kind :delete
+                                             :icon (r/as-element [:> DeleteOutlined])
+                                             :disabled? (empty? selected-ids)
+                                             :label "删除"}]]]
+             [perm/when-allowed "monitor:logininfor:remove"
+              [antd/popconfirm {:title "确认清空所有登录日志？"
+                                :onConfirm #(rf/dispatch [:login-logs/clear])}
+               [page-toolbar/toolbar-button {:kind :delete
+                                             :icon (r/as-element [:> DeleteOutlined])
+                                             :label "清空"}]]]
+             [page-toolbar/toolbar-button {:perm "monitor:logininfor:unlock"
+                                           :kind :add
                                            :icon (r/as-element [:> LockOutlined])
                                            :disabled? (empty? selected-ids)
                                            :on-click #(when-let [row (some (fn [item]
@@ -102,7 +106,8 @@
                                                                            items)]
                                                         (rf/dispatch [:login-logs/unlock (:user_name row)]))
                                            :label "解锁"}]
-             [page-toolbar/toolbar-button {:kind :export
+             [page-toolbar/toolbar-button {:perm "monitor:logininfor:export"
+                                           :kind :export
                                            :icon (r/as-element [:> DownloadOutlined])
                                            :on-click #(rf/dispatch [:login-logs/export])
                                            :label "导出"}]]

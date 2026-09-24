@@ -5,6 +5,7 @@
                                 UploadOutlined]]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -30,15 +31,17 @@
             :render (fn [_ ^js record]
                       (r/as-element
                        [antd/space
-                        [antd/button {:type "link" :size "small"
-                                      :icon (r/as-element [:> DownloadOutlined])
-                                      :onClick #(rf/dispatch [:file/download (.-name record)])}
-                         "下载"]
-                        [antd/popconfirm {:title "确认删除该文件？"
-                                          :onConfirm #(rf/dispatch [:file/delete (.-name record)])}
-                         [antd/button {:type "link" :danger true :size "small"
-                                       :icon (r/as-element [:> DeleteOutlined])}
-                          "删除"]]]))}])
+                        [perm/when-allowed "system:file:download"
+                         [antd/button {:type "link" :size "small"
+                                       :icon (r/as-element [:> DownloadOutlined])
+                                       :onClick #(rf/dispatch [:file/download (.-name record)])}
+                          "下载"]]
+                        [perm/when-allowed "system:file:remove"
+                         [antd/popconfirm {:title "确认删除该文件？"
+                                           :onConfirm #(rf/dispatch [:file/delete (.-name record)])}
+                          [antd/button {:type "link" :danger true :size "small"
+                                        :icon (r/as-element [:> DeleteOutlined])}
+                           "删除"]]]]))}])
 
 ;; ─── 主页面 ──────────────────────────────────────────────────────
 
@@ -55,7 +58,8 @@
                             :beforeUpload (fn [file]
                                             (rf/dispatch [:file/upload file])
                                             false)}
-               [page-toolbar/toolbar-button {:kind :import
+               [page-toolbar/toolbar-button {:perm "system:file:upload"
+                                             :kind :import
                                              :icon (r/as-element [:> UploadOutlined])
                                              :label "上传"}]]]
        :right [page-toolbar/toolbar-right

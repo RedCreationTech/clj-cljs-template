@@ -5,7 +5,13 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api.menus :as menus-api]
    [com.ruoyi.frontend.api.roles :as roles-api]
+   [com.ruoyi.frontend.events.common :as ec]
    [re-frame.core :as rf]))
+
+(rf/reg-event-fx :roles/search
+                 ;; 按搜索表单里的条件查询(条件存在 app-db 的 [:roles :query-params])
+                 (fn [{:keys [db]} _]
+                   {:dispatch [:roles/fetch (get-in db [:roles :query-params] {})]}))
 
 (rf/reg-event-db :roles/update-query
                  (fn [db [_ k v]]
@@ -72,8 +78,8 @@
                                     (fn [result]
                                       (when (= 200 (:code result))
                                         (antd/success! "创建成功")
-                                        (rf/dispatch [:roles/fetch {}])))
-                                    (fn [_] (antd/error! "网络错误")))))
+                                        (rf/dispatch [:roles/search])))
+                                    (fn [_]))))
 
 (rf/reg-fx :api/update-role
            (fn [[id params]]
@@ -81,8 +87,8 @@
                                     (fn [result]
                                       (when (= 200 (:code result))
                                         (antd/success! "更新成功")
-                                        (rf/dispatch [:roles/fetch {}])))
-                                    (fn [_] (antd/error! "网络错误")))))
+                                        (rf/dispatch [:roles/search])))
+                                    (fn [_]))))
 
 (rf/reg-fx :api/update-role-and-refresh
            (fn [[id params]]
@@ -90,10 +96,10 @@
                                     (fn [result]
                                       (when (= 200 (:code result))
                                         (antd/success! "权限更新成功，正在刷新...")
-                                        (rf/dispatch [:roles/fetch {}])
+                                        (rf/dispatch [:roles/search])
                                   ;; 刷新页面以更新菜单
                                         (js/setTimeout #(.reload js/location) 500)))
-                                    (fn [_] (antd/error! "网络错误")))))
+                                    (fn [_]))))
 
 (rf/reg-event-fx :roles/delete
                  (fn [_ [_ id]]
@@ -109,8 +115,8 @@
                                     (fn [result]
                                       (when (= 200 (:code result))
                                         (antd/success! "删除成功")
-                                        (rf/dispatch [:roles/fetch {}])))
-                                    (fn [_] (antd/error! "网络错误")))))
+                                        (rf/dispatch [:roles/search])))
+                                    (fn [_]))))
 
 (rf/reg-fx :api/change-role-status
            (fn [[id status]]
@@ -118,8 +124,8 @@
                                            (fn [result]
                                              (when (= 200 (:code result))
                                                (antd/success! "状态修改成功")
-                                               (rf/dispatch [:roles/fetch {}])))
-                                           (fn [_] (antd/error! "网络错误")))))
+                                               (rf/dispatch [:roles/search])))
+                                           (fn [_]))))
 
 (rf/reg-event-fx :roles/open-permission
                  (fn [{:keys [db]} [_ role]]
@@ -136,7 +142,7 @@
                                      (let [role (:data result)]
                                        (rf/dispatch [:roles/set-permission-role role])
                                        (rf/dispatch [:roles/set-checked-keys (mapv str (:menu-ids role []))]))))
-                                 (fn [_] (antd/error! "获取角色详情失败")))))
+                                 (fn [_]))))
 
 (rf/reg-event-db :roles/set-permission-role
                  (fn [db [_ role]]
@@ -199,7 +205,8 @@
 (rf/reg-event-db :roles/set-dept-tree-and-keys
                  (fn [db [_ result]]
                    (-> db
-                       (assoc-in [:roles :data-scope-dept-tree] (:depts result []))
+                       ;; 后端返回平铺的部门列表,这里组树
+                       (assoc-in [:roles :data-scope-dept-tree] (ec/build-dept-tree (:depts result []) 0))
                        (assoc-in [:roles :data-scope-checked-keys] (mapv str (:checked-keys result []))))))
 
 (rf/reg-fx :api/fetch-role-dept-tree
@@ -208,7 +215,7 @@
                                            (fn [result]
                                              (when (= 200 (:code result))
                                                (rf/dispatch [:roles/set-dept-tree-and-keys (:data result)])))
-                                           (fn [_] (antd/error! "获取部门树失败")))))
+                                           (fn [_]))))
 
 (rf/reg-event-fx :roles/save-data-scope
                  (fn [{:keys [db]} _]
@@ -226,8 +233,8 @@
                                             (fn [result]
                                               (when (= 200 (:code result))
                                                 (antd/success! "数据权限设置成功")
-                                                (rf/dispatch [:roles/fetch {}])))
-                                            (fn [_] (antd/error! "设置失败")))))
+                                                (rf/dispatch [:roles/search])))
+                                            (fn [_]))))
 
 (rf/reg-event-fx :roles/open-user-alloc
                  (fn [{:keys [db]} [_ role]]
@@ -340,7 +347,7 @@
                 (when (= 200 (:code result))
                   (antd/success! "取消授权成功")
                   (rf/dispatch [:roles/fetch-allocated])))
-              (fn [_] (antd/error! "取消授权失败")))))
+              (fn [_]))))
 
 (rf/reg-event-fx :roles/cancel-all-users
                  (fn [{:keys [db]} _]
@@ -361,7 +368,7 @@
                   (antd/success! "批量取消授权成功")
                   (rf/dispatch [:roles/fetch-allocated])
                   (rf/dispatch [:roles/set-allocated-selected []])))
-              (fn [_] (antd/error! "批量取消授权失败")))))
+              (fn [_]))))
 
 (rf/reg-event-fx :roles/select-all-users
                  (fn [{:keys [db]} _]
@@ -382,4 +389,4 @@
                   (antd/success! "批量授权成功")
                   (rf/dispatch [:roles/fetch-unallocated])
                   (rf/dispatch [:roles/set-unallocated-selected []])))
-              (fn [_] (antd/error! "批量授权失败")))))
+              (fn [_]))))

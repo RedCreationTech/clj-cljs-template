@@ -18,7 +18,7 @@
 (defn refresh
   "用当前令牌换新令牌(滑动续期)。"
   [on-success on-error]
-  (t/request {:method :post :uri "/auth/refresh"
+  (t/request {:method :post :uri "/auth/refresh" :silent? true
               :on-success on-success :on-error on-error}))
 
 (defn get-info
@@ -30,5 +30,5 @@
 (defn logout
   "用户登出。token 显式传入:调用时 app-db 里的令牌通常已经清掉了。"
   [token on-success on-error]
-  (t/request {:method :post :uri "/auth/logout" :token token
+  (t/request {:method :post :uri "/auth/logout" :token token :silent? true
               :on-success on-success :on-error on-error}))

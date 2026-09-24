@@ -26,3 +26,9 @@
   [id on-success on-error]
   (t/request {:method :delete :uri (str "/system/notice/" id)
               :on-success on-success :on-error on-error}))
+
+(defn latest-notices
+  "最新的已发布通知(顶部铃铛)。后台轮询,失败不提示。"
+  [on-success on-error]
+  (t/request {:method :get :uri "/system/notice/latest" :silent? true
+              :on-success on-success :on-error on-error}))

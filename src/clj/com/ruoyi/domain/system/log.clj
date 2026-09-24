@@ -23,7 +23,7 @@
 (defn clear-oper-logs!
   "清空操作日志。"
   [{:keys [query-fn]} params]
-  (query-fn :clear-oper-logs! params))
+  (query-fn :clear-oper-logs! (merge {:begin_time nil :end_time nil} (select-keys params [:begin_time :end_time]))))
 
 (defn delete-oper-logs!
   "删除指定操作日志。"
@@ -53,7 +53,7 @@
 (defn clear-login-logs!
   "清空登录日志。"
   [{:keys [query-fn]} params]
-  (query-fn :clear-login-logs! params))
+  (query-fn :clear-login-logs! (merge {:begin_time nil :end_time nil} (select-keys params [:begin_time :end_time]))))
 
 (defn delete-login-logs!
   "删除指定登录日志。"
@@ -67,7 +67,7 @@
   (let [page-num (or (:page-num params) 1)
         page-size (or (:page-size params) 10)
         offset (* (dec page-num) page-size)
-        filters (-> params
+        filters (-> (merge {:ipaddr nil :login_name nil} params)
                     (dissoc :page-num :page-size)
                     (assoc :offset offset :page_size page-size))
         rows (query-fn :list-online-users filters)

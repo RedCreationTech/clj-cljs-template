@@ -1,7 +1,6 @@
 (ns com.ruoyi.frontend.api.profile
   "个人中心接口。"
   (:require
-   [ajax.core :as ajax]
    [com.ruoyi.frontend.api.transport :as t]))
 
 (defn get-profile
@@ -25,14 +24,5 @@
 (defn upload-avatar
   "上传头像。"
   [form-data on-success on-error]
-  (ajax/ajax-request
-   {:method :post
-    :uri (str t/api-base "/system/profile/avatar")
-    :body form-data
-    :headers (when-let [token (t/get-token)]
-               {"Authorization" (str "Bearer " token)})
-    :response-format (ajax/json-response-format {:keywords? true})
-    :handler (fn [[ok result]]
-               (if ok
-                 (on-success result)
-                 (on-error result)))}))
+  (t/request {:method :post :uri "/system/profile/avatar" :body form-data
+              :on-success on-success :on-error on-error}))

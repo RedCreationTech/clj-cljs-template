@@ -182,7 +182,7 @@
      (rf/dispatch [:profile/fetch])
      js/undefined)
    [])
-  (let [user @(rf/subscribe [:auth/user])
+  (let [user @(rf/subscribe [:auth/current-user])
         profile @(rf/subscribe [:profile/data])
         data (or profile user {})]
     [:div {:style {:padding "22px"

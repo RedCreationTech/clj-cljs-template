@@ -4,6 +4,7 @@
    ["@ant-design/icons" :refer [DashboardOutlined DeleteOutlined PieChartOutlined ReloadOutlined]]
    ["antd" :refer [Modal Spin]]
    [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -134,11 +135,12 @@
                  :onClick #(do (rf/dispatch [:cache/fetch-info])
                                (rf/dispatch [:cache/fetch-names]))}
     "刷新"]
-   [antd/popconfirm
-    {:title "确认清空全部缓存？"
-     :onConfirm #(rf/dispatch [:cache/clear])}
-    [antd/button {:danger true :icon (r/as-element [:> DeleteOutlined])}
-     "清空"]]])
+   [perm/when-allowed "monitor:cache:remove"
+    [antd/popconfirm
+     {:title "确认清空全部缓存？"
+      :onConfirm #(rf/dispatch [:cache/clear])}
+     [antd/button {:danger true :icon (r/as-element [:> DeleteOutlined])}
+      "清空"]]]])
 
 (defn- cache-body [loading? cache-data command-stats]
   (if loading?

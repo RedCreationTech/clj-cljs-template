@@ -154,7 +154,7 @@
              (for [[file entry] (requires ctx)]
                [file #(if (str/includes? % entry) % (insert-require % file entry))])))))
 
-(defn- report! [{:keys [module label ns-root menu-path]} files edits dry-run?]
+(defn- report! [{:keys [module label ns-root menu-path perm-prefix]} files edits dry-run?]
   (println (str (if dry-run? "【试运行,未写入】" "✔ 已生成") "模块 " module "(" label ")"))
   (println "  新建:")
   (doseq [f (sort (keys files))] (println "    " f))
@@ -166,7 +166,9 @@
                   "  2. 重启 bb dev(system.edn 与迁移有变化,迁移在启动时自动执行),重新登录后\n"
                   "     打开 http://localhost:3000/" menu-path "(菜单:业务管理 / " label ")\n"
                   "  3. bb e2e tests/e2e/" module ".spec.js   # 生成的端到端用例\n"
-                  "  4. 按业务修改生成的代码;撤销生成可用 git checkout + git clean"))))
+                  "  4. 权限标识 " perm-prefix ":list/query/add/edit/remove 已登记为按钮菜单并授权给 admin;\n"
+                  "     其他角色在「角色管理 → 分配权限」里勾选\n"
+                  "  5. 按业务修改生成的代码;撤销生成可用 git checkout + git clean"))))
 
 (defn generate!
   [args]

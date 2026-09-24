@@ -3,6 +3,7 @@
   (:require
    ["@ant-design/icons" :refer [DeleteOutlined EditOutlined]]
    [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.perm :as perm]
    [reagent.core :as r]))
 
 (defn- protected?
@@ -17,16 +18,18 @@
         :on-click #(on-view (.-user_id ^js record))}
     v]))
 
-(defn- render-status [on-change-status v record]
-  (r/as-element
-   [antd/switch {:checked (= v "0")
-                 :on-change (fn [checked?]
-                              (on-change-status (.-user_id ^js record)
-                                                (if checked? "0" "1")))}]))
+(defn- status-switch [on-change-status v record]
+  [antd/switch {:checked (= v "0")
+                :disabled (not (perm/allowed? "system:user:edit"))
+                :on-change (fn [checked?]
+                             (on-change-status (.-user_id ^js record)
+                                               (if checked? "0" "1")))}])
 
-(defn- render-more-menu [on-reset-password on-auth-role record]
-  [antd/dropdown {:menu {:items (clj->js [{:key "resetPwd" :label (r/as-element [:span "重置密码"])}
-                                          {:key "authRole" :label (r/as-element [:span "分配角色"])}])
+(defn- render-status [on-change-status v record]
+  (r/as-element [status-switch on-change-status v record]))
+
+(defn- more-dropdown [items on-reset-password on-auth-role record]
+  [antd/dropdown {:menu {:items (clj->js items)
                          :onClick (fn [e]
                                     (case (.-key e)
                                       "resetPwd" (on-reset-password (.-user_id ^js record))
@@ -36,20 +39,30 @@
                  :style {:color "#409eff"}}
     "更多"]])
 
+(defn- render-more-menu [on-reset-password on-auth-role record]
+  (when-let [items (seq (cond-> []
+                          (perm/allowed? "system:user:resetPwd")
+                          (conj {:key "resetPwd" :label (r/as-element [:span "重置密码"])})
+                          (perm/allowed? "system:user:edit")
+                          (conj {:key "authRole" :label (r/as-element [:span "分配角色"])})))]
+    (more-dropdown items on-reset-password on-auth-role record)))
+
 (defn- render-actions [{:keys [on-edit on-delete on-reset-password on-auth-role]} record]
   (r/as-element
    [antd/space
-    [antd/button {:type "link" :size "small"
-                  :style {:color "#409eff"}
-                  :icon (r/as-element [:> EditOutlined])
-                  :on-click #(on-edit (.-user_id ^js record))}
-     "修改"]
-    [antd/button {:type "link" :size "small"
-                  :disabled (protected? record)
-                  :style {:color (if (protected? record) "#c0c4cc" "#409eff")}
-                  :icon (r/as-element [:> DeleteOutlined])
-                  :on-click #(on-delete (.-user_id ^js record))}
-     "删除"]
+    [perm/when-allowed "system:user:edit"
+     [antd/button {:type "link" :size "small"
+                   :style {:color "#409eff"}
+                   :icon (r/as-element [:> EditOutlined])
+                   :on-click #(on-edit (.-user_id ^js record))}
+      "修改"]]
+    [perm/when-allowed "system:user:remove"
+     [antd/button {:type "link" :size "small"
+                   :disabled (protected? record)
+                   :style {:color (if (protected? record) "#c0c4cc" "#409eff")}
+                   :icon (r/as-element [:> DeleteOutlined])
+                   :on-click #(on-delete (.-user_id ^js record))}
+      "删除"]]
     [render-more-menu on-reset-password on-auth-role record]]))
 
 (defn user-columns

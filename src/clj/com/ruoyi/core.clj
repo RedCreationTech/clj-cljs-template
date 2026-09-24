@@ -23,6 +23,7 @@
    [com.ruoyi.web.routes.api]
    [com.ruoyi.web.routes.auth]
    [com.ruoyi.web.routes.gen]
+   [com.ruoyi.web.routes.monitor]
    [com.ruoyi.web.routes.system]
    [integrant.core :as ig]
    [kit.edge.db.mysql]

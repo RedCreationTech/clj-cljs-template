@@ -5,6 +5,7 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [goog.object :as gobj]
    [re-frame.core :as rf]
    [reagent.core :as r]
@@ -31,10 +32,11 @@
        #js {:title "操作" :key "action" :dataIndex "token-id"
             :render (fn [v ^js record]
                       (r/as-element
-                       [antd/button {:type "link" :danger true :size "small"
-                                     :onClick #(when-let [tid (token-id-from-row v record)]
-                                                 (rf/dispatch [:online-users/force-logout tid]))}
-                        "强退"]))}])
+                       [perm/when-allowed "monitor:online:forceLogout"
+                        [antd/button {:type "link" :danger true :size "small"
+                                      :onClick #(when-let [tid (token-id-from-row v record)]
+                                                  (rf/dispatch [:online-users/force-logout tid]))}
+                         "强退"]]))}])
 
 (defn online-page []
   (hooks/use-effect

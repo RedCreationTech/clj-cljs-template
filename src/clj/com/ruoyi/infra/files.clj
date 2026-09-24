@@ -1,6 +1,9 @@
 (ns com.ruoyi.infra.files
-  "上传文件的落盘与读取。客户端给的文件名只取最后一段并替换不安全字符;
-   按名字读、删文件时先规范化路径,确认仍是根目录的直接子文件(防 ../ 目录穿越)。"
+  "上传文件的校验、落盘与读取。
+   - 校验:扩展名白名单 + 大小上限(system.edn 的 :upload-config,环境变量 UPLOAD_MAX_MB / UPLOAD_EXTENSIONS);
+   - 落盘:客户端给的文件名只取最后一段并替换不安全字符,同名不覆盖;
+   - 读取:按名字读、删文件时先规范化路径,确认仍是根目录的直接子文件(防 ../ 目录穿越)。
+   请求体整体大小请在反向代理上再限制一道(如 nginx client_max_body_size)。"
   (:require
    [clojure.java.io :as io]
    [clojure.string :as str])
@@ -42,3 +45,52 @@
           target (if (.exists target) (io/file dir (str (System/currentTimeMillis) "_" n)) target)]
       (io/copy tempfile target)
       target)))
+
+;; ─── 上传校验 ────────────────────────────────────────────────────────
+
+(def default-extensions
+  "默认允许的扩展名(小写)。可执行文件、脚本、HTML/SVG(可能带脚本)不在其中。"
+  #{"jpg" "jpeg" "png" "gif" "webp" "bmp" "pdf" "txt" "csv" "md"
+    "doc" "docx" "xls" "xlsx" "ppt" "pptx" "zip"})
+
+(def image-extensions #{"jpg" "jpeg" "png" "gif" "webp"})
+
+(defn- parse-extensions [v]
+  (cond
+    (set? v) v
+    (str/blank? (str v)) default-extensions
+    :else (into #{} (comp (map str/trim) (map str/lower-case) (remove str/blank?))
+                (str/split (str v) #","))))
+
+(defn policy
+  "上传配置 → 校验策略 {:max-bytes .. :extensions #{..}};:max-mb 默认 10。"
+  [{:keys [max-mb extensions]}]
+  {:max-bytes (* (or max-mb 10) 1024 1024)
+   :extensions (parse-extensions extensions)})
+
+(defn image-policy
+  "头像等图片:只允许常见图片格式,且不超过 2MB(也不超过通用上限)。"
+  [upload-config]
+  (let [{:keys [max-bytes]} (policy upload-config)]
+    {:max-bytes (min max-bytes (* 2 1024 1024))
+     :extensions image-extensions}))
+
+(defn extension
+  "文件扩展名(小写),没有时返回 nil。"
+  [filename]
+  (let [n (str filename)
+        i (str/last-index-of n ".")]
+    (when (and i (< (inc i) (count n)))
+      (str/lower-case (subs n (inc i))))))
+
+(defn upload-error
+  "上传的文件({:tempfile :filename :size},ring multipart 的格式)不符合策略时返回提示,否则 nil。"
+  [{:keys [max-bytes extensions]} {:keys [tempfile filename size]}]
+  (let [ext (extension filename)
+        size (or size (some-> ^File tempfile .length) 0)]
+    (cond
+      (nil? tempfile) "请选择要上传的文件"
+      (nil? (safe-name filename)) "文件名不合法"
+      (not (contains? extensions ext)) (str "不支持的文件类型:" (or ext "无扩展名"))
+      (> size max-bytes) (str "文件不能超过 " (quot max-bytes (* 1024 1024)) "MB")
+      :else nil)))

@@ -41,7 +41,7 @@
           (is (= 200 (:status response)))
           (is (= 200 (get-in response [:body :code])))
           (is (= "hello.txt" (get-in response [:body :data :fileName])))
-          (is (= "/uploads/hello.txt" (get-in response [:body :data :url])))
+          (is (= "/api/common/download?fileName=hello.txt" (get-in response [:body :data :url])))
           (let [target (io/file common/upload-dir "hello.txt")]
             (is (.exists target))
             (is (= "hello world" (slurp target)))))
@@ -52,8 +52,17 @@
   (testing "上传请求缺少文件时返回失败"
     (let [response (common/upload {} {:params {}})]
       (is (= 200 (:status response)))
-      (is (= 500 (get-in response [:body :code])))
-      (is (= "上传失败" (get-in response [:body :msg]))))))
+      (is (= 400 (get-in response [:body :code])))
+      (is (= "请选择要上传的文件" (get-in response [:body :msg]))))))
+
+(deftest test-upload-rejects-disallowed-type
+  (testing "扩展名不在白名单里:拒绝,不落盘"
+    (let [source (File/createTempFile "source" ".html")]
+      (try
+        (let [response (common/upload {} {:params {:file {:tempfile source :filename "x.html"}}})]
+          (is (= 400 (get-in response [:body :code])))
+          (is (empty? (.listFiles (io/file common/upload-dir)))))
+        (finally (.delete source))))))
 
 (deftest test-upload-exception
   (testing "上传复制失败时返回异常信息"
@@ -124,7 +133,7 @@
     (let [source (File/createTempFile "source" ".txt")]
       (try
         (spit source "x")
-        (let [resp (common/upload {} {:params {:file {:tempfile source :filename "../../evil.clj"}}})]
-          (is (= "evil.clj" (get-in resp [:body :data :fileName])))
-          (is (.exists (io/file common/upload-dir "evil.clj"))))
+        (let [resp (common/upload {} {:params {:file {:tempfile source :filename "../../evil.txt"}}})]
+          (is (= "evil.txt" (get-in resp [:body :data :fileName])))
+          (is (.exists (io/file common/upload-dir "evil.txt"))))
         (finally (.delete source))))))

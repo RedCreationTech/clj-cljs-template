@@ -37,6 +37,11 @@
         total (query-fn :count-notices query-params)]
     (ok {:rows rows :total (:total total)})))
 
+(defn latest-notices
+  "最新的已发布通知(顶部铃铛用,登录即可访问):最多 5 条。"
+  [{:keys [query-fn]} _request]
+  (ok (query-fn :list-latest-notices {:limit 5})))
+
 (defn get-notice
   "获取通知公告详情。"
   [{:keys [query-fn]} request]

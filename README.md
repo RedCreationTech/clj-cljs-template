@@ -23,7 +23,10 @@
 
 **系统管理**：用户、角色（RBAC + 数据权限）、菜单（树形 + 按钮权限）、部门（树形）、岗位、字典、参数配置、通知公告、文件管理。
 
-**权限控制**：JWT Bearer 认证，令牌带会话 ID（`jti`），会话存 `sys_online`：登出、强退、空闲 30 分钟后令牌立即失效；前端在令牌过半时自动续期，任何 401 都回到登录页。按角色动态下发菜单树与权限标识（`perms`）；在线用户与强制下线；登录失败限流、验证码开关、默认关闭的自助注册。按钮级 `perms` 校验与数据权限（`data_scope` 1~5）的 SQL 片段生成器已就位但尚未接入路由/查询，接入方式见 C4 文档 §13。
+**权限控制**：
+- **认证**：JWT Bearer，令牌带会话 ID（`jti`），会话存 `sys_online`：登出、强退、空闲 30 分钟后令牌立即失效；前端在令牌过半时自动续期，任何 401 都回到登录页。登录失败限流、验证码开关、默认关闭的自助注册。
+- **按钮级权限**：路由用数据声明 `{:auth? true}`（要求登录）与 `{:perms "system:user:add"}`（要求权限，集合表示满足任一）；未登录 401、无权限 403。权限来自「用户 → 启用的角色 → 角色勾选的菜单/按钮（`sys_menu.perms`）」，每次请求实时计算，改角色立即生效；`admin` 角色拥有 `*:*:*`。前端按 `getInfo` 下发的 `permissions` 隐藏无权限的按钮（`:perm` / `perm/when-allowed`）。
+- **数据权限**：角色的 `data_scope`（1 全部 / 2 自定义部门 / 3 本部门 / 4 本部门及以下 / 5 仅本人，多角色取并集）真正作用于用户管理：列表按范围过滤，详情、修改、删除、重置密码等先检查目标用户（与要改到的部门）是否在范围内；业务模块可复用 `domain.system.data-scope`。
 
 **日志审计**：操作日志中间件自动记录所有 API 请求；登录日志记录 IP / 浏览器 / 结果。
 
@@ -165,6 +168,7 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | `LOGIN_MAX_FAILURES` / `LOGIN_LOCK_MINUTES` | 5 / 10 | 同一用户名失败次数上限与锁定时长 |
 | `REGISTER_ENABLED` | `false` | 自助注册；开启后只接受用户名密码，新用户无角色 |
 | `CORS_ORIGINS` | 空（只允许同源） | 允许跨域的前端地址，逗号分隔；`*` 仅建议开发用 |
+| `UPLOAD_MAX_MB` / `UPLOAD_EXTENSIONS` | 10 / 内置白名单 | 单文件大小上限与允许的扩展名（逗号分隔）；头像另限图片、2MB。请求体整体大小请在反向代理上再限制 |
 
 `Dockerfile` 提供多阶段镜像构建（`clojure:temurin-21-tools-deps` 构建 → `eclipse-temurin:21-jre-alpine` 运行）；构建镜像前先执行 `bb release`，运行时用 `-e JWT_SECRET=… -e COOKIE_SECRET=…` 注入密钥。
 
@@ -205,7 +209,7 @@ bb new-module <模块名> [--label 中文名] [--fields "字段规格,..."] [--d
 - **字段规格**：`name:type[:required][:标签]`，逗号分隔；`type` 可选 `string`（前 3 个可搜索字段做模糊查询）、`text`、`int`、`decimal`、`date`（`yyyy-MM-dd`）、`bool`（存 `"0"`/`"1"`）。`id`、`create_by/time`、`update_by/time` 自动生成。
 - `--dry-run` 只列出将要新建和修改的文件。
 
-一条命令生成可直接运行的完整模块：两套迁移（建表 + 共享的「业务管理」目录菜单并授权 admin 角色）、HugSQL 查询、领域服务（Integrant 组件）、控制器、路由（登录校验 + Malli 参数校验 + Swagger）、后端集成测试、前端 api / re-frame 事件 / 页面（搜索、分页表格、新增编辑弹窗、删除）、Playwright 用例；并在 `system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs` 的 `;; [new-module] <tag>` 标记处自动登记（标记行请保留，可反复生成多个模块）。生成前会检查文件、前端关键字与 HugSQL 查询名冲突，有冲突一个文件都不写。撤销：`git checkout . && git clean -fd`。
+一条命令生成可直接运行的完整模块：两套迁移（建表 + 共享的「业务管理」目录菜单 + 本模块菜单与查询/新增/修改/删除按钮权限，并授权 admin 角色）、HugSQL 查询、领域服务（Integrant 组件）、控制器、路由（登录校验 + `biz:<模块>:list/query/add/edit/remove` 按钮权限 + Malli 参数校验 + Swagger）、后端集成测试、前端 api / re-frame 事件 / 页面（搜索、分页表格、新增编辑弹窗、删除，按钮按权限显示）、Playwright 用例；并在 `system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs` 的 `;; [new-module] <tag>` 标记处自动登记（标记行请保留，可反复生成多个模块）。生成前会检查文件、前端关键字与 HugSQL 查询名冲突，有冲突一个文件都不写。撤销：`git checkout . && git clean -fd`。
 
 CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模块，并要求 lint、格式、后端测试、迁移往返、前端零 warning 编译与生成的 E2E 全部通过，保证脚手架与模板同步演进。
 
@@ -213,11 +217,11 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 
 以 `example` 模块为例（完整清单见 C4 文档「扩展指南」一节）：
 
-1. **迁移**：`resources/migrations-sqlite/<ts>-create-example.up/down.sql` 与 `resources/migrations/` 各一份（多条语句用 `--;;` 分隔）；菜单通过 `INSERT INTO sys_menu` 写入。
+1. **迁移**：`resources/migrations-sqlite/<ts>-create-example.up/down.sql` 与 `resources/migrations/` 各一份（多条语句用 `--;;` 分隔）；菜单（C）与按钮（F，`perms` 如 `biz:example:add`）通过 `INSERT INTO sys_menu` 写入并授权给角色。
 2. **SQL**：`resources/sql/example.sql`（HugSQL），并加入 `system.edn` 的 `:db.sql/query-fn :filenames`。
 3. **领域层**：`src/clj/com/ruoyi/domain/example.clj`，用 `defmethod ig/init-key :app.example/service` 暴露服务；在 `system.edn` 登记组件并注入到 `:reitit.routes/api`。
-4. **控制器 + 路由**：`web/controllers/example.clj`、`web/routes/example.clj`，在 `web/routes/api.clj` 的 `api-routes` 追加路由组；在 `core.clj` require 新命名空间。
-5. **前端**：`api/example.cljs` → `events/example.cljs` → `pages/example.cljs`；在 `router.cljs`、`pages/layout/menu_data.cljs`、`pages/layout/page_view.cljs`、`events.cljs`、`events/common.cljs` 各登记一行。
+4. **控制器 + 路由**：`web/controllers/example.clj`、`web/routes/example.clj`（路由组 `{:auth? true}`，各接口 `:perms`），在 `web/routes/api.clj` 的 `api-routes` 追加路由组；在 `core.clj` require 新命名空间。列表接口的查询参数用 `controllers.params/query` 转成关键字键。
+5. **前端**：`api/example.cljs` → `events/example.cljs` → `pages/example.cljs`（按钮用 `:perm` / `perm/when-allowed` 按权限显示）；在 `router.cljs`、`pages/layout/menu_data.cljs`、`pages/layout/page_view.cljs`、`events.cljs`、`events/common.cljs` 各登记一行。
 6. **测试**：`test/clj/.../example_test.clj` + `tests/e2e/example.spec.js`。
 
 页面内的代码生成器（系统工具 → 代码生成）适合从**已有表结构**生成骨架供复制参考；新建模块优先用 `bb new-module`。
@@ -256,10 +260,15 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 | POST /api/auth/login | 登录（返回 JWT；连续失败会被临时锁定） |
 | POST /api/auth/refresh | 令牌续期（前端自动调用） |
 | POST /api/auth/logout | 登出（会话立即失效） |
-| GET /api/auth/getInfo | 当前用户信息（角色/权限/菜单） |
+| GET /api/auth/getInfo | 当前用户信息（角色/权限标识/菜单；admin 的权限为 `["*:*:*"]`） |
 | GET /api/system/{user,role,menu,dept,post,notice,config} | 系统管理 CRUD |
 | GET /api/system/dict/{type,data} | 字典 |
+| PUT /api/system/role/dataScope | 角色数据范围（1~5，自定义时带部门） |
+| GET /api/system/notice/latest | 最新通知（顶部铃铛，登录即可） |
 | GET /api/system/{oper-log,login-log,online} | 审计与在线用户 |
+| PUT /api/system/login-log/unlock/{userName} | 解除登录失败锁定 |
+| POST /api/common/upload、GET /api/common/download | 通用上传下载（登录；类型与大小受限） |
+| GET /api/common/avatar/{name} | 头像图片（公开，只读头像目录里的图片） |
 | GET /api/system/job | 定时任务 |
 | GET /api/system/{server,datasource,cache,integrant} | 监控 |
 | GET /api/system/dashboard/stats | 首页统计 |
@@ -274,7 +283,9 @@ Swagger UI：http://localhost:3000/api
 ## 开发约定
 
 - 后端分层：`route -> controller -> domain(service) -> HugSQL query -> db`；组件全部在 `system.edn` 装配。
-- API 契约：响应信封 `{:code :msg :data}`，分页 `{:total :rows}`，参数 `page`/`size`，字段 snake_case（详见 C4 文档 §6.6）。
+- API 契约：响应信封 `{:code :msg :data}`，分页 `{:total :rows}`，参数 `page`/`size`，字段 snake_case（详见 C4 文档 §6.6）；列表接口用 `controllers.params/query` 读查询参数（字符串键 → 关键字键，空串视为未填）。
+- 权限：新接口在路由数据里声明 `:auth?` / `:perms`，对应按钮菜单（F）写进迁移；前端按钮加 `:perm` 或包 `perm/when-allowed`。前端只负责显隐，拦截以后端为准。
+- 接口失败由 `api.transport` 统一提示（403、5xx、网络断开、业务码非 200）并复位 loading，调用方的 `on-error` 只做收尾，不要再各自弹「网络错误」；上传用 `t/request` 的 `:body`，带令牌下载用 `t/download!`。
 - 每个 namespace ≤ 500 行、函数 ≤ 50 行（`bb check` 检查 src / env / test / bb / scripts）；超限时拆分。
 - clj-kondo 零 warning、cljfmt 格式一致（`bb lint`、`bb fmt:check`，CI 强制）。
 - SQL 统一放 `resources/sql/*.sql`；两套迁移目录必须同步（`bb lint:migrations` 检查）；共用 SQL 只写两库都支持的语法（如 `INSTR` 代替 `||`、派生表代替 `DUAL`）。

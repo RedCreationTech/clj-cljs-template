@@ -39,6 +39,7 @@
        :list-posts-by-user-id []
        :list-menus-by-role-id base-menus
        :list-menus-by-role-ids base-menus
+       :list-user-role-perms [{:role_key "admin" :perms nil}]
        :create-login-log! nil
        :create-online-user! nil
        :delete-online-user! nil
@@ -212,7 +213,7 @@
       (is (= 200 (-> response :body :code)))
       (is (= "admin" (-> response :body :data :user :user_name)))
       (is (seq (-> response :body :data :roles)))
-      (is (seq (-> response :body :data :permissions)))
+      (is (= ["*:*:*"] (-> response :body :data :permissions)) "admin 角色返回通配权限")
       (is (vector? (-> response :body :data :menus))))))
 
 (deftest test-get-info-user-not-found

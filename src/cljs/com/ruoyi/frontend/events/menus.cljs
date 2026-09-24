@@ -104,7 +104,7 @@
                                       (when (= 200 (:code result))
                                         (antd/success! "创建成功")
                                         (rf/dispatch [:menus/fetch])))
-                                    (fn [_] (antd/error! "网络错误")))))
+                                    (fn [_]))))
 
 (rf/reg-fx :api/update-menu
            (fn [[id params]]
@@ -113,7 +113,7 @@
                                       (when (= 200 (:code result))
                                         (antd/success! "更新成功")
                                         (rf/dispatch [:menus/fetch])))
-                                    (fn [_] (antd/error! "网络错误")))))
+                                    (fn [_]))))
 
 (rf/reg-event-fx :menus/delete
                  (fn [_ [_ id]]
@@ -130,7 +130,7 @@
                                       (when (= 200 (:code result))
                                         (antd/success! "删除成功")
                                         (rf/dispatch [:menus/fetch])))
-                                    (fn [_] (antd/error! "网络错误")))))
+                                    (fn [_]))))
 
 (rf/reg-fx :api/change-menu-status
            (fn [[id status]]
@@ -139,4 +139,4 @@
                                              (when (= 200 (:code result))
                                                (antd/success! "状态修改成功")
                                                (rf/dispatch [:menus/fetch])))
-                                           (fn [_] (antd/error! "网络错误")))))
+                                           (fn [_]))))

@@ -115,7 +115,7 @@
               (fn [r] (when (= 200 (:code r))
                         (rf/dispatch [:cache/set-value (get-in r [:data :value] "")])
                         (rf/dispatch [:cache/show-value])))
-              (fn [_] (antd/error! "获取缓存值失败")))))
+              (fn [_]))))
 
 (rf/reg-event-fx :cache/clear
                  (fn [{:keys [db]} _]
@@ -130,7 +130,7 @@
                   (rf/dispatch [:cache/fetch-info])
                   (rf/dispatch [:cache/fetch-names])
                   (rf/dispatch [:cache/fetch-keys])))
-              (fn [_] (antd/error! "清空缓存失败")))))
+              (fn [_]))))
 
 (rf/reg-event-fx :cache/clear-name
                  (fn [_ [_ cache-name]]
@@ -146,7 +146,7 @@
                   (rf/dispatch [:cache/fetch-info])
                   (rf/dispatch [:cache/fetch-names])
                   (rf/dispatch [:cache/fetch-keys])))
-              (fn [_] (antd/error! "清空缓存失败")))))
+              (fn [_]))))
 
 (rf/reg-event-fx :cache/clear-key
                  (fn [_ [_ cache-name cache-key]]
@@ -161,7 +161,7 @@
                   (antd/success! "缓存键已清除")
                   (rf/dispatch [:cache/fetch-keys])
                   (rf/dispatch [:cache/fetch-info])))
-              (fn [_] (antd/error! "清除缓存键失败")))))
+              (fn [_]))))
 
 (rf/reg-event-db :server/set-datasource
                  (fn [db [_ data]]

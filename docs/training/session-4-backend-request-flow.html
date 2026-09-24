@@ -72,7 +72,7 @@
         <li>异常与操作日志中间件</li>
         <li>路由组织：api.clj 与 system.clj</li>
         <li>控制器与领域服务：以用户管理为例</li>
-        <li>数据权限：ALL / CUSTOM / DEPT / DEPT_CHILD / SELF</li>
+        <li>按钮级权限(路由的 <code>:perms</code>)与数据权限:全部 / 自定义 / 本部门 / 本部门及以下 / 仅本人</li>
         <li>动手：追踪一次请求 / 新增一个系统端点</li>
       </ul>
     </section>
@@ -206,25 +206,27 @@ flowchart TD
           <span class="sym">wrap-json-body</span>))))</code></pre>
     <p>注意顺序：请求先进入 <code>wrap-json-body</code>（最外层最后返回），实际执行时从 <code>((:middleware env/defaults) handler opts)</code> 开始向内。</p>
 
-    <h2>4. 认证中间件</h2>
-    <p><code>src/clj/com/ruoyi/web/middleware/auth.clj</code> 负责 JWT 解析与权限控制：</p>
-    <pre><code class="language-clojure">(<span class="kw">defn</span> <span class="sym">wrap-jwt-auth</span>
-  <span class="str">"签名与有效期通过、且会话仍在线时,把 claims 放进 :identity 并刷新心跳。"</span>
+    <h2>4. 认证与鉴权中间件</h2>
+    <p><code>src/clj/com/ruoyi/web/middleware/auth.clj</code> 提供两个中间件,都挂在 <code>routes/api.clj</code> 的公共 route-data 上(见 7.1),路由本身只写数据:</p>
+<pre><code class="language-clojure">(defn wrap-jwt-auth
+  &quot;签名与有效期通过、且会话仍在线时,把 claims 放进 :identity 并刷新心跳。&quot;
   [handler]
-  (<span class="kw">fn</span> [request]
-    (<span class="kw">let</span> [claims (<span class="sym">some-&gt;</span> (<span class="sym">security/extract-token</span> request) <span class="sym">security/parse-token</span>)
-          identity (<span class="kw">when</span> (<span class="kw">and</span> claims (<span class="sym">online/active?</span> (<span class="macro">:jti</span> claims))) claims)]
-      (handler (<span class="sym">cond-&gt;</span> request identity (<span class="sym">assoc</span> <span class="macro">:identity</span> identity))))))
+  (fn [request]
+    (let [claims (some-&gt; (security/extract-token request) security/parse-token)
+          identity (when (and claims (online/active? (:jti claims))) claims)]
+      (handler (cond-&gt; request identity (assoc :identity identity))))))
 
-(<span class="kw">defn</span> <span class="sym">require-auth</span>
-  <span class="str">"要求请求必须通过认证，否则返回 401。"</span>
-  [handler]
-  (<span class="kw">fn</span> [request]
-    (<span class="kw">if</span> (<span class="macro">:identity</span> request)
-      (handler request)
-      (<span class="macro">-&gt;</span> (<span class="sym">response/response</span> {<span class="macro">:code</span> <span class="num">401</span> <span class="macro">:msg</span> <span class="str">"未登录或令牌已过期"</span>})
-          (<span class="sym">response/status</span> <span class="num">401</span>)
-          (<span class="sym">response/content-type</span> <span class="str">"application/json"</span>)))))</code></pre>
+(def authorize
+  &quot;reitit :compile 中间件:只包装声明了 :auth? / :perms 的路由。&quot;
+  {:name ::authorize
+   :compile (fn [{:keys [auth? perms] :as data} _opts]
+              (when (or auth? perms)
+                (let [rule (select-keys data [:auth? :perms])]
+                  (fn [handler]
+                    (fn [request]
+                      (or (check rule request)      ; 未登录 401 / 缺少权限 403
+                          (handler request)))))))})</code></pre>
+    <p>权限集合由 <code>domain.system.permission/user-permissions</code> 按请求实时计算:用户 → 启用的角色 → 角色勾选的菜单/按钮上的 <code>perms</code>;<code>admin</code> 角色得到 <code>*:*:*</code>。</p>
 
     <h2>5. 异常中间件</h2>
     <p><code>src/clj/com/ruoyi/web/middleware/exception.clj</code> 把异常统一转换为 JSON：</p>
@@ -269,75 +271,71 @@ flowchart TD
 
     <h2>7. 路由组织</h2>
     <h3>7.1 api.clj：全局 route-data</h3>
-    <pre><code class="language-clojure">(<span class="kw">def</span> <span class="sym">route-data</span>
-  {<span class="macro">:coercion</span>   malli/coercion
-   <span class="macro">:muuntaja</span>   formats/instance
-   <span class="macro">:swagger</span>    {<span class="macro">:id</span> ::api}
-   <span class="macro">:middleware</span> [parameters/parameters-middleware
+    <pre><code class="language-clojure">(def route-data
+  {:coercion   malli/coercion
+   :muuntaja   formats/instance
+   :swagger    {:id ::api}
+   ;; 从外到内:协商 → 异常兜底 → 认证(:identity)→ 按路由数据鉴权 → 解码与 Malli 校验
+   :middleware [parameters/parameters-middleware
                 muuntaja/format-negotiate-middleware
                 muuntaja/format-response-middleware
+                exception/wrap-exception
+                auth-mw/wrap-jwt-auth
+                auth-mw/authorize
                 coercion/coerce-exceptions-middleware
                 muuntaja/format-request-middleware
                 coercion/coerce-response-middleware
-                coercion/coerce-request-middleware
-                exception/wrap-exception]})
+                coercion/coerce-request-middleware]})
 
-(<span class="kw">defn</span> <span class="sym">api-routes</span> [opts]
-  [[<span class="str">"/swagger.json"</span> {<span class="macro">:get</span> {<span class="macro">:no-doc</span> <span class="kw">true</span>
-                         <span class="macro">:swagger</span> {<span class="macro">:info</span> {<span class="macro">:title</span> <span class="str">"RouYi API"</span>}}
-                         <span class="macro">:handler</span> (<span class="sym">swagger/create-swagger-handler</span>)}}]
-   [<span class="str">"/health"</span> {<span class="macro">:get</span> #'<span class="sym">health/healthcheck!</span>}]
-   (<span class="sym">auth/auth-routes</span> opts)
-   (<span class="sym">system/system-routes</span> opts)
-   (<span class="sym">common/common-routes</span> opts)
-   (<span class="sym">business/business-routes</span> opts)
-   (<span class="sym">gen/gen-routes</span> opts)
-   (<span class="sym">captcha/captcha-routes</span> opts)])</code></pre>
+(defn api-routes [opts]
+  [[&quot;/swagger.json&quot; {:get {:no-doc true
+                           :swagger {:info {:title &quot;Admin API&quot;}}
+                           :handler (swagger/create-swagger-handler)}}]
+   [&quot;/health&quot; {:get {:handler (partial #&#x27;health/healthcheck! {:datasource (:datasource opts)})}}]
+   (auth/auth-routes opts)
+   (system/system-routes opts)
+   (monitor/monitor-routes opts)
+   (common/common-routes opts)
+   (gen/gen-routes opts)
+   (captcha/captcha-routes opts)
+   ;; [new-module] routes
+   ])</code></pre>
 
     <h3>7.2 system.clj：业务路由</h3>
-    <p>系统管理路由统一挂载 <code>auth-middleware</code>，并用 <code>partial</code> 注入 service：</p>
-    <pre><code class="language-clojure">(<span class="kw">defn</span> <span class="sym">system-routes</span> [{<span class="macro">:keys</span> [user-service role-service ...]}]
-  [<span class="str">"/system"</span>
-   {<span class="macro">:middleware</span> [(auth-mw/auth-middleware {<span class="macro">:required?</span> <span class="kw">true</span>})]
-    <span class="macro">:swagger</span> {<span class="macro">:tags</span> [<span class="str">"系统管理"</span>]}}
+    <p>路由组用 <code>:auth? true</code> 要求登录,每个接口用 <code>:perms</code> 声明按钮权限(集合表示满足任一),并用 <code>partial</code> 注入 service:</p>
+<pre><code class="language-clojure">(defn system-routes [opts]
+  (into [&quot;/system&quot; {:auth? true :swagger {:tags [&quot;系统管理&quot;]}}]
+        (mapcat #(% opts) [user-routes role-routes ...])))
 
-   [<span class="str">"/user"</span>
-    [<span class="str">""</span> {<span class="macro">:get</span> {<span class="macro">:summary</span> <span class="str">"用户列表"</span>
-               <span class="macro">:parameters</span> {<span class="macro">:query</span> PagingQuery}
-               <span class="macro">:handler</span> (<span class="sym">partial</span> user/list-users {<span class="macro">:user-service</span> user-service})}
-         <span class="macro">:post</span> {<span class="macro">:summary</span> <span class="str">"新增用户"</span>
-                <span class="macro">:handler</span> (<span class="sym">partial</span> user/create-user {<span class="macro">:user-service</span> user-service})}}]
-    [<span class="str">"/:id"</span> {<span class="macro">:get</span> {<span class="macro">:summary</span> <span class="str">"用户详情"</span> <span class="macro">:parameters</span> {<span class="macro">:path</span> PathId}
-                   <span class="macro">:handler</span> (<span class="sym">partial</span> user/get-user {<span class="macro">:user-service</span> user-service})}
-            <span class="macro">:put</span> {<span class="macro">:summary</span> <span class="str">"更新用户"</span> <span class="macro">:parameters</span> {<span class="macro">:path</span> PathId}
-                   <span class="macro">:handler</span> (<span class="sym">partial</span> user/update-user {<span class="macro">:user-service</span> user-service})}
-            <span class="macro">:delete</span> {<span class="macro">:summary</span> <span class="str">"删除用户"</span> <span class="macro">:parameters</span> {<span class="macro">:path</span> PathId}
-                      <span class="macro">:handler</span> (<span class="sym">partial</span> user/delete-user {<span class="macro">:user-service</span> user-service})}}]]])</code></pre>
+(defn- user-routes [{:keys [user-service]}]
+  [[&quot;/user&quot;
+    [&quot;&quot; {:get  {:perms &quot;system:user:list&quot; :summary &quot;用户列表&quot;
+                :parameters {:query PagingQuery}
+                :handler (partial user/list-users {:user-service user-service})}
+         :post {:perms &quot;system:user:add&quot; :summary &quot;新增用户&quot;
+                :handler (partial user/create-user {:user-service user-service})}}]
+    [&quot;/:id&quot; {:get    {:perms &quot;system:user:query&quot; ...}
+             :put    {:perms &quot;system:user:edit&quot; ...}
+             :delete {:perms &quot;system:user:remove&quot; ...}}]]])</code></pre>
 
     <h2>8. 控制器模式</h2>
-    <p><code>src/clj/com/ruoyi/web/controllers/system/user.clj</code> 展示了标准控制器：</p>
-    <pre><code class="language-clojure">(<span class="kw">defn-</span> <span class="sym">ok</span>
-  ([data] (<span class="sym">ok</span> <span class="num">200</span> <span class="str">"操作成功"</span> data))
-  ([code msg data]
-   (<span class="macro">-&gt;</span> (<span class="sym">response/response</span> {<span class="macro">:code</span> code <span class="macro">:msg</span> msg <span class="macro">:data</span> data})
-       (<span class="sym">response/content-type</span> <span class="str">"application/json"</span>))))
+    <p><code>src/clj/com/ruoyi/web/controllers/system/user.clj</code> 展示了标准控制器:把字符串键的查询参数整理成领域层的关键字键,并带上当前用户的数据范围:</p>
+<pre><code class="language-clojure">(defn list-params
+  &quot;查询参数(字符串键)→ user-service/list-users 的参数:分页、筛选条件与数据范围。&quot;
+  [user-service request]
+  (let [raw (:query-params request)]
+    (merge {:page-num (or (parse-int (get raw &quot;page&quot;)) 1)
+            :page-size (or (parse-int (get raw &quot;size&quot;)) 10)
+            :user_name (not-empty (get raw &quot;user_name&quot;))
+            :status (not-empty (get raw &quot;status&quot;))
+            :dept_id (parse-int (get raw &quot;dept_id&quot;))}
+           (data-scope/sql-params (request-scope user-service request)))))
 
-(<span class="kw">defn-</span> <span class="sym">fail</span> [msg]
-  (<span class="macro">-&gt;</span> (<span class="sym">response/response</span> {<span class="macro">:code</span> <span class="num">500</span> <span class="macro">:msg</span> msg})
-      (<span class="sym">response/content-type</span> <span class="str">"application/json"</span>)))
-
-(<span class="kw">defn</span> <span class="sym">list-users</span>
-  <span class="str">"查询用户列表（带数据权限过滤）。"</span>
-  [{<span class="macro">:keys</span> [user-service]} request]
-  (<span class="kw">let</span> [raw (<span class="macro">:query-params</span> request)
-        identity (<span class="macro">:identity</span> request)
-        data-perm-filter (<span class="sym">data-perm/data-perm-filter</span> identity <span class="str">"default"</span> <span class="macro">:alias</span> <span class="str">"u"</span>)
-        params (<span class="sym">merge</span> {<span class="macro">:page-num</span> (<span class="kw">or</span> (<span class="sym">parse-int</span> (<span class="sym">get</span> raw <span class="str">"page"</span>)) <span class="num">1</span>)
-                         <span class="macro">:page-size</span> (<span class="kw">or</span> (<span class="sym">parse-int</span> (<span class="sym">get</span> raw <span class="str">"size"</span>)) <span class="num">10</span>)}
-                        (<span class="sym">dissoc</span> raw <span class="str">"page"</span> <span class="str">"size"</span>)
-                        (<span class="macro">:params</span> data-perm-filter))
-        result (<span class="sym">user-service/list-users</span> user-service params)]
-    (<span class="sym">ok</span> {<span class="macro">:total</span> (<span class="macro">:total</span> result) <span class="macro">:rows</span> (<span class="macro">:rows</span> result)})))</code></pre>
+(defn list-users
+  [{:keys [user-service]} request]
+  (let [result (user-service/list-users user-service (list-params user-service request))]
+    (ok {:total (:total result) :rows (:rows result)})))</code></pre>
+    <p>其它列表接口用通用的 <code>controllers.params/query</code> 做同样的转换——直接把 <code>:query-params</code> 传给领域层,筛选条件会被静默忽略。</p>
 
     <h2>9. 领域服务</h2>
     <p><code>src/clj/com/ruoyi/domain/system/user.clj</code> 处理业务逻辑、事务、密码加密、关联表：</p>
@@ -374,30 +372,28 @@ flowchart TD
     user-id))</code></pre>
 
     <h2>10. 数据权限</h2>
-    <p><code>src/clj/com/ruoyi/infra/data_perm.clj</code> 根据角色生成 SQL 片段。五种范围对应 RuoYi 的数据权限：</p>
-    <pre><code class="language-clojure">(<span class="kw">case</span> scope
-  <span class="num">1</span> {<span class="macro">:params</span> {} <span class="macro">:sql</span> <span class="str">"1=1"</span>}          <span class="comment">;; ALL</span>
-  <span class="num">2</span> {<span class="macro">:params</span> {<span class="macro">:data-perm-dept-ids</span> ids}
-     <span class="macro">:sql</span> (<span class="sym">str</span> <span class="str">" "</span> alias <span class="str">".dept_id IN (:v*:data-perm-dept-ids)"</span>)}  <span class="comment">;; CUSTOM</span>
-  <span class="num">3</span> {<span class="macro">:params</span> {<span class="macro">:data-perm-dept-id</span> dept-id}
-     <span class="macro">:sql</span> (<span class="sym">str</span> <span class="str">" "</span> alias <span class="str">".dept_id = :data-perm-dept-id"</span>)}          <span class="comment">;; DEPT</span>
-  <span class="num">4</span> {<span class="macro">:params</span> {<span class="macro">:data-perm-dept-id</span> dept-id}
-     <span class="macro">:sql</span> (<span class="sym">str</span> <span class="str">" "</span> alias <span class="str">".dept_id IN (SELECT dept_id FROM sys_dept WHERE del_flag = '0' AND (dept_id = :data-perm-dept-id OR ancestors LIKE ...))"</span>)} <span class="comment">;; DEPT_CHILD</span>
-  <span class="num">5</span> {<span class="macro">:params</span> {<span class="macro">:data-perm-user-id</span> uid}
-     <span class="macro">:sql</span> (<span class="sym">str</span> <span class="str">" "</span> alias <span class="str">".user_id = :data-perm-user-id"</span>)})         <span class="comment">;; SELF</span></code></pre>
-    <p>控制器把它合并进查询参数后，HugSQL 的 <code>:v*</code> 列表参数会被自动展开：</p>
-    <pre><code class="language-sql"><span class="sql-kw">SELECT</span> u.* <span class="sql-kw">FROM</span> sys_user u
-<span class="sql-kw">WHERE</span> u.del_flag = <span class="str">'0'</span>
-  <span class="sql-kw">AND</span> (:user_name <span class="sql-kw">IS NULL</span> <span class="sql-kw">OR</span> <span class="sql-func">INSTR</span>(u.user_name, :user_name) &gt; <span class="num">0</span>)
-  <span class="sql-kw">AND</span> u.dept_id <span class="sql-kw">IN</span> (:v*:data-perm-dept-ids)
-<span class="sql-kw">LIMIT</span> :page_size <span class="sql-kw">OFFSET</span> :offset</code></pre>
+    <p><code>src/clj/com/ruoyi/domain/system/data_scope.clj</code> 把角色的 <code>data_scope</code>(1 全部 / 2 自定义部门 / 3 本部门 / 4 本部门及以下 / 5 仅本人,多个角色取并集)算成可见范围,再转成三个固定的 SQL 参数:</p>
+<pre><code class="language-clojure">(data-scope/resolve-scope roles ctx)
+;; =&gt; {:all? true}                              admin 或任一角色为「全部」
+;; =&gt; {:dept-ids #{2 4 5} :self-id nil}         本部门及以下
+;; =&gt; {:dept-ids #{} :self-id 9}                仅本人
+
+(data-scope/sql-params {:dept-ids #{2 4 5}})
+;; =&gt; {:scope_all 0 :scope_dept_ids [2 4 5] :scope_user_id nil}</code></pre>
+    <p>SQL 里的条件是写死的,不拼接任何 SQL 字符串,SQLite 与 MySQL 通用;<code>:v*</code> 列表为空时用一个不存在的 ID 占位:</p>
+<pre><code class="language-sql">SELECT u.* FROM sys_user u
+WHERE u.del_flag = &#x27;0&#x27;
+  AND (:user_name IS NULL OR INSTR(u.user_name, :user_name) &gt; 0)
+  AND (:scope_all = 1 OR u.dept_id IN (:v*:scope_dept_ids) OR u.user_id = :scope_user_id)
+LIMIT :page_size OFFSET :offset</code></pre>
+    <p>详情、修改、删除等单条操作用 <code>data-scope/allows?</code> 检查目标用户(以及要改到的部门)是否在范围内,不在就返回 403。</p>
 
     <section class="exercise">
       <h2>练习 / 讨论</h2>
       <ol>
         <li>启动后端后，使用 <code>curl</code> 或浏览器开发者工具访问 <code>GET /api/system/user?page=1&amp;size=5</code>，观察响应。然后在 <code>wrap-oper-log</code> 里加一行 <code>(log/info "operlog:" uri)</code>，用 <code>(user/rr)</code> 热重载后再次请求，确认日志打印。</li>
-        <li>在 <code>system.clj</code> 中新增一个 <code>GET /system/demo/hello</code> 端点，要求必须登录，并在控制器中返回 <code>{:code 200 :msg "ok" :data "hello"}</code>。借助<a href="session-1-clojure-basics.html">第1讲</a>的 <code>(user/rroutes)</code> + <code>(user/rr)</code> 让它在不重启后端的情况下上线。</li>
-        <li>讨论：数据权限过滤放在控制器层还是 SQL 层更好？本项目为什么选择生成 SQL 片段注入查询参数？</li>
+        <li>在 <code>system.clj</code> 中新增一个 <code>GET /system/demo/hello</code> 端点，要求必须登录(放在 <code>/system</code> 组里即可)并声明 <code>:perms "system:demo:hello"</code>,在控制器中返回 <code>{:code 200 :msg "ok" :data "hello"}</code>;分别用 admin 与一个没有该权限的用户调用,观察 200 / 403。借助<a href="session-1-clojure-basics.html">第1讲</a>的 <code>(user/rroutes)</code> + <code>(user/rr)</code> 让它在不重启后端的情况下上线。</li>
+        <li>讨论：数据权限过滤放在控制器层还是 SQL 层更好？本项目为什么用「固定写法的 SQL 条件 + 参数」而不是拼接 SQL 片段？</li>
       </ol>
     </section>
   </main>

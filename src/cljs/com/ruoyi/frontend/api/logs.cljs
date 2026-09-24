@@ -27,6 +27,12 @@
   (t/request {:method :delete :uri (str "/system/oper-log/" ids)
               :on-success on-success :on-error on-error}))
 
+(defn unlock-user
+  "解除用户的登录失败锁定。"
+  [user-name on-success on-error]
+  (t/request {:method :put :uri (str "/system/login-log/unlock/" (js/encodeURIComponent user-name))
+              :on-success on-success :on-error on-error}))
+
 (defn clear-login-logs
   "清空登录日志。"
   [on-success on-error]

@@ -57,6 +57,15 @@
    "登录失败" "Login failed"
    "网络错误,请稍后重试" "Network error, please retry later"
    "登录状态已过期,请重新登录" "Your session has expired, please log in again"
+   ;; 接口失败的统一提示(api.errors / 后端通用文案)
+   "没有操作权限" "Permission denied"
+   "未登录或令牌已过期" "Not logged in or session expired"
+   "接口不存在" "API not found"
+   "请求参数不合法" "Invalid request parameters"
+   "服务器错误,请稍后重试" "Server error, please retry later"
+   "服务器内部错误,请稍后重试" "Internal server error, please retry later"
+   "响应格式错误" "Malformed response"
+   "操作失败" "Operation failed"
    ;; 头部
    "布局设置" "Layout"
    "退出登录" "Log out"
@@ -70,6 +79,12 @@
    "中" "Medium"
    "大" "Large"
    "语言" "Language"
+   "文档" "Docs"
+   "搜索菜单" "Search menus"
+   "通知" "Notifications"
+   "公告" "Announcement"
+   "暂无通知" "No notifications"
+   "查看全部" "View all"
    ;; 标签页
    "刷新页面" "Reload"
    "关闭当前" "Close"

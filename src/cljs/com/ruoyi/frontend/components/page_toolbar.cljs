@@ -2,7 +2,8 @@
   "页面工具栏容器。"
   (:require
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.i18n :as i18n]))
+   [com.ruoyi.frontend.i18n :as i18n]
+   [com.ruoyi.frontend.perm :as perm]))
 
 (defn page-toolbar [{:keys [left right style]}]
   [:div {:style (merge {:display "flex"
@@ -23,8 +24,8 @@
    :export {:color "#e6a23c" :border "1px solid #f3d19e" :background "#fdf6ec"}
    :default {:height 36 :borderRadius 4}})
 
-(defn toolbar-button
-  [{:keys [kind icon on-click disabled? loading? children label]}]
+(defn- toolbar-button*
+  [kind icon on-click disabled? loading? content]
   [antd/button {:icon icon
                 :disabled disabled?
                 :loading loading?
@@ -37,7 +38,13 @@
                               (get button-colors kind)
                               (when disabled?
                                 {:opacity 0.55}))}
-   (or label children)])
+   content])
+
+(defn toolbar-button
+  "工具栏按钮。:perm 为所需权限(字符串或集合),没有权限时不渲染(见 frontend.perm)。"
+  [{:keys [kind icon on-click disabled? loading? children label perm]}]
+  (when (perm/allowed? perm)
+    (toolbar-button* kind icon on-click disabled? loading? (or label children))))
 
 (defn toolbar-left [& children]
   (into [:div {:style {:display "flex" :gap 10}}] children))

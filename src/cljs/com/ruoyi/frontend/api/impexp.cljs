@@ -40,28 +40,11 @@
 (defn export-generic-csv
   "通用导出CSV。"
   [url filename params]
-  (let [token (t/get-token)
-        headers (if token {"Authorization" (str "Bearer " token)} {})
-        query-str (when (seq params)
+  (let [query-str (when (seq params)
                     (str "?" (str/join "&"
                                        (map (fn [[k v]] (str (name k) "=" (js/encodeURIComponent (str v))))
                                             params))))]
-    (-> (js/fetch (str t/api-base url (or query-str ""))
-                  (clj->js {:method "GET"
-                            :headers (clj->js headers)}))
-        (.then (fn [resp]
-                 (if (.-ok resp)
-                   (.blob resp)
-                   (throw (js/Error. (str "Export failed: " (.-status resp)))))))
-        (.then (fn [blob]
-                 (let [url (js/URL.createObjectURL blob)
-                       a (js/document.createElement "a")]
-                   (set! (.-href a) url)
-                   (set! (.-download a) (or filename "export.csv"))
-                   (.appendChild (.-body js/document) a)
-                   (.click a)
-                   (.removeChild (.-body js/document) a)
-                   (js/URL.revokeObjectURL url)))))))
+    (t/download! (str url query-str) (or filename "export.csv"))))
 
 (defn export-roles
   [params]

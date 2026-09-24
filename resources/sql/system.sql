@@ -1,7 +1,7 @@
 -- :name list-users :? :*
--- :doc 查询用户列表，支持用户名、手机号、状态筛选
+-- :doc 查询用户列表，支持用户名、手机号、状态筛选;scope_* 为数据权限(domain.system.data-scope)
 SELECT u.user_id, u.dept_id, u.user_name, u.nick_name, u.user_type, u.email,
-       u.phonenumber, u.sex, u.avatar, u.password, u.status, u.del_flag,
+       u.phonenumber, u.sex, u.avatar, u.status, u.del_flag,
        u.login_ip, u.login_date, u.create_by, u.create_time, u.update_by,
        u.update_time, u.remark, d.dept_name
 FROM sys_user u
@@ -10,7 +10,8 @@ WHERE u.del_flag = '0'
   AND (:user_name IS NULL OR INSTR(u.user_name, :user_name) > 0)
   AND (:phonenumber IS NULL OR INSTR(u.phonenumber, :phonenumber) > 0)
   AND (:status IS NULL OR u.status = :status)
-  AND (:dept_id IS NULL OR u.dept_id = :dept_id)
+  AND (:dept_id IS NULL OR u.dept_id IN (:v*:dept_ids))
+  AND (:scope_all = 1 OR u.dept_id IN (:v*:scope_dept_ids) OR u.user_id = :scope_user_id)
 ORDER BY u.user_id
 LIMIT :page_size OFFSET :offset
 
@@ -22,7 +23,8 @@ WHERE u.del_flag = '0'
   AND (:user_name IS NULL OR INSTR(u.user_name, :user_name) > 0)
   AND (:phonenumber IS NULL OR INSTR(u.phonenumber, :phonenumber) > 0)
   AND (:status IS NULL OR u.status = :status)
-  AND (:dept_id IS NULL OR u.dept_id = :dept_id)
+  AND (:dept_id IS NULL OR u.dept_id IN (:v*:dept_ids))
+  AND (:scope_all = 1 OR u.dept_id IN (:v*:scope_dept_ids) OR u.user_id = :scope_user_id)
 
 -- :name find-user-by-id :? :1
 -- :doc 根据ID查询用户
@@ -349,6 +351,14 @@ WHERE (:notice_name IS NULL OR INSTR(notice_name, :notice_name) > 0)
 ORDER BY notice_id DESC
 LIMIT :page_size OFFSET :offset
 
+-- :name list-latest-notices :? :*
+-- :doc 最新的已发布通知(顶部铃铛),只取列表需要的字段
+SELECT notice_id, notice_name, notice_type, create_by, create_time
+FROM sys_notice
+WHERE status = '0'
+ORDER BY notice_id DESC
+LIMIT :limit
+
 -- :name count-notices :? :1
 -- :doc 统计通知公告数量
 SELECT COUNT(*) AS total FROM sys_notice
@@ -446,6 +456,36 @@ WHERE m.menu_id IN (
   WHERE rm2.role_id IN (:v*:role-ids) AND m2.parent_id > 0
 )
 ORDER BY m.parent_id, m.order_num
+
+-- :name list-user-data-scopes :? :*
+-- :doc 用户各启用角色的数据范围(见 domain.system.data-scope)
+SELECT r.role_id, r.role_key, r.data_scope
+FROM sys_user_role ur
+INNER JOIN sys_role r ON r.role_id = ur.role_id
+WHERE ur.user_id = :user_id
+  AND r.status = '0'
+  AND r.del_flag = '0'
+
+-- :name list-role-dept-ids :? :*
+-- :doc 角色的自定义数据范围(部门)
+SELECT dept_id FROM sys_role_dept WHERE role_id = :role_id ORDER BY dept_id
+
+-- :name delete-role-depts! :! :n
+DELETE FROM sys_role_dept WHERE role_id = :role_id
+
+-- :name insert-role-dept! :! :n
+INSERT INTO sys_role_dept (role_id, dept_id) VALUES (:role_id, :dept_id)
+
+-- :name list-user-role-perms :? :*
+-- :doc 用户各启用角色的角色键与菜单权限标识(停用的角色/菜单不计入);用于按钮级鉴权
+SELECT r.role_key, m.perms
+FROM sys_user_role ur
+INNER JOIN sys_role r ON r.role_id = ur.role_id
+LEFT JOIN sys_role_menu rm ON rm.role_id = r.role_id
+LEFT JOIN sys_menu m ON m.menu_id = rm.menu_id AND m.status = '0'
+WHERE ur.user_id = :user_id
+  AND r.status = '0'
+  AND r.del_flag = '0'
 
 -- ════════════════════════════════════════════════════════════════
 -- 表单模板

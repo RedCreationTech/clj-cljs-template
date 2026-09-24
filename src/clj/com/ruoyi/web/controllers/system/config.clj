@@ -2,7 +2,7 @@
   "参数配置控制器。"
   (:require
    [com.ruoyi.domain.system.config :as config-service]
-   [com.ruoyi.infra.data-perm :as data-perm]
+   [com.ruoyi.web.controllers.params :as params]
    [ring.util.response :as response]))
 
 (defn- ok ([data] (ok 200 "操作成功" data))
@@ -18,13 +18,9 @@
   (get-in request [:identity :user-name] ""))
 
 (defn list-configs
-  "查询参数列表（带数据权限过滤）。"
+  "查询参数列表。"
   [{:keys [config-service]} request]
-  (let [params (:query-params request)
-        identity (:identity request)
-        data-perm-filter (data-perm/data-perm-filter identity "default" :alias "u")
-        params (merge params (:params data-perm-filter))]
-    (ok (config-service/list-configs config-service params))))
+  (ok (config-service/list-configs config-service (params/query request))))
 
 (defn get-config
   [{:keys [config-service]} request]

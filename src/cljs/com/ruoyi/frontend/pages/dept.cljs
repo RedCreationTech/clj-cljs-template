@@ -7,6 +7,7 @@
    [com.ruoyi.frontend.components.dept-tree-select :refer [dept-tree-select]]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -57,11 +58,13 @@
 (defn- toolbar []
   [page-toolbar/page-toolbar
    {:left [page-toolbar/toolbar-left
-           [page-toolbar/toolbar-button {:kind :add
+           [page-toolbar/toolbar-button {:perm "system:dept:add"
+                                         :kind :add
                                          :icon (r/as-element [:> PlusOutlined])
                                          :on-click #(rf/dispatch [:depts/open-modal])
                                          :label "新增"}]
-           [page-toolbar/toolbar-button {:kind :export
+           [page-toolbar/toolbar-button {:perm "system:dept:edit"
+                                         :kind :export
                                          :icon (r/as-element [:> CheckOutlined])
                                          :label "保存排序"}]
            [page-toolbar/toolbar-button {:kind :import
@@ -92,19 +95,22 @@
             :render (fn [_ ^js record]
                       (r/as-element
                        [antd/space
-                        [antd/button {:type "link" :size "small"
-                                      :icon (r/as-element [:> EditOutlined])
-                                      :on-click #(rf/dispatch [:depts/edit (js->clj record :keywordize-keys true)])}
-                         "修改"]
-                        [antd/button {:type "link" :size "small"
-                                      :icon (r/as-element [:> PlusOutlined])
-                                      :on-click #(rf/dispatch [:depts/open-modal {:parent_id (.-dept_id record)}])}
-                         "新增"]
-                        [antd/popconfirm {:title "确认删除该部门？"
-                                          :onConfirm #(rf/dispatch [:depts/delete (.-dept_id record)])}
-                         [antd/button {:type "link" :danger true :size "small"
-                                       :icon (r/as-element [:> DeleteOutlined])}
-                          "删除"]]]))}])
+                        [perm/when-allowed "system:dept:edit"
+                         [antd/button {:type "link" :size "small"
+                                       :icon (r/as-element [:> EditOutlined])
+                                       :on-click #(rf/dispatch [:depts/edit (js->clj record :keywordize-keys true)])}
+                          "修改"]]
+                        [perm/when-allowed "system:dept:add"
+                         [antd/button {:type "link" :size "small"
+                                       :icon (r/as-element [:> PlusOutlined])
+                                       :on-click #(rf/dispatch [:depts/open-modal {:parent_id (.-dept_id record)}])}
+                          "新增"]]
+                        [perm/when-allowed "system:dept:remove"
+                         [antd/popconfirm {:title "确认删除该部门？"
+                                           :onConfirm #(rf/dispatch [:depts/delete (.-dept_id record)])}
+                          [antd/button {:type "link" :danger true :size "small"
+                                        :icon (r/as-element [:> DeleteOutlined])}
+                           "删除"]]]]))}])
 
 ;; ─── 编辑弹窗 ──────────────────────────────────────────────────────
 

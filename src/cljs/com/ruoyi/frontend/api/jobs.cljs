@@ -27,6 +27,12 @@
   (t/request {:method :put :uri (str "/system/job/" id) :params params
               :on-success on-success :on-error on-error}))
 
+(defn change-job-status
+  "暂停(\"1\")/恢复(\"0\")任务:同时更新调度器。"
+  [job-id status on-success on-error]
+  (t/request {:method :put :uri (str "/system/job/" job-id "/changeStatus") :params {:status status}
+              :on-success on-success :on-error on-error}))
+
 (defn delete-job
   "删除定时任务。"
   [id on-success on-error]

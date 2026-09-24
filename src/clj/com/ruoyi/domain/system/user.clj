@@ -1,31 +1,48 @@
 (ns com.ruoyi.domain.system.user
   "用户领域服务，处理用户 CRUD、密码管理与角色关联。"
   (:require
+   [clojure.string :as str]
+   [com.ruoyi.domain.system.data-scope :as data-scope]
    [com.ruoyi.infra.db :as db]
    [com.ruoyi.infra.security :as security]))
 
+(defn- dept-with-children
+  "按部门筛选时包含下级部门;未选部门时给一个占位 ID(IN 列表不能为空)。"
+  [query-fn dept-id]
+  (if dept-id
+    (vec (sort (data-scope/descendant-dept-ids (query-fn :list-depts {:status nil :dept_name nil}) dept-id)))
+    [-1]))
+
 (defn list-users
-  "查询用户列表，支持分页和条件筛选。"
+  "查询用户列表，支持分页和条件筛选。params 里的 :scope_* 为数据范围(见 domain.system.data-scope/sql-params),
+   不传时不做数据过滤——对外接口必须由控制器按当前用户传入。"
   [{:keys [query-fn]} params]
   (let [page-num (or (:page-num params) 1)
         page-size (or (:page-size params) 10)
         offset (* (dec page-num) page-size)
-        filters (merge {:user_name nil :phonenumber nil :status nil
-                        :dept_id nil :params nil}
-                       (-> params
-                           (dissoc :page-num :page-size))
+        filters (merge {:user_name nil :phonenumber nil :status nil :dept_id nil}
+                       data-scope/unrestricted
+                       (dissoc params :page-num :page-size)
                        {:offset offset :page_size page-size})
+        filters (assoc filters :dept_ids (dept-with-children query-fn (:dept_id filters)))
         rows (query-fn :list-users filters)
         total (query-fn :count-users filters)]
     {:rows rows :total (:total total)}))
 
 (defn find-user-by-id
-  "根据ID查询用户详情，包含部门、角色、岗位信息。"
+  "根据ID查询用户详情，包含部门、角色、岗位信息。不含密码哈希(校验密码用 password-matches?)。"
   [{:keys [query-fn]} user-id]
   (when-let [user (query-fn :find-user-by-id {:user_id user-id})]
-    (assoc user
-           :roles (query-fn :list-roles-by-user-id {:user_id user-id})
-           :posts (query-fn :list-posts-by-user-id {:user_id user-id}))))
+    (-> user
+        (dissoc :password)
+        (assoc :roles (query-fn :list-roles-by-user-id {:user_id user-id})
+               :posts (query-fn :list-posts-by-user-id {:user_id user-id})))))
+
+(defn password-matches?
+  "校验用户当前密码(修改密码时核对旧密码)。"
+  [{:keys [query-fn]} user-id raw-password]
+  (let [hash (:password (query-fn :find-user-by-id {:user_id user-id}))]
+    (boolean (and hash (security/verify-password raw-password hash)))))
 
 (defn find-user-by-name
   "根据用户名查询用户（用于登录）。"
@@ -56,16 +73,21 @@
       (query-fn :insert-user-post! {:user_id user-id :post_id post-id}))
     user-id))
 
+(def ^:private update-defaults
+  "update-user! SQL 的全部参数;没给的字段为 nil,SQL 里 COALESCE 保留原值。"
+  {:dept_id nil :nick_name nil :user_type nil :email nil :phonenumber nil :sex nil
+   :avatar nil :password nil :status nil :update_by "" :remark nil})
+
 (defn update-user!
-  "更新用户信息，可选更新密码。"
+  "更新用户信息(只改给出的字段);给出 :password(明文)时重新哈希。"
   [{:keys [query-fn]} {:keys [user-id password roles posts] :as params}]
   (ensure-unique-user-name! {:query-fn query-fn} (:user_name params) user-id)
-  (let [update-data (-> params
+  (let [update-data (-> (merge update-defaults params)
                         (dissoc :roles :posts :user-id)
                         (assoc :user_id user-id))
-        update-data (if password
-                      (assoc update-data :password (security/hash-password password))
-                      update-data)]
+        ;; 空密码视为不修改(编辑表单里密码框留空)
+        update-data (assoc update-data :password (when-not (str/blank? password)
+                                                   (security/hash-password password)))]
     (query-fn :update-user! update-data)
     ;; 更新角色关联
     (when roles

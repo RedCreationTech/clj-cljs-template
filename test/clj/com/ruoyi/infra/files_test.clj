@@ -38,3 +38,25 @@
     (is (not= (.getName a) (.getName b)) "同名不覆盖")
     (is (= "hi" (slurp (io/file root (.getName b)))))
     (is (nil? (files/store! root src ".htaccess")))))
+
+(deftest upload-policy-test
+  (let [policy (files/policy {:max-mb 1 :extensions ""})
+        tmp (java.io.File/createTempFile "upload" ".bin")]
+    (testing "默认扩展名白名单,大小上限按 MB"
+      (is (= (* 1024 1024) (:max-bytes policy)))
+      (is (contains? (:extensions policy) "pdf"))
+      (is (not (contains? (:extensions policy) "exe")))
+      (is (not (contains? (:extensions policy) "html")) "HTML/SVG 可能带脚本,默认不允许")
+      (is (= #{"txt" "log"} (:extensions (files/policy {:extensions " TXT, log ,"})))))
+    (testing "校验"
+      (is (nil? (files/upload-error policy {:tempfile tmp :filename "a.PDF" :size 10})))
+      (is (= "请选择要上传的文件" (files/upload-error policy {:filename "a.pdf"})))
+      (is (= "不支持的文件类型:exe" (files/upload-error policy {:tempfile tmp :filename "a.exe" :size 1})))
+      (is (= "不支持的文件类型:无扩展名" (files/upload-error policy {:tempfile tmp :filename "Makefile" :size 1})))
+      (is (= "文件名不合法" (files/upload-error policy {:tempfile tmp :filename "../.." :size 1})))
+      (is (= "文件不能超过 1MB" (files/upload-error policy {:tempfile tmp :filename "a.pdf" :size (* 2 1024 1024)}))))
+    (testing "图片策略:只允许图片,最大 2MB"
+      (let [img (files/image-policy {:max-mb 10})]
+        (is (= (* 2 1024 1024) (:max-bytes img)))
+        (is (some? (files/upload-error img {:tempfile tmp :filename "a.pdf" :size 1})))))
+    (.delete tmp)))

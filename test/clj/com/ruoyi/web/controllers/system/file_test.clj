@@ -81,8 +81,8 @@
             response (file/upload-file {} request)
             body (:body response)]
         (is (= 200 (:status response)))
-        (is (= 500 (:code body)))
-        (is (= "上传失败" (:msg body)))
+        (is (= 400 (:code body)))
+        (is (= "请选择要上传的文件" (:msg body)))
         (is (nil? (:data body)))))))
 
 (deftest test-download-file-success

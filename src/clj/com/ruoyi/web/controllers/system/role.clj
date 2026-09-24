@@ -1,8 +1,9 @@
 (ns com.ruoyi.web.controllers.system.role
   "角色管理控制器。"
   (:require
-   [clojure.string]
+   [clojure.string :as str]
    [com.ruoyi.domain.system.role :as role-service]
+   [com.ruoyi.web.controllers.params :as params]
    [ring.util.response :as response]))
 
 (defn- ok ([data] (ok 200 "操作成功" data))
@@ -17,8 +18,7 @@
 (defn list-roles
   "查询角色列表。"
   [{:keys [role-service]} request]
-  (let [params (:query-params request)]
-    (ok (role-service/list-roles role-service params))))
+  (ok (role-service/list-roles role-service (params/query request))))
 
 (defn get-role
   "查询角色详情。"
@@ -61,24 +61,22 @@
     (role-service/update-role! role-service {:role-id role-id :status status})
     (ok "状态修改成功")))
 
-(defn- parse-user-ids
-  "将逗号分隔的用户ID字符串解析为long集合。"
+(defn- parse-ids
+  "逗号分隔的 ID 字符串 → [long ...];空串或 nil 得到 []。"
   [s]
-  (when (seq s)
-    (->> (clojure.string/split s #",")
-         (map clojure.string/trim)
-         (remove empty?)
-         (map parse-long)
-         (doall))))
+  (->> (str/split (str s) #",")
+       (map str/trim)
+       (remove str/blank?)
+       (mapv parse-long)))
 
 (defn data-scope
-  "设置角色数据权限范围。"
+  "设置角色数据权限范围:1 全部 / 2 自定义(dept_ids 逗号分隔)/ 3 本部门 / 4 本部门及以下 / 5 仅本人。"
   [{:keys [role-service]} request]
-  (let [params (get-in request [:parameters :body])
-        role-id (:role_id params)
-        data-scope (:data_scope params)]
-    (role-service/update-role! role-service {:role-id role-id :data_scope data-scope})
-    (ok "数据权限设置成功")))
+  (let [{:keys [role_id data_scope dept_ids]} (get-in request [:parameters :body])]
+    (if-not (contains? #{"1" "2" "3" "4" "5"} data_scope)
+      (fail "数据范围取值为 1~5")
+      (do (role-service/set-data-scope! role-service role_id data_scope (parse-ids dept_ids))
+          (ok "数据权限设置成功")))))
 
 (defn option-select
   "获取角色选项列表（下拉框用）。"
@@ -123,7 +121,7 @@
   [{:keys [role-service]} request]
   (let [q (get-in request [:parameters :query])
         role-id (:role_id q)
-        user-ids (parse-user-ids (:user_ids q))]
+        user-ids (parse-ids (:user_ids q))]
     (role-service/cancel-auth-user-all! role-service {:role-id role-id :user-ids user-ids})
     (ok "批量取消成功")))
 
@@ -132,12 +130,12 @@
   [{:keys [role-service]} request]
   (let [q (get-in request [:parameters :query])
         role-id (:role_id q)
-        user-ids (parse-user-ids (:user_ids q))]
+        user-ids (parse-ids (:user_ids q))]
     (role-service/select-auth-user-all! role-service {:role-id role-id :user-ids user-ids})
     (ok "批量授权成功")))
 
 (defn dept-tree-by-role
-  "获取角色部门树。"
-  [{:keys [dept-service role-service]} request]
+  "角色数据权限弹窗:全部部门 + 已勾选的自定义部门。"
+  [{:keys [role-service]} request]
   (let [role-id (parse-long (get-in request [:path-params :id]))]
-    (ok (role-service/dept-tree-by-role role-service dept-service role-id))))
+    (ok (role-service/dept-tree-by-role role-service role-id))))

@@ -193,7 +193,7 @@
 ;; ─── 主页面 ──────────────────────────────────────────────────────
 
 (defn dashboard-page []
-  (let [user @(rf/subscribe [:auth/user])
+  (let [user @(rf/subscribe [:auth/current-user])
         stats @(rf/subscribe [:dashboard/stats])
         loading? @(rf/subscribe [:dashboard/loading?])
         [now set-now!] (hooks/use-state (js/Date.))

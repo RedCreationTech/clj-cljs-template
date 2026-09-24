@@ -80,4 +80,5 @@
      :service-key (str ":app." module "/service")
      :service-arg (str module "-service")
      :api-path (str "/biz/" module)
-     :menu-path (str "biz/" module)}))
+     :menu-path (str "biz/" module)
+     :perm-prefix (str "biz:" module)}))

@@ -191,7 +191,7 @@
       [layout-header/side-nav-header {:collapsed collapsed
                                       :set-collapsed! set-collapsed!
                                       :breadcrumbs breadcrumbs}])]
-   [layout-header/header-actions {:user user :set-settings-open! set-settings-open!}]
+   [layout-header/header-actions {:user (:user user) :menus (:menus user) :set-settings-open! set-settings-open!}]
    [layout-settings/layout-settings-drawer {:open? settings-open?
                                             :on-close #(set-settings-open! false)}]])
 

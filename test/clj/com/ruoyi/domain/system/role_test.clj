@@ -103,12 +103,28 @@
     (is (nil? (role/select-auth-user-all! mock-service {:role-id 1 :user-ids [2 3]})))))
 
 (deftest test-dept-tree-by-role
-  (testing "获取角色关联部门树"
-    (let [dept-service {:query-fn mock-query-fn :list-depts :list-depts}
-          result (role/dept-tree-by-role mock-service dept-service 1)]
-      (is (map? result))
-      (is (contains? result :depts))
-      (is (contains? result :checked-keys)))))
+  (testing "全部部门 + 角色已勾选的自定义部门"
+    (let [svc {:query-fn (fn [q _] (case q
+                                     :list-depts [{:dept_id 1 :parent_id 0} {:dept_id 2 :parent_id 1}]
+                                     :list-role-dept-ids [{:dept_id 2}]
+                                     nil))}]
+      (is (= {:depts [{:dept_id 1 :parent_id 0} {:dept_id 2 :parent_id 1}] :checked-keys [2]}
+             (role/dept-tree-by-role svc 1))))))
+
+(deftest test-set-data-scope
+  (let [calls (atom [])
+        svc {:query-fn (fn [q p] (swap! calls conj [q p]) 1)}]
+    (testing "自定义范围:清空后写入所选部门"
+      (role/set-data-scope! svc 3 "2" [4 5 4])
+      (is (= [[:delete-role-depts! {:role_id 3}]
+              [:insert-role-dept! {:role_id 3 :dept_id 4}]
+              [:insert-role-dept! {:role_id 3 :dept_id 5}]]
+             (filterv #(not= :update-role! (first %)) @calls))))
+    (testing "其它范围:只清空自定义部门"
+      (reset! calls [])
+      (role/set-data-scope! svc 3 "4" [4])
+      (is (= [[:delete-role-depts! {:role_id 3}]]
+             (filterv #(not= :update-role! (first %)) @calls))))))
 
 (deftest test-get-role-perms
   (testing "获取角色权限标识"

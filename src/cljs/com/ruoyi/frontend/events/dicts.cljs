@@ -93,7 +93,7 @@
                                              (rf/dispatch [:dicts/fetch-types {}]))
                                            (when (not= 200 (:code result))
                                              (antd/error! (:msg result))))
-                                         (fn [_] (antd/error! "网络错误")))))
+                                         (fn [_]))))
 
 (rf/reg-event-fx :dicts/update-type
                  (fn [_ [_ id params]]
@@ -108,7 +108,7 @@
                                              (rf/dispatch [:dicts/fetch-types {}]))
                                            (when (not= 200 (:code result))
                                              (antd/error! (:msg result))))
-                                         (fn [_] (antd/error! "网络错误")))))
+                                         (fn [_]))))
 
 (rf/reg-event-fx :dicts/delete-type
                  (fn [_ [_ id]]
@@ -123,7 +123,7 @@
                                              (rf/dispatch [:dicts/fetch-types {}]))
                                            (when (not= 200 (:code result))
                                              (antd/error! (:msg result))))
-                                         (fn [_] (antd/error! "网络错误")))))
+                                         (fn [_]))))
 
 (rf/reg-event-fx :dicts/create-data
                  (fn [_ [_ params]]
@@ -138,7 +138,7 @@
                                              (rf/dispatch [:dicts/fetch-data {:dict_type (:dict_type params)}]))
                                            (when (not= 200 (:code result))
                                              (antd/error! (:msg result))))
-                                         (fn [_] (antd/error! "网络错误")))))
+                                         (fn [_]))))
 
 (rf/reg-event-fx :dicts/update-data
                  (fn [_ [_ id params]]
@@ -153,7 +153,7 @@
                                              (rf/dispatch [:dicts/fetch-data {:dict_type (:dict_type params)}]))
                                            (when (not= 200 (:code result))
                                              (antd/error! (:msg result))))
-                                         (fn [_] (antd/error! "网络错误")))))
+                                         (fn [_]))))
 
 (rf/reg-event-fx :dicts/delete-data
                  (fn [_ [_ id]]
@@ -168,4 +168,4 @@
                                              (rf/dispatch [:dicts/fetch-data {}]))
                                            (when (not= 200 (:code result))
                                              (antd/error! (:msg result))))
-                                         (fn [_] (antd/error! "网络错误")))))
+                                         (fn [_]))))

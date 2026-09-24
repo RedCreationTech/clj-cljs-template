@@ -4,7 +4,7 @@
    [clojure.string :as str]
    [com.ruoyi.domain.system.log :as log-domain]
    [com.ruoyi.domain.system.menu :as menu-service]
-   [com.ruoyi.domain.system.role :as role-service]
+   [com.ruoyi.domain.system.permission :as permission]
    [com.ruoyi.domain.system.user :as user-service]
    [com.ruoyi.infra.login-guard :as guard]
    [com.ruoyi.infra.online :as online]
@@ -134,20 +134,18 @@
       (error 401 "会话已失效,请重新登录"))))
 
 (defn get-info
-  "获取当前登录用户信息及权限菜单。"
+  "获取当前登录用户信息、权限标识(前端据此显隐按钮,admin 为 [\"*:*:*\"])与菜单树。"
   [{:keys [user-service menu-service]} request]
   (let [identity (:identity request)
         user-id (:user-id identity)]
     (if-let [user (user-service/find-user-by-id user-service user-id)]
       (let [roles (:roles user)
             role-ids (mapv :role_id roles)
-            perms (->> (mapcat #(role-service/get-role-perms {:query-fn (:query-fn user-service)} %) role-ids)
-                       (into #{})
-                       (vec))
+            perms (permission/user-permissions (:query-fn user-service) user-id)
             menus (menu-service/menu-tree-by-roles menu-service role-ids)]
         (success {:user (select-keys user [:user_id :user_name :nick_name :avatar :email :phonenumber :sex])
                   :roles (mapv :role_key roles)
-                  :permissions perms
+                  :permissions (vec perms)
                   :menus menus}))
       (error 401 "用户不存在"))))
 

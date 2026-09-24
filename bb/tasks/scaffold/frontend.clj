@@ -100,6 +100,7 @@
        "   [" ns-root ".frontend.components.page-search :as page-search]\n"
        "   [" ns-root ".frontend.components.page-toolbar :as page-toolbar]\n"
        "   [" ns-root ".frontend.i18n :as i18n]\n"
+       "   [" ns-root ".frontend.perm :as perm]\n"
        "   [re-frame.core :as rf]\n"
        "   [reagent.core :as r]\n"
        "   [reagent.hooks :as hooks]))\n\n"
@@ -115,7 +116,7 @@
        "          (update-vals values #(if (= \"\" %) nil %))\n"
        "          bool-keys))\n\n"))
 
-(defn- page-search-part [{:keys [module]}]
+(defn- page-search-part [{:keys [module perm-prefix]}]
   (str "(defn- search-input [{:keys [key label type]} query]\n"
        "  (let [on-change #(rf/dispatch [:" module "/set-query key %])]\n"
        "    [page-search/search-item label\n"
@@ -141,20 +142,26 @@
        "(defn- toolbar []\n"
        "  [page-toolbar/page-toolbar\n"
        "   {:left [page-toolbar/toolbar-left\n"
-       "           [page-toolbar/toolbar-button {:kind :add :label (i18n/tr \"新增\") :icon (r/as-element [:> PlusOutlined])\n"
+       "           [page-toolbar/toolbar-button {:perm \"" perm-prefix ":add\" :kind :add :label (i18n/tr \"新增\")\n"
+       "                                         :icon (r/as-element [:> PlusOutlined])\n"
        "                                         :on-click #(rf/dispatch [:" module "/open-modal nil])}]]\n"
        "    :right [page-toolbar/toolbar-right\n"
        "            [page-toolbar/round-tool-button {:title (i18n/tr \"刷新\") :icon (r/as-element [:> ReloadOutlined])\n"
        "                                             :on-click #(rf/dispatch [:" module "/fetch {}])}]]}])\n\n"))
 
-(defn- page-table-part [{:keys [module]}]
-  (str "(defn- row-actions [^js record]\n"
+(defn- page-table-part [{:keys [module perm-prefix]}]
+  (str "(defn- row-actions\n"
+       "  \"行操作,按权限显示(后端路由同样用 :perms 拦截)。\"\n"
+       "  [^js record]\n"
        "  (let [row (js->clj record :keywordize-keys true)]\n"
        "    [antd/space\n"
-       "     [antd/button {:type \"link\" :size \"small\" :icon (r/as-element [:> EditOutlined])\n"
-       "                   :on-click #(rf/dispatch [:" module "/open-modal row])} (i18n/tr \"编辑\")]\n"
-       "     [antd/popconfirm {:title \"确认删除这条记录?\" :onConfirm #(rf/dispatch [:" module "/delete (:id row)])}\n"
-       "      [antd/button {:type \"link\" :danger true :size \"small\" :icon (r/as-element [:> DeleteOutlined])} (i18n/tr \"删除\")]]]))\n\n"
+       "     [perm/when-allowed \"" perm-prefix ":edit\"\n"
+       "      [antd/button {:type \"link\" :size \"small\" :icon (r/as-element [:> EditOutlined])\n"
+       "                    :on-click #(rf/dispatch [:" module "/open-modal row])} (i18n/tr \"编辑\")]]\n"
+       "     [perm/when-allowed \"" perm-prefix ":remove\"\n"
+       "      [antd/popconfirm {:title \"确认删除这条记录?\" :onConfirm #(rf/dispatch [:" module "/delete (:id row)])}\n"
+       "       [antd/button {:type \"link\" :danger true :size \"small\" :icon (r/as-element [:> DeleteOutlined])}\n"
+       "        (i18n/tr \"删除\")]]]]))\n\n"
        "(defn- columns []\n"
        "  (clj->js\n"
        "   (concat\n"

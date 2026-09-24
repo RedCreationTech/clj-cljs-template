@@ -97,6 +97,8 @@
   (require 'com.ruoyi.domain.system.dict :reload)
   (require 'com.ruoyi.domain.system.config :reload)
   (require 'com.ruoyi.domain.system.log :reload)
+  (require 'com.ruoyi.domain.system.permission :reload)
+  (require 'com.ruoyi.domain.system.data-scope :reload)
   (require 'com.ruoyi.domain.gen :reload)
   ;; [new-module] reload-domain
   (log/info "Domain services reloaded."))
@@ -117,6 +119,7 @@
   (log/info "Reloading routes...")
   (require 'com.ruoyi.web.routes.auth :reload)
   (require 'com.ruoyi.web.routes.system :reload)
+  (require 'com.ruoyi.web.routes.monitor :reload)
   (require 'com.ruoyi.web.routes.gen :reload)
   (require 'com.ruoyi.web.routes.api :reload)
   (require 'com.ruoyi.web.handler :reload)
@@ -143,12 +146,12 @@
   (log/info "Controllers reloaded."))
 
 (defn reload-infra
-  "Reload infrastructure namespaces (security, online, data-perm)."
+  "Reload infrastructure namespaces (security, online, login-guard)."
   []
   (log/info "Reloading infra...")
   (require 'com.ruoyi.infra.security :reload)
   (require 'com.ruoyi.infra.online :reload)
-  (require 'com.ruoyi.infra.data-perm :reload)
+  (require 'com.ruoyi.infra.login-guard :reload)
   (log/info "Infra reloaded."))
 
 (defn reload-all

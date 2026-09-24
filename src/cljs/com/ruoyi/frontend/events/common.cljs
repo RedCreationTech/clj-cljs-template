@@ -68,3 +68,19 @@
                  (if (seq children)
                    (assoc d :children children)
                    d))))))
+
+(defn stop-all-loading
+  "接口失败时把各模块的 :loading? 统一复位(列表请求失败后表格不会一直转圈)。
+   约定:模块状态放在 app-db 顶层键下,形如 {:configs {:loading? true ..}}。"
+  [db]
+  (reduce-kv (fn [acc k v]
+               (if (and (map? v) (true? (:loading? v)))
+                 (assoc-in acc [k :loading?] false)
+                 acc))
+             db
+             db))
+
+(defn unread-count
+  "铃铛角标:比上次查看时最新的一条更新的通知数(notice_id 自增)。"
+  [items seen-id]
+  (count (filter #(> (:notice_id %) (or seen-id 0)) items)))

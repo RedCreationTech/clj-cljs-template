@@ -6,6 +6,7 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -74,32 +75,37 @@
             :render (fn [_ ^js record]
                       (r/as-element
                        [antd/space
-                        [antd/button {:type "link" :size "small"
-                                      :icon (r/as-element [:> EditOutlined])
-                                      :onClick #(on-edit (js->clj record :keywordize-keys true))}
-                         "编辑"]
-                        [antd/popconfirm {:title "确认删除该任务？"
-                                          :onConfirm #(rf/dispatch [:jobs/delete (.-job_id record)])}
-                         [antd/button {:type "link" :danger true :size "small"
-                                       :icon (r/as-element [:> DeleteOutlined])}
-                          "删除"]]
-                        [antd/button {:type "link" :size "small"
-                                      :disabled (= (.-status record) "0")
-                                      :onClick #(rf/dispatch [:jobs/update (.-job_id record) {:status "0"}])}
-                         "恢复"]
-                        [antd/button {:type "link" :size "small"
-                                      :disabled (= (.-status record) "1")
-                                      :onClick #(rf/dispatch [:jobs/update (.-job_id record) {:status "1"}])}
-                         "暂停"]
+                        [perm/when-allowed "monitor:job:edit"
+                         [antd/button {:type "link" :size "small"
+                                       :icon (r/as-element [:> EditOutlined])
+                                       :onClick #(on-edit (js->clj record :keywordize-keys true))}
+                          "编辑"]]
+                        [perm/when-allowed "monitor:job:remove"
+                         [antd/popconfirm {:title "确认删除该任务？"
+                                           :onConfirm #(rf/dispatch [:jobs/delete (.-job_id record)])}
+                          [antd/button {:type "link" :danger true :size "small"
+                                        :icon (r/as-element [:> DeleteOutlined])}
+                           "删除"]]]
+                        [perm/when-allowed "monitor:job:changeStatus"
+                         [antd/button {:type "link" :size "small"
+                                       :disabled (= (.-status record) "0")
+                                       :onClick #(rf/dispatch [:jobs/change-status (.-job_id record) "0"])}
+                          "恢复"]]
+                        [perm/when-allowed "monitor:job:changeStatus"
+                         [antd/button {:type "link" :size "small"
+                                       :disabled (= (.-status record) "1")
+                                       :onClick #(rf/dispatch [:jobs/change-status (.-job_id record) "1"])}
+                          "暂停"]]
                         [antd/button {:type "link" :size "small"
                                       :icon (r/as-element [:> FileTextOutlined])
                                       :onClick #(on-show-log (.-job_name record))}
                          "日志"]
-                        [antd/popconfirm {:title "确认立即执行一次该任务？"
-                                          :onConfirm #(rf/dispatch [:jobs/run-once (.-job_id record)])}
-                         [antd/button {:type "link" :size "small"
-                                       :icon (r/as-element [:> PlayCircleOutlined])}
-                          "执行"]]]))}])
+                        [perm/when-allowed "monitor:job:changeStatus"
+                         [antd/popconfirm {:title "确认立即执行一次该任务？"
+                                           :onConfirm #(rf/dispatch [:jobs/run-once (.-job_id record)])}
+                          [antd/button {:type "link" :size "small"
+                                        :icon (r/as-element [:> PlayCircleOutlined])}
+                           "执行"]]]]))}])
 
 (defn- job-log-columns []
   (clj->js
@@ -142,7 +148,8 @@
 (defn- job-toolbar [{:keys [job-name job-group setters]}]
   [page-toolbar/page-toolbar
    {:left [page-toolbar/toolbar-left
-           [page-toolbar/toolbar-button {:kind :add
+           [page-toolbar/toolbar-button {:perm "monitor:job:add"
+                                         :kind :add
                                          :icon (r/as-element [:> PlusOutlined])
                                          :on-click #(open-add-form! setters)
                                          :label "新增"}]]

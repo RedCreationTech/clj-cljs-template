@@ -6,6 +6,7 @@
    [com.ruoyi.infra.cron :as cron]
    [com.ruoyi.infra.db :as db]
    [com.ruoyi.infra.scheduler :as scheduler-core]
+   [com.ruoyi.web.controllers.params :as params]
    [ring.util.response :as response]))
 
 (defn- ok
@@ -27,7 +28,7 @@
 (defn list-jobs
   [{:keys [query-fn]} request]
   (ok (query-fn :list-jobs (merge {:job_name nil :job_group nil :status nil}
-                                  (:query-params request)))))
+                                  (params/query request)))))
 
 (defn get-job
   [{:keys [query-fn]} request]

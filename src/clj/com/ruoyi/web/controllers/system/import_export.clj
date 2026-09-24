@@ -11,7 +11,7 @@
    [com.ruoyi.domain.system.post :as post-service]
    [com.ruoyi.domain.system.role :as role-service]
    [com.ruoyi.domain.system.user :as user-service]
-   [com.ruoyi.infra.data-perm :as data-perm]
+   [com.ruoyi.web.controllers.system.user :as user-ctrl]
    [ring.util.response :as response]))
 
 (defn- ok
@@ -76,7 +76,7 @@
                                                                 :password default-password
                                                                 :roles []
                                                                 :posts []
-                                                                :create_by (:user_name identity "")))
+                                                                :create_by (:user-name identity "")))
                               {:user_name (:user_name user) :status "success"})
                             (catch Exception e
                               {:user_name (first row) :status "failed" :msg (.getMessage e)})))
@@ -112,12 +112,8 @@
   "导出用户为 CSV 文件（带数据权限过滤）。"
   [{:keys [user-service]} request]
   (try
-    (let [identity (:identity request)
-          raw (:query-params request)
-          data-perm-filter (data-perm/data-perm-filter identity "default" :alias "u")
-          params (merge {:page-num 1 :page-size 10000}
-                        (dissoc raw "page" "size")
-                        (:params data-perm-filter))
+    (let [raw (:query-params request)
+          params (assoc (user-ctrl/list-params user-service request) :page-num 1 :page-size 10000)
           result (user-service/list-users user-service params)
           selected-ids (set (parse-id-list (get raw "ids")))
           rows (cond->> (:rows result)

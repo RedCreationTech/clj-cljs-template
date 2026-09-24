@@ -2,6 +2,7 @@
   "岗位管理控制器。"
   (:require
    [com.ruoyi.domain.system.post :as post-service]
+   [com.ruoyi.web.controllers.params :as params]
    [ring.util.response :as response]))
 
 (defn- ok ([data] (ok 200 "操作成功" data))
@@ -19,8 +20,7 @@
 (defn list-posts
   "查询岗位列表。"
   [{:keys [post-service]} request]
-  (let [params (:query-params request)]
-    (ok (post-service/list-posts post-service params))))
+  (ok (post-service/list-posts post-service (params/query request))))
 
 (defn get-post
   [{:keys [post-service]} request]

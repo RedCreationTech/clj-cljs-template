@@ -98,6 +98,8 @@ clj-nrepl-eval -p 7000 '(user/migrate)'     # 运行迁移
 ### 接口、存储、文案、颜色
 
 - **接口**：直接 require 领域命名空间，例如 `[com.ruoyi.frontend.api.users :as users-api]`（已没有 `api.cljs` 门面）。所有请求走 `api.transport/request`：它负责带令牌、令牌过半时触发 `:auth/refresh`、收到 401 时触发 `:auth/session-expired`，页面不需要自己处理登录失效。
+- **失败提示统一**：其它失败（403 无权限、5xx、网络断开、HTTP 200 但业务码非 200）由 transport 派发 `:api/error` 统一弹出后端的 `msg`（文案见 `api.errors`），同时复位各模块的 `:loading?`。调用方的 `on-error` 只做收尾，**不要**再弹「网络错误」；后台请求（续期、铃铛轮询）传 `:silent? true`。上传文件用 `t/request` 的 `:body`（`js/FormData`），带令牌下载用 `t/download!`（`<a href>` 带不了令牌）。
+- **按钮权限**：工具栏按钮给 `page-toolbar/toolbar-button` 传 `:perm "system:user:add"`；其它元素（行内按钮、Popconfirm、Dropdown）包一层 `[perm/when-allowed "system:user:edit" ...]`。权限集合来自 `getInfo` 的 `permissions`（sub `:auth/permissions`），admin 为 `*:*:*`。前端只负责显隐，后端路由的 `:perms` 才是拦截。
 - **localStorage**：只通过 `com.ruoyi.frontend.storage`（`get-item` / `set-item!` / `get-json` / `set-json!` / `remove-item!`），键名自动加 `ruoyi_` 前缀、隐私模式下不会抛异常。
 - **界面文案**：用 `(i18n/tr "中文原文")`，英文译文加到 `i18n.cljs` 的 `en-US` 词典；没有译文时显示中文，不会出现键名。带参数：`(i18n/tr "共 {0} 条" total)`。外壳（登录、头部、菜单、Tab、面包屑、通用工具栏、分页）已完成，业务页面按需逐步迁移。
 - **颜色**：内联样式里的背景、文字、边框颜色用 `resources/public/css/app.css` 定义的变量（`var(--app-bg)`、`var(--app-text-regular)`、`var(--app-border-light)` 等），不要写死 `#fff` / `#606266`，否则暗色主题会出现白块或看不清的文字。
@@ -108,7 +110,11 @@ clj-nrepl-eval -p 7000 '(user/migrate)'     # 运行迁移
 - 令牌 claims：`:user-id :user-name :roles :jti :iat :exp`，`:exp` 是 Unix 秒。`:jti` 是会话 ID，对应 `sys_online.session_id`。
 - **会话是否有效以 `sys_online` 为准**：`wrap-jwt-auth` 每次请求更新心跳，更新 0 行即视为未登录；登出、强退、空闲超过 30 分钟（后台清理）都会删掉会话行，令牌立即失效。续期（`/api/auth/refresh`）把会话改挂到新 `jti`，旧令牌 30 秒宽限。
 - 登录：验证码开关（`:auth-config :captcha-enabled?`，prod 默认开）→ 失败限流（`infra.login-guard`，按用户名）→ 校验密码与状态。失败提示统一为“用户名或密码错误”，不要区分“用户不存在”。
-- 需要登录的路由用 `(auth-mw/auth-middleware {:required? true})`；文件上传下载同样要求登录，路径必须经 `infra.files/resolve-in` / `resolve-under` / `store!`，不能直接用请求里的文件名拼路径。
+- **鉴权由路由数据驱动**(`web.middleware.auth`,挂在 `routes/api.clj` 的顶层):`wrap-jwt-auth` 写入 `:identity`,`authorize` 读取路由数据 `:auth? true`(要求登录,可放在路由组上)与 `:perms "模块:资源:动作"`(字符串或集合,满足任一);未登录 401、无权限 403。**不要**再在路由组里挂中间件。权限按请求实时算(`domain.system.permission`),新接口的权限标识要在迁移里登记成按钮菜单(F)并授权给 admin 角色(参考 `20260924000001-add-button-perms`)。
+- **数据权限**:`domain.system.data-scope` 计算当前用户可见范围(角色 `data_scope` 1~5,多角色取并集),列表查询把 `sql-params` 传给 SQL 里固定的 `AND (:scope_all = 1 OR x.dept_id IN (:v*:scope_dept_ids) OR x.user_id = :scope_user_id)`,单条操作用 `allows?` 检查(用户管理控制器是完整示例)。
+- 文件上传下载要求登录,路径必须经 `infra.files/resolve-in` / `resolve-under` / `store!`,不能直接用请求里的文件名拼路径;上传先用 `files/upload-error` 按 `:upload-config`(类型白名单、大小上限)校验。
+- 列表接口读查询参数用 `controllers.params/query`:reitit 的 `:query-params` 是字符串键,直接传给领域层会让筛选条件被静默忽略。
+- 用户记录不带密码哈希(`find-user-by-id` 已去掉 `:password`,列表 SQL 不查);校验密码用 `user-service/password-matches?`。`update-user!` 只改给出的字段,空密码视为不修改。
 - 认证相关配置都在 `system.edn` 的 `:reitit.routes/api :auth-config`，环境变量覆盖见 README。
 
 ## Frontend Ant Design 常见错误
@@ -527,6 +533,9 @@ npm run test:e2e:report                  # 查看 HTML 报告
 - `auth.spec.js` — 登录/登出、密码错误提示、登出后旧令牌失效、会话失效后自动回登录页
 - `navigation.spec.js` — 系统管理、系统监控、系统工具等核心菜单可访问性
 - `post-crud.spec.js` — 岗位管理新增/修改/删除示例
+- `permission.spec.js` — 只读用户看不到增删改按钮、越权接口统一提示;角色自定义数据范围的勾选与回显
+- `search.spec.js` — 角色、岗位、参数列表的搜索条件生效
+- `header.spec.js` — 顶部菜单搜索跳转、通知铃铛未读数
 - `auth-helper.js` — 登录/登出公共辅助
 - `<module>.spec.js` — `bb new-module` 为每个生成的模块写的新增/修改/删除用例
 

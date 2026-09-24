@@ -1,12 +1,12 @@
 (ns com.ruoyi.frontend.pages.layout.header
   "主布局 Header 的组成部分:顶部/侧边导航区、右侧操作区、显示设置面板。"
   (:require
-   ["@ant-design/icons" :refer [BellOutlined ExpandOutlined FontSizeOutlined GithubOutlined
-                                GlobalOutlined MenuFoldOutlined MenuUnfoldOutlined QuestionCircleOutlined
-                                SearchOutlined]]
-   ["antd" :refer [Avatar Badge Button Dropdown Menu Popover Segmented]]
+   ["@ant-design/icons" :refer [ExpandOutlined FontSizeOutlined GithubOutlined
+                                GlobalOutlined MenuFoldOutlined MenuUnfoldOutlined QuestionCircleOutlined]]
+   ["antd" :refer [Avatar Button Dropdown Menu Popover Segmented]]
    [com.ruoyi.frontend.config :as config]
    [com.ruoyi.frontend.i18n :as i18n]
+   [com.ruoyi.frontend.pages.layout.header-tools :as tools]
    [re-frame.core :as rf]
    [reagent.core :as r]))
 
@@ -103,18 +103,16 @@
                :style {:fontSize 18 :color "var(--app-text-regular)"}
                :icon (r/as-element [:> FontSizeOutlined])}]])
 
-;; Header 右侧操作区:搜索/GitHub/文档/全屏/显示设置/通知/头像菜单。
+;; Header 右侧操作区:菜单搜索/GitHub/文档/全屏/显示设置/语言/通知/头像菜单。
 (defn header-actions
-  [{:keys [user set-settings-open!]}]
+  [{:keys [user menus set-settings-open!]}]
   (let [icon-btn {:type "text" :style {:fontSize 18 :color "var(--app-text-regular)"}}]
     [:div {:style {:display "flex" :alignItems "center" :gap 6}}
-     ;; 搜索
-     [:> Button (assoc icon-btn :icon (r/as-element [:> SearchOutlined]))]
-     ;; GitHub
-     [:> Button (assoc icon-btn :icon (r/as-element [:> GithubOutlined])
+     [tools/menu-search menus]
+     [:> Button (assoc icon-btn :title "GitHub" :icon (r/as-element [:> GithubOutlined])
                        :onClick #(js/window.open config/repo-url "_blank"))]
-     ;; 文档
-     [:> Button (assoc icon-btn :icon (r/as-element [:> QuestionCircleOutlined]))]
+     [:> Button (assoc icon-btn :title (i18n/tr "文档") :icon (r/as-element [:> QuestionCircleOutlined])
+                       :onClick #(js/window.open config/docs-url "_blank"))]
      ;; 全屏
      [:> Button (assoc icon-btn :icon (r/as-element [:> ExpandOutlined])
                        :onClick #(let [doc js/document.documentElement]
@@ -123,9 +121,7 @@
                                      (.requestFullscreen doc))))]
      [display-settings-button]
      [language-switcher]
-     ;; 通知
-     [:> Badge {:count 3 :size "small"}
-      [:> Button (assoc icon-btn :icon (r/as-element [:> BellOutlined]))]]
+     [tools/notice-bell]
      ;; 头像 + 下拉菜单
      [:> Dropdown {:menu {:items (clj->js [{:key "profile" :label (i18n/tr "个人中心")}
                                            {:key "layout-settings" :label (i18n/tr "布局设置")}

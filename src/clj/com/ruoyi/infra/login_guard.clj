@@ -53,6 +53,11 @@
   (swap! state dissoc (user-key username))
   nil)
 
+(defn unlock!
+  "管理员手动解锁(登录日志页的「解锁」按钮):清除该用户名的失败记录与锁定。"
+  [username]
+  (record-success! username))
+
 (defn reset-all!
   "清空全部记录(测试用)。"
   []

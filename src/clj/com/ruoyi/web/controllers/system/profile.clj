@@ -1,10 +1,10 @@
 (ns com.ruoyi.web.controllers.system.profile
   "个人中心控制器。"
   (:require
-   [clojure.java.io]
    [clojure.string :as str]
    [com.ruoyi.domain.system.user :as user-service]
-   [com.ruoyi.infra.security :as security]
+   [com.ruoyi.infra.files :as files]
+   [com.ruoyi.web.controllers.common :as common]
    [ring.util.response :as response]))
 
 (defn- ok
@@ -26,41 +26,37 @@
       (ok (select-keys user [:user_id :user_name :nick_name :avatar :email :phonenumber :sex]))
       (fail "用户不存在"))))
 
+(def ^:private editable-fields
+  "个人中心只能改这些字段;状态、部门、密码等不能通过这里修改(改密码走 /password,要核对旧密码)。"
+  [:nick_name :phonenumber :email :sex])
+
 (defn update-profile
-  "更新当前用户个人信息。"
+  "更新当前用户个人信息(昵称、手机、邮箱、性别)。"
   [{:keys [user-service]} request]
   (try
     (let [identity (:identity request)
           user-id (:user-id identity)
-          params (assoc (:body-params request) :user-id user-id)]
+          params (assoc (select-keys (:body-params request) editable-fields)
+                        :user-id user-id :update_by (:user-name identity ""))]
       (user-service/update-user! user-service params)
       (ok "更新成功"))
     (catch Exception e
       (fail (.getMessage e)))))
 
-(defn- save-avatar!
-  "保存上传的头像文件。"
-  [upload]
-  (let [filename (str (System/currentTimeMillis) "_" (:filename upload))
-        upload-dir (or (System/getProperty "app.upload.dir") "uploads/avatar")
-        file (java.io.File. (str upload-dir "/" filename))]
-    (.mkdirs (.getParentFile file))
-    (clojure.java.io/copy (:tempfile upload) file)
-    (str "/" upload-dir "/" filename)))
-
 (defn upload-avatar
-  "上传头像。"
-  [{:keys [user-service]} request]
-  (try
-    (let [identity (:identity request)
-          user-id (:user-id identity)
-          {:keys [avatarfile]} (:params-params request)
-          avatar-url (when avatarfile (save-avatar! avatarfile))]
-      (when avatar-url
-        (user-service/update-user! user-service {:user-id user-id :avatar avatar-url}))
-      (ok {:avatar avatar-url}))
-    (catch Exception e
-      (fail (.getMessage e)))))
+  "上传头像:只接受图片(见 infra.files/image-policy),保存到 common/avatar-dir,
+   通过公开接口 /api/common/avatar/<文件名> 访问。"
+  [{:keys [user-service upload-config]} request]
+  (let [{:keys [tempfile filename] :as file} (get-in request [:params :avatarfile])]
+    (if-let [err (files/upload-error (files/image-policy upload-config) file)]
+      (ok 400 err nil)
+      (try
+        (let [target (files/store! common/avatar-dir tempfile (str (System/currentTimeMillis) "_" filename))
+              url (str "/api/common/avatar/" (.getName target))]
+          (user-service/update-user! user-service {:user-id (get-in request [:identity :user-id]) :avatar url})
+          (ok {:avatar url}))
+        (catch Exception e
+          (fail (.getMessage e)))))))
 
 (defn change-password
   "修改当前用户密码。"
@@ -69,13 +65,10 @@
     (let [identity (:identity request)
           user-id (:user-id identity)
           {:keys [old_password new_password]} (:body-params request)]
-      (if (or (str/blank? old_password) (str/blank? new_password))
-        (fail "旧密码和新密码不能为空")
-        (let [user (user-service/find-user-by-id user-service user-id)]
-          (if (security/verify-password old_password (:password user))
-            (do
-              (user-service/update-user! user-service {:user-id user-id :password new_password})
-              (ok "密码修改成功"))
-            (fail "旧密码错误")))))
+      (cond
+        (or (str/blank? old_password) (str/blank? new_password)) (fail "旧密码和新密码不能为空")
+        (not (user-service/password-matches? user-service user-id old_password)) (fail "旧密码错误")
+        :else (do (user-service/update-user! user-service {:user-id user-id :password new_password})
+                  (ok "密码修改成功"))))
     (catch Exception e
       (fail (.getMessage e)))))

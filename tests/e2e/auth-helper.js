@@ -1,5 +1,5 @@
 // 登录辅助函数
-// 后端在 uuid 存在但 captcha 为空时跳过验证码校验，因此直接提交即可登录。
+// 开发/测试环境默认关闭验证码(CAPTCHA_ENABLED),登录页不显示验证码输入框,直接提交即可。
 
 const LOGIN_URL = '/';
 
@@ -17,7 +17,6 @@ async function login(page, username = 'admin', password = 'admin123') {
 
   await page.getByPlaceholder('用户名').fill(username);
   await page.getByPlaceholder('密码').fill(password);
-  // 验证码留空即可通过后端校验
 
   await page.getByRole('button', { name: /登\s*录/ }).click();
 

@@ -74,11 +74,11 @@
 
 (rf/reg-fx :api/create-dept
            (fn [params]
-             (depts-api/create-dept params (fn [r] (when (= 200 (:code r)) (antd/success! "创建成功") (rf/dispatch [:depts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+             (depts-api/create-dept params (fn [r] (when (= 200 (:code r)) (antd/success! "创建成功") (rf/dispatch [:depts/fetch {}]))) (fn [_]))))
 
 (rf/reg-fx :api/update-dept
            (fn [[id params]]
-             (depts-api/update-dept id params (fn [r] (when (= 200 (:code r)) (antd/success! "更新成功") (rf/dispatch [:depts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+             (depts-api/update-dept id params (fn [r] (when (= 200 (:code r)) (antd/success! "更新成功") (rf/dispatch [:depts/fetch {}]))) (fn [_]))))
 
 (rf/reg-event-fx :depts/delete
                  (fn [_ [_ id]] {:api/delete-dept id}))
@@ -89,7 +89,7 @@
 
 (rf/reg-fx :api/delete-dept
            (fn [id]
-             (depts-api/delete-dept id (fn [r] (when (= 200 (:code r)) (antd/success! "删除成功") (rf/dispatch [:depts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+             (depts-api/delete-dept id (fn [r] (when (= 200 (:code r)) (antd/success! "删除成功") (rf/dispatch [:depts/fetch {}]))) (fn [_]))))
 
 (rf/reg-fx :api/change-dept-status
            (fn [[id status]]
@@ -98,4 +98,4 @@
                                              (when (= 200 (:code result))
                                                (antd/success! "状态修改成功")
                                                (rf/dispatch [:depts/fetch {}])))
-                                           (fn [_] (antd/error! "网络错误")))))
+                                           (fn [_]))))

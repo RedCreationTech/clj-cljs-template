@@ -5,6 +5,7 @@
                                 DragOutlined EyeOutlined FolderOpenOutlined SaveOutlined]]
    [clojure.string :as str]
    [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]))
 
@@ -229,10 +230,11 @@
                [antd/button {:type "primary" :size "small"
                              :onClick #(rf/dispatch [:form-template/load t])}
                 "加载"]
-               [antd/popconfirm {:title "确认删除？"
-                                 :onConfirm #(rf/dispatch [:form-template/delete (:id t)])}
-                [antd/button {:type "text" :danger true :size "small"}
-                 "删除"]]]]])]))]))
+               [perm/when-allowed "tool:build:remove"
+                [antd/popconfirm {:title "确认删除？"
+                                  :onConfirm #(rf/dispatch [:form-template/delete (:id t)])}
+                 [antd/button {:type "text" :danger true :size "small"}
+                  "删除"]]]]]])]))]))
 
 ;; ─── 主页面 ──────────────────────────────────────────────────────
 
@@ -250,9 +252,10 @@
                        :onClick #(rf/dispatch [:fb/toggle-code])
                        :disabled (empty? items)}
           "生成代码"]
-         [antd/button {:icon (r/as-element [:> SaveOutlined])
-                       :onClick #(rf/dispatch [:form-template/open-save-modal])}
-          "保存模板"]
+         [perm/when-allowed ["tool:build:add" "tool:build:edit"]
+          [antd/button {:icon (r/as-element [:> SaveOutlined])
+                        :onClick #(rf/dispatch [:form-template/open-save-modal])}
+           "保存模板"]]
          [antd/button {:icon (r/as-element [:> FolderOpenOutlined])
                        :onClick #(rf/dispatch [:form-template/open-load-drawer-and-fetch])}
           "加载模板"]

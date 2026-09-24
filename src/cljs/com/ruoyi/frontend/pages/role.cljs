@@ -7,8 +7,8 @@
    [com.ruoyi.frontend.api.impexp :as impexp-api]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
-   [re-frame.db]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
 
@@ -79,7 +79,7 @@
         [antd/select-option {:value "1"} "停用"]]]
       [page-search/search-actions
        [page-toolbar/search-button {:icon (r/as-element [:> SearchOutlined])
-                                    :on-click #(rf/dispatch [:roles/fetch (:roles/query-params @re-frame.db/app-db)])}]
+                                    :on-click #(rf/dispatch [:roles/search])}]
        [page-toolbar/reset-button {:icon (r/as-element [:> ReloadOutlined])
                                    :on-click #(do (rf/dispatch [:roles/reset-query])
                                                   (rf/dispatch [:roles/fetch {}]))}]]]]))
@@ -89,26 +89,20 @@
 (defn- toolbar []
   [page-toolbar/page-toolbar
    {:left [page-toolbar/toolbar-left
-           [page-toolbar/toolbar-button {:kind :add
+           [page-toolbar/toolbar-button {:perm "system:role:add"
+                                         :kind :add
                                          :icon (r/as-element [:> PlusOutlined])
                                          :on-click #(rf/dispatch [:roles/open-modal])
                                          :label "新增"}]
-           [page-toolbar/toolbar-button {:kind :edit
-                                         :icon (r/as-element [:> EditOutlined])
-                                         :disabled? true
-                                         :label "修改"}]
-           [page-toolbar/toolbar-button {:kind :delete
-                                         :icon (r/as-element [:> DeleteOutlined])
-                                         :disabled? true
-                                         :label "删除"}]
-           [page-toolbar/toolbar-button {:kind :export
+           [page-toolbar/toolbar-button {:perm "system:role:export"
+                                         :kind :export
                                          :icon (r/as-element [:> DownloadOutlined])
                                          :on-click #(impexp-api/export-roles {})
                                          :label "导出"}]]
     :right [page-toolbar/toolbar-right
             [page-toolbar/round-tool-button {:title "搜索"
                                              :icon (r/as-element [:> SearchOutlined])
-                                             :on-click #(rf/dispatch [:roles/fetch (:roles/query-params @re-frame.db/app-db)])}]
+                                             :on-click #(rf/dispatch [:roles/search])}]
             [page-toolbar/round-tool-button {:title "刷新"
                                              :icon (r/as-element [:> ReloadOutlined])
                                              :on-click #(rf/dispatch [:roles/fetch {}])}]]}])
@@ -135,26 +129,29 @@
             :render (fn [_ ^js record]
                       (r/as-element
                        [:div {:className "ruoyi-menu-actions"}
-                        [antd/button {:type "link" :size "small"
-                                      :icon (r/as-element [:> EditOutlined])
-                                      :on-click #(rf/dispatch [:roles/edit (js->clj record :keywordize-keys true)])}
-                         "修改"]
-                        [antd/popconfirm {:title "确认删除该角色？"
-                                          :onConfirm #(rf/dispatch [:roles/delete (.-role_id record)])}
-                         [antd/button {:type "link" :danger true :size "small"
-                                       :icon (r/as-element [:> DeleteOutlined])}
-                          "删除"]]
-                        [antd/dropdown {:menu {:items (clj->js [{:key "data" :label "数据权限"}
-                                                                {:key "users" :label "分配用户"}
-                                                                {:key "perm" :label "分配权限"}])
-                                               :onClick (fn [e]
-                                                          (case (.-key e)
-                                                            "data" (rf/dispatch [:roles/open-data-scope (js->clj record :keywordize-keys true)])
-                                                            "users" (rf/dispatch [:roles/open-user-alloc (js->clj record :keywordize-keys true)])
-                                                            "perm" (rf/dispatch [:roles/open-permission (js->clj record :keywordize-keys true)])
-                                                            nil))}}
-                         [antd/button {:type "link" :size "small"}
-                          "更多"]]]))}])
+                        [perm/when-allowed "system:role:edit"
+                         [antd/button {:type "link" :size "small"
+                                       :icon (r/as-element [:> EditOutlined])
+                                       :on-click #(rf/dispatch [:roles/edit (js->clj record :keywordize-keys true)])}
+                          "修改"]]
+                        [perm/when-allowed "system:role:remove"
+                         [antd/popconfirm {:title "确认删除该角色？"
+                                           :onConfirm #(rf/dispatch [:roles/delete (.-role_id record)])}
+                          [antd/button {:type "link" :danger true :size "small"
+                                        :icon (r/as-element [:> DeleteOutlined])}
+                           "删除"]]]
+                        [perm/when-allowed "system:role:edit"
+                         [antd/dropdown {:menu {:items (clj->js [{:key "data" :label "数据权限"}
+                                                                 {:key "users" :label "分配用户"}
+                                                                 {:key "perm" :label "分配权限"}])
+                                                :onClick (fn [e]
+                                                           (case (.-key e)
+                                                             "data" (rf/dispatch [:roles/open-data-scope (js->clj record :keywordize-keys true)])
+                                                             "users" (rf/dispatch [:roles/open-user-alloc (js->clj record :keywordize-keys true)])
+                                                             "perm" (rf/dispatch [:roles/open-permission (js->clj record :keywordize-keys true)])
+                                                             nil))}}
+                          [antd/button {:type "link" :size "small"}
+                           "更多"]]]]))}])
 
 ;; ─── 编辑弹窗 ──────────────────────────────────────────────────────
 
@@ -239,12 +236,13 @@
      [antd/radio-group {:value data-scope
                         :style {:marginBottom 16}
                         :on-change #(rf/dispatch [:roles/set-data-scope (.. % -target -value)])}
+      ;; 取值与后端 domain.system.data-scope 一致(若依约定)
       [antd/radio {:value "1"} "全部数据权限"]
-      [antd/radio {:value "2"} "本部门数据"]
-      [antd/radio {:value "3"} "本部门及以下数据"]
-      [antd/radio {:value "4"} "仅本人数据"]
-      [antd/radio {:value "5"} "自定义数据"]]
-     (when (= data-scope "5")
+      [antd/radio {:value "2"} "自定义数据"]
+      [antd/radio {:value "3"} "本部门数据"]
+      [antd/radio {:value "4"} "本部门及以下数据"]
+      [antd/radio {:value "5"} "仅本人数据"]]
+     (when (= data-scope "2")
        (if (seq dept-tree)
          [antd/tree {:checkable true
                      :defaultExpandAll true

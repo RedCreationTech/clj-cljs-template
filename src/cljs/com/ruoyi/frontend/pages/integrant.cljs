@@ -3,6 +3,7 @@
   (:require
    ["@ant-design/icons" :refer [ReloadOutlined]]
    [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -229,10 +230,11 @@
        "-")]
     (when is-fn?
       [antd/descriptions-item {:label "输入/输出采集"}
-       [antd/switch {:checked (boolean (:active trace-data))
-                     :checkedChildren "开启"
-                     :unCheckedChildren "关闭"
-                     :onChange #(rf/dispatch [:integrant/toggle-trace selected %])}]])
+       [perm/when-allowed "monitor:integrant:trace"
+        [antd/switch {:checked (boolean (:active trace-data))
+                      :checkedChildren "开启"
+                      :unCheckedChildren "关闭"
+                      :onChange #(rf/dispatch [:integrant/toggle-trace selected %])}]]])
     [antd/descriptions-item {:label "运行时摘要"}
      (if sys
        [:pre {:style {:margin 0 :fontSize 12 :whiteSpace "pre-wrap"}}

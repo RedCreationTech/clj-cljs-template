@@ -3,6 +3,7 @@
   (:require
    [clojure.test :refer [deftest is testing]]
    [com.ruoyi.infra.security :as security]
+   [com.ruoyi.web.controllers.common :as common]
    [com.ruoyi.web.controllers.system.profile :as profile])
   (:import
    [java.nio.file Files]
@@ -46,43 +47,56 @@
       (is (= 500 (get-in response [:body :code]))))))
 
 (deftest test-update-profile
-  (testing "更新当前用户个人信息"
-    (let [user-service (mock-user-service {:password (security/hash-password "admin123")})
-          request {:identity {:user-id 1}
-                   :body-params {:nick_name "新昵称" :email "new@ruoyi.vip"}}
-          response (profile/update-profile {:user-service user-service} request)]
-      (is (map? response))
-      (is (= 200 (get-in response [:body :code]))))))
+  (testing "只更新昵称/手机/邮箱/性别;状态、部门、密码等字段被忽略"
+    (let [updates (atom [])
+          user-service {:query-fn (fn [q p]
+                                    (when (= q :update-user!) (swap! updates conj p))
+                                    nil)}
+          request {:identity {:user-id 1 :user-name "admin"}
+                   :body-params {:nick_name "新昵称" :email "new@ruoyi.vip"
+                                 :status "1" :dept_id 9 :password "hack" :user_id 2}}
+          response (profile/update-profile {:user-service user-service} request)
+          p (first @updates)]
+      (is (= 200 (get-in response [:body :code])))
+      (is (= "新昵称" (:nick_name p)))
+      (is (= 1 (:user_id p)) "只能改自己")
+      (is (nil? (:status p)))
+      (is (nil? (:dept_id p)))
+      (is (nil? (:password p)) "改密码必须走 /password 并核对旧密码"))))
+
+(defn- with-avatar-dir [f]
+  (let [dir (.toFile (Files/createTempDirectory "avatar-test" (make-array FileAttribute 0)))]
+    (try
+      (with-redefs [common/avatar-dir (str dir "/")]
+        (f dir))
+      (finally
+        (doseq [x (.listFiles dir)] (.delete x))
+        (.delete dir)))))
+
+(defn- upload [filename content]
+  (let [tmp (.toFile (Files/createTempFile "upload" ".bin" (make-array FileAttribute 0)))]
+    (spit tmp content)
+    {:filename filename :tempfile tmp :size (.length tmp)}))
 
 (deftest test-upload-avatar
-  (testing "上传头像"
-    (let [temp-dir (Files/createTempDirectory "avatar-test" (make-array FileAttribute 0))
-          temp-file (Files/createTempFile temp-dir "avatar" ".png" (make-array FileAttribute 0))
-          _ (spit (.toFile temp-file) "fake image content")
-          _ (System/setProperty "app.upload.dir" (str temp-dir))
-          user-service (mock-user-service {:password (security/hash-password "admin123")})
-          request {:identity {:user-id 1}
-                   :params-params {:avatarfile {:filename "test.png"
-                                                :tempfile (.toFile temp-file)}}}
-          response (profile/upload-avatar {:user-service user-service} request)]
-      (try
-        (is (map? response))
-        (is (= 200 (get-in response [:body :code])))
-        (is (some? (get-in response [:body :data :avatar])))
-        (finally
-          (doseq [f (.listFiles (.toFile temp-dir))]
-            (.delete f))
-          (Files/deleteIfExists temp-dir)
-          (System/clearProperty "app.upload.dir"))))))
-
-(deftest test-upload-avatar-without-file
-  (testing "未选择头像文件"
-    (let [user-service (mock-user-service {:password (security/hash-password "admin123")})
-          request {:identity {:user-id 1}
-                   :params-params {}}
-          response (profile/upload-avatar {:user-service user-service} request)]
-      (is (map? response))
-      (is (= 200 (get-in response [:body :code]))))))
+  (with-avatar-dir
+    (fn [dir]
+      (let [user-service (mock-user-service {:password (security/hash-password "admin123")})
+            call #(profile/upload-avatar {:user-service user-service} {:identity {:user-id 1} :params {:avatarfile %}})]
+        (testing "图片保存到头像目录,返回公开访问地址"
+          (let [response (call (upload "me.png" "fake image content"))
+                url (get-in response [:body :data :avatar])]
+            (is (= 200 (get-in response [:body :code])))
+            (is (re-matches #"/api/common/avatar/\d+_me\.png" url))
+            (is (= 1 (count (.listFiles dir))))))
+        (testing "不是图片:拒绝"
+          (let [response (call (upload "run.exe" "MZ"))]
+            (is (= 400 (get-in response [:body :code])))
+            (is (= "不支持的文件类型:exe" (get-in response [:body :msg])))))
+        (testing "超过 2MB:拒绝"
+          (is (= 400 (get-in (call (assoc (upload "big.png" "x") :size (* 3 1024 1024))) [:body :code]))))
+        (testing "未选择文件"
+          (is (= "请选择要上传的文件" (get-in (call nil) [:body :msg]))))))))
 
 (deftest test-change-password
   (testing "修改当前用户密码成功"

@@ -8,6 +8,7 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -170,20 +171,23 @@
   (let [selected-id-string #(str/join "," selected-ids)]
     [page-toolbar/page-toolbar
      {:left [page-toolbar/toolbar-left
-             [antd/popconfirm {:title "确认删除选中的操作日志？"
-                               :onConfirm #(when (seq selected-ids)
-                                             (rf/dispatch [:oper-logs/delete (selected-id-string)])
-                                             (set-selected-ids! []))}
-              [page-toolbar/toolbar-button {:kind :delete
-                                            :icon (r/as-element [:> DeleteOutlined])
-                                            :disabled? (empty? selected-ids)
-                                            :label "删除"}]]
-             [antd/popconfirm {:title "确认清空所有操作日志？"
-                               :onConfirm #(rf/dispatch [:oper-logs/clear])}
-              [page-toolbar/toolbar-button {:kind :delete
-                                            :icon (r/as-element [:> DeleteOutlined])
-                                            :label "清空"}]]
-             [page-toolbar/toolbar-button {:kind :export
+             [perm/when-allowed "monitor:operlog:remove"
+              [antd/popconfirm {:title "确认删除选中的操作日志？"
+                                :onConfirm #(when (seq selected-ids)
+                                              (rf/dispatch [:oper-logs/delete (selected-id-string)])
+                                              (set-selected-ids! []))}
+               [page-toolbar/toolbar-button {:kind :delete
+                                             :icon (r/as-element [:> DeleteOutlined])
+                                             :disabled? (empty? selected-ids)
+                                             :label "删除"}]]]
+             [perm/when-allowed "monitor:operlog:remove"
+              [antd/popconfirm {:title "确认清空所有操作日志？"
+                                :onConfirm #(rf/dispatch [:oper-logs/clear])}
+               [page-toolbar/toolbar-button {:kind :delete
+                                             :icon (r/as-element [:> DeleteOutlined])
+                                             :label "清空"}]]]
+             [page-toolbar/toolbar-button {:perm "monitor:operlog:export"
+                                           :kind :export
                                            :icon (r/as-element [:> DownloadOutlined])
                                            :on-click #(rf/dispatch [:oper-logs/export])
                                            :label "导出"}]]

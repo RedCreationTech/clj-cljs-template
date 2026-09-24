@@ -45,70 +45,57 @@
             response (handler {})]
         (is (nil? (:identity response)))))))
 
-(deftest test-require-auth-authorized
-  (testing "已认证请求放行"
-    (let [handler (auth/require-auth (fn [_req] {:ok true}))
-          response (handler {:identity {:user-id 1}})]
-      (is (= {:ok true} response)))))
+;; ── authorize:按路由数据鉴权 ─────────────────────────────────────
 
-(deftest test-require-auth-unauthorized
-  (testing "未认证请求返回 401"
-    (let [handler (auth/require-auth (fn [_req] {:ok true}))
-          response (handler {})]
-      (is (= 401 (:status response)))
-      (is (= {:code 401 :msg "未登录或令牌已过期"} (:body response)))
-      (is (= "application/json" (get-in response [:headers "Content-Type"]))))))
+(defn- query-fn-with
+  "模拟 query-fn:按用户返回 :list-user-role-perms 的行。"
+  [rows-by-user]
+  (fn [query params]
+    (is (= :list-user-role-perms query))
+    (get rows-by-user (:user_id params) [])))
 
-(deftest test-require-perms-allowed
-  (testing "拥有任一所需权限时放行"
-    (let [handler ((auth/require-perms ["system:user:list" "system:user:add"])
-                   (fn [_req] {:ok true}))
-          response (handler {:identity {:perms #{"system:user:add"}}})]
-      (is (= {:ok true} response)))))
+(def ^:private qf
+  (query-fn-with {1 [{:role_key "admin" :perms nil}]
+                  2 [{:role_key "viewer" :perms "system:user:list"}
+                     {:role_key "viewer" :perms "system:user:query,system:user:export"}]}))
 
-(deftest test-require-perms-denied
-  (testing "无所需权限时返回 403"
-    (let [handler ((auth/require-perms ["system:user:list"])
-                   (fn [_req] {:ok true}))
-          response (handler {:identity {:perms #{"system:user:add"}}})]
-      (is (= 403 (:status response)))
-      (is (= {:code 403 :msg "没有操作权限"} (:body response)))
-      (is (= "application/json" (get-in response [:headers "Content-Type"]))))))
+(defn- request-as [user-id]
+  (cond-> {:components {:query-fn qf}}
+    user-id (assoc :identity {:user-id user-id})))
 
-(deftest test-require-perms-no-identity
-  (testing "无身份时返回 403"
-    (let [handler ((auth/require-perms ["system:user:list"])
-                   (fn [_req] {:ok true}))
-          response (handler {})]
-      (is (= 403 (:status response)))
-      (is (= {:code 403 :msg "没有操作权限"} (:body response))))))
+(defn- compile-authorize
+  "按 reitit 的方式编译 authorize:返回包装后的 handler,未声明规则时返回 nil。"
+  [data]
+  (when-let [mw ((:compile auth/authorize) data {})]
+    (mw (fn [_] {:status 200 :body :ok}))))
 
-(deftest test-require-perms-single-string
-  (testing "单个字符串权限也正常工作"
-    (let [handler ((auth/require-perms "system:user:list")
-                   (fn [_req] {:ok true}))
-          response (handler {:identity {:perms #{"system:user:list"}}})]
-      (is (= {:ok true} response)))))
+(deftest test-authorize-skips-routes-without-rules
+  (testing "没有 :auth? / :perms 的路由不包装(匿名接口零开销)"
+    (is (nil? (compile-authorize {})))
+    (is (nil? (compile-authorize {:summary "登录"})))))
 
-(deftest test-auth-middleware-combined
-  (testing "组合中间件：JWT + 认证 + 权限"
-    (let [calls (atom [])]
-      (with-redefs [security/extract-token (fn [_] "token")
-                    security/parse-token (fn [_] {:user-id 1 :jti "s-1" :perms ["system:user:list"]})
-                    online/active? (fn [jti] (swap! calls conj [:active jti]) true)]
-        (let [middleware (auth/auth-middleware {:required? true
-                                                :perms ["system:user:list"]})
-              handler (middleware (fn [req] {:identity (:identity req)}))
-              response (handler {})]
-          (is (= {:user-id 1 :jti "s-1" :perms ["system:user:list"]} (:identity response)))
-          (is (= [[:active "s-1"]] @calls)))))))
+(deftest test-authorize-requires-login
+  (let [h (compile-authorize {:auth? true})]
+    (testing "未登录 401"
+      (let [response (h (request-as nil))]
+        (is (= 401 (:status response)))
+        (is (= {:code 401 :msg "未登录或令牌已过期"} (:body response)))
+        (is (= "application/json" (get-in response [:headers "Content-Type"])))))
+    (testing "登录即可,不查权限"
+      (is (= 200 (:status (h {:identity {:user-id 9}})))))))
 
-(deftest test-auth-middleware-optional-auth
-  (testing "组合中间件：不强制认证时未登录也能访问"
-    (with-redefs [security/extract-token (fn [_] nil)
-                  security/parse-token (fn [_] nil)
-                  online/active? (fn [_] false)]
-      (let [middleware (auth/auth-middleware {})
-            handler (middleware (fn [_req] {:ok true}))
-            response (handler {})]
-        (is (= {:ok true} response))))))
+(deftest test-authorize-checks-perms
+  (let [h (compile-authorize {:auth? true :perms "system:user:add"})]
+    (testing "缺少权限 403"
+      (let [response (h (request-as 2))]
+        (is (= 403 (:status response)))
+        (is (= {:code 403 :msg "没有操作权限"} (:body response)))))
+    (testing "admin 角色拥有全部权限"
+      (is (= 200 (:status (h (request-as 1))))))
+    (testing "声明了 :perms 但未登录:先返回 401"
+      (is (= 401 (:status (h (request-as nil))))))))
+
+(deftest test-authorize-any-of
+  (testing ":perms 为集合时满足任一即可;一个菜单的 perms 可用逗号写多个"
+    (is (= 200 (:status ((compile-authorize {:perms ["system:role:list" "system:user:export"]}) (request-as 2)))))
+    (is (= 403 (:status ((compile-authorize {:perms ["system:role:list" "system:user:add"]}) (request-as 2)))))))

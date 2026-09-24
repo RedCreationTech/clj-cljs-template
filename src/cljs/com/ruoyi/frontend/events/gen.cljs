@@ -43,7 +43,7 @@
                    {:db db :api/gen-generate tables}))
 
 (rf/reg-fx :api/gen-generate
-           (fn [tables] (gen-api/gen-generate tables (fn [r] (when (= 200 (:code r)) (antd/success! "代码生成成功"))) (fn [_] (antd/error! "生成失败")))))
+           (fn [tables] (gen-api/gen-generate tables (fn [r] (when (= 200 (:code r)) (antd/success! "代码生成成功"))) (fn [_]))))
 
 (rf/reg-event-db :gen/open-config
                  (fn [db _]
@@ -76,7 +76,7 @@
                                  (fn [r]
                                    (when (= 200 (:code r))
                                      (antd/success! (str "部署成功: " (get-in r [:data :message])))))
-                                 (fn [_] (antd/error! "部署失败")))))
+                                 (fn [_]))))
 
 (rf/reg-event-db :file/set-list
                  (fn [db [_ data]]
@@ -96,7 +96,7 @@
            (fn [file]
              (file-api/file-upload file
                                    (fn [r] (when (= 200 (:code r)) (antd/success! "上传成功") (rf/dispatch [:file/fetch])))
-                                   (fn [_] (antd/error! "上传失败")))))
+                                   (fn [_]))))
 
 (rf/reg-event-fx :file/download
                  (fn [_ [_ filename]]
@@ -109,4 +109,4 @@
            (fn [filename]
              (file-api/file-delete filename
                                    (fn [r] (when (= 200 (:code r)) (antd/success! "删除成功") (rf/dispatch [:file/fetch])))
-                                   (fn [_] (antd/error! "删除失败")))))
+                                   (fn [_]))))

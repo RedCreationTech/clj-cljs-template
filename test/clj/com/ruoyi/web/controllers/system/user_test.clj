@@ -5,7 +5,7 @@
    [com.ruoyi.web.controllers.system.user :as user]))
 
 (def admin-identity
-  {:user-id 1 :user-name "admin" :roles [{:role-key "admin" :data-scope 1}]})
+  {:user-id 1 :user-name "admin" :roles [1]})
 
 (def mock-user-service
   {:query-fn (fn [q _p]
@@ -28,6 +28,19 @@
                  :insert-user-post! nil
                  :delete-user-roles! nil
                  :delete-user-posts! nil
+                 ;; 数据范围:admin 角色不过滤
+                 :list-user-data-scopes [{:role_id 1 :role_key "admin" :data_scope "1"}]
+                 nil))})
+
+(defn- scoped-service
+  "只有「本部门」数据范围(部门 2)的用户;目标用户在部门 1。"
+  []
+  {:query-fn (fn [q p]
+               (case q
+                 :list-user-data-scopes [{:role_id 2 :role_key "dept" :data_scope "3"}]
+                 :find-user-by-id (if (= 9 (:user_id p))
+                                    {:user_id 9 :user_name "me" :dept_id 2}
+                                    {:user_id 1 :user_name "admin" :dept_id 1})
                  nil))})
 
 (deftest test-list-users
@@ -69,8 +82,21 @@
     (let [request {:body-params {:nick_name "测试" :password "123456"}
                    :identity admin-identity}
           response (user/create-user {:user-service mock-user-service} request)]
-      (is (map? response))
-      (is (= 200 (:status response))))))
+      (is (= 200 (:status response)))
+      (is (= "用户名不能为空" (-> response :body :msg))))))
+
+(deftest test-data-scope-guards
+  (let [request {:path-params {:id "1"} :identity {:user-id 9 :user-name "me"}}]
+    (testing "范围外的用户:详情、修改、删除、重置密码都返回 403"
+      (doseq [f [user/get-user user/update-user user/delete-user user/reset-password user/auth-role]]
+        (is (= 403 (:status (f {:user-service (scoped-service)} request))))))
+    (testing "新增到范围外的部门返回 403"
+      (is (= 403 (:status (user/create-user {:user-service (scoped-service)}
+                                            {:identity {:user-id 9}
+                                             :body-params {:user_name "x" :nick_name "x" :password "x" :dept_id 1}})))))
+    (testing "范围内(本人)可以查看"
+      (is (= 200 (:status (user/get-user {:user-service (scoped-service)}
+                                         {:path-params {:id "9"} :identity {:user-id 9}})))))))
 
 (deftest test-update-user
   (testing "更新用户"
@@ -113,22 +139,6 @@
       (is (map? response))
       (is (= 200 (:status response))))))
 
-(deftest test-import-users
-  (testing "导入用户"
-    (let [request {:body-params {:rows [{:user_name "import1" :nick_name "导入1"}
-                                        {:user_name "import2" :nick_name "导入2"}]}
-                   :identity admin-identity}
-          response (user/import-users {:user-service mock-user-service} request)]
-      (is (map? response))
-      (is (= 200 (:status response))))))
-
-(deftest test-export-users
-  (testing "导出用户CSV"
-    (let [request {:query-params {} :identity admin-identity}
-          response (user/export-users {:user-service mock-user-service} request)]
-      (is (map? response))
-      (is (= 200 (:status response))))))
-
 (deftest test-auth-role
   (testing "获取用户角色列表"
     (let [request {:path-params {:id "1"} :identity admin-identity}
@@ -142,11 +152,5 @@
                    :body-params {:role_ids [1 2]}
                    :identity admin-identity}
           response (user/update-auth-role {:user-service mock-user-service} request)]
-      (is (map? response))
-      (is (= 200 (:status response))))))
-
-(deftest test-import-template
-  (testing "下载用户导入模板"
-    (let [response (user/import-template {} {})]
       (is (map? response))
       (is (= 200 (:status response))))))

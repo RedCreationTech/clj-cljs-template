@@ -7,6 +7,7 @@
    [com.ruoyi.frontend.components.icon-picker :as icon-picker]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [goog.object]
    [re-frame.core :as rf]
    [reagent.core :as r]
@@ -92,11 +93,13 @@
   [page-toolbar/page-toolbar
    {:style {:padding "8px 22px 10px 22px"}
     :left [page-toolbar/toolbar-left
-           [page-toolbar/toolbar-button {:kind :add
+           [page-toolbar/toolbar-button {:perm "system:menu:add"
+                                         :kind :add
                                          :icon (r/as-element [:> PlusOutlined])
                                          :on-click #(rf/dispatch [:menus/open-modal])
                                          :label "新增"}]
-           [page-toolbar/toolbar-button {:kind :export
+           [page-toolbar/toolbar-button {:perm "system:menu:edit"
+                                         :kind :export
                                          :icon (r/as-element [:> CheckOutlined])
                                          :label "保存排序"}]
            [page-toolbar/toolbar-button {:kind :import
@@ -111,6 +114,27 @@
                                              :on-click #(rf/dispatch [:menus/fetch])}]]}])
 
 ;; ─── 表格列 ──────────────────────────────────────────────────────
+
+(defn- row-actions
+  "行操作:修改 / 新增子菜单 / 删除,按权限显示。"
+  [^js record]
+  [:div {:className "ruoyi-menu-actions"}
+   [perm/when-allowed "system:menu:edit"
+    [antd/button {:type "link" :size "small"
+                  :icon (r/as-element [:> EditOutlined])
+                  :on-click #(rf/dispatch [:menus/edit (js->clj record :keywordize-keys true)])}
+     "修改"]]
+   [perm/when-allowed "system:menu:add"
+    [antd/button {:type "link" :size "small"
+                  :icon (r/as-element [:> PlusOutlined])
+                  :on-click #(rf/dispatch [:menus/open-modal {:parent_id (.-menu_id record)}])}
+     "新增"]]
+   [perm/when-allowed "system:menu:remove"
+    [antd/popconfirm {:title "确认删除该菜单？"
+                      :onConfirm #(rf/dispatch [:menus/delete (.-menu_id record)])}
+     [antd/button {:type "link" :danger true :size "small"
+                   :icon (r/as-element [:> DeleteOutlined])}
+      "删除"]]]])
 
 (defn- menu-columns []
   #js [#js {:title "菜单名称" :dataIndex "menu_name" :key "menu_name" :width 280
@@ -145,22 +169,7 @@
                         (if (= v "0") "正常" "停用")]))}
        #js {:title "操作" :key "action" :width 300
             :className "ruoyi-menu-action-cell"
-            :render (fn [_ ^js record]
-                      (r/as-element
-                       [:div {:className "ruoyi-menu-actions"}
-                        [antd/button {:type "link" :size "small"
-                                      :icon (r/as-element [:> EditOutlined])
-                                      :on-click #(rf/dispatch [:menus/edit (js->clj record :keywordize-keys true)])}
-                         "修改"]
-                        [antd/button {:type "link" :size "small"
-                                      :icon (r/as-element [:> PlusOutlined])
-                                      :on-click #(rf/dispatch [:menus/open-modal {:parent_id (.-menu_id record)}])}
-                         "新增"]
-                        [antd/popconfirm {:title "确认删除该菜单？"
-                                          :onConfirm #(rf/dispatch [:menus/delete (.-menu_id record)])}
-                         [antd/button {:type "link" :danger true :size "small"
-                                       :icon (r/as-element [:> DeleteOutlined])}
-                          "删除"]]]))}])
+            :render (fn [_ ^js record] (r/as-element [row-actions record]))}])
 
 ;; ─── 菜单编辑弹窗字段片段 ──────────────────────────────────────────────
 

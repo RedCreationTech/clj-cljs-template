@@ -2,6 +2,7 @@
   "部门管理控制器。"
   (:require
    [com.ruoyi.domain.system.dept :as dept-service]
+   [com.ruoyi.web.controllers.params :as params]
    [ring.util.response :as response]))
 
 (defn- ok ([data] (ok 200 "操作成功" data))
@@ -19,8 +20,7 @@
 (defn list-depts
   "查询部门列表。"
   [{:keys [dept-service]} request]
-  (let [params (:query-params request)]
-    (ok (dept-service/list-depts dept-service params))))
+  (ok (dept-service/list-depts dept-service (params/query request))))
 
 (defn dept-tree
   "获取部门树（用于用户管理左侧选择）。"

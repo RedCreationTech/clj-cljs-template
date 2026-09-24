@@ -80,12 +80,12 @@
 (defn- query-entry [{:keys [col type]}]
   (str "[:" col " {:optional true} " (get-in m/types [type :malli]) "]"))
 
-(defn routes [{:keys [ns-root module label fields service-arg api-path]}]
+(defn routes [{:keys [ns-root module label fields service-arg api-path perm-prefix]}]
   (str "(ns " ns-root ".web.routes." module "\n"
-       "  \"" label "路由(bb new-module 生成):要求登录,Malli 校验参数并生成 Swagger 文档。\"\n"
+       "  \"" label "路由(bb new-module 生成):要求登录,各接口用 :perms 声明按钮权限(见 web.middleware.auth),\n"
+       "   Malli 校验参数并生成 Swagger 文档。\"\n"
        "  (:require\n"
-       "   [" ns-root ".web.controllers." module " :as ctrl]\n"
-       "   [" ns-root ".web.middleware.auth :as auth-mw]))\n\n"
+       "   [" ns-root ".web.controllers." module " :as ctrl]))\n\n"
        "(def ^:private Query\n"
        "  [:map\n   [:page {:optional true} [:int {:min 1}]]\n   [:size {:optional true} [:int {:min 1 :max 500}]]"
        (apply str (map #(str "\n   " (query-entry %)) (m/searchable fields))) "])\n\n"
@@ -95,14 +95,18 @@
        "(defn routes [{:keys [" service-arg "]}]\n"
        "  (let [ctx {:" service-arg " " service-arg "}]\n"
        "    [\"" api-path "\"\n"
-       "     {:middleware [(auth-mw/auth-middleware {:required? true})]\n"
+       "     {:auth? true\n"
        "      :swagger {:tags [\"" label "\"]}}\n"
-       "     [\"\" {:get {:summary \"" label "列表(分页)\" :parameters {:query Query} :handler (partial ctrl/list-page ctx)}\n"
-       "          :post {:summary \"新增" label "\" :parameters {:body Body} :handler (partial ctrl/create ctx)}}]\n"
+       "     [\"\" {:get {:perms \"" perm-prefix ":list\" :summary \"" label "列表(分页)\"\n"
+       "                :parameters {:query Query} :handler (partial ctrl/list-page ctx)}\n"
+       "          :post {:perms \"" perm-prefix ":add\" :summary \"新增" label "\"\n"
+       "                 :parameters {:body Body} :handler (partial ctrl/create ctx)}}]\n"
        "     [\"/:id\" {:parameters {:path Path}\n"
-       "              :get {:summary \"" label "详情\" :handler (partial ctrl/get-one ctx)}\n"
-       "              :put {:summary \"修改" label "\" :parameters {:body Body} :handler (partial ctrl/update-one ctx)}\n"
-       "              :delete {:summary \"删除" label "\" :handler (partial ctrl/delete-one ctx)}}]]))\n"))
+       "              :get {:perms \"" perm-prefix ":query\" :summary \"" label "详情\" :handler (partial ctrl/get-one ctx)}\n"
+       "              :put {:perms \"" perm-prefix ":edit\" :summary \"修改" label "\"\n"
+       "                    :parameters {:body Body} :handler (partial ctrl/update-one ctx)}\n"
+       "              :delete {:perms \"" perm-prefix ":remove\" :summary \"删除" label "\"\n"
+       "                       :handler (partial ctrl/delete-one ctx)}}]]))\n"))
 
 (defn- sample-body [fields suffix]
   (str "{" (str/join " " (for [{:keys [col type]} fields]

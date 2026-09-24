@@ -17,3 +17,7 @@
 (def repo-url
   "顶部工具栏 GitHub 图标跳转的仓库地址。"
   "https://github.com/zhaoyul/clojure-template")
+
+(def docs-url
+  "顶部工具栏「文档」图标跳转的地址。"
+  (str repo-url "#readme"))

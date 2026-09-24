@@ -6,6 +6,7 @@
    [com.ruoyi.frontend.api.impexp :as impexp-api]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -57,12 +58,14 @@
                           [antd/button {:type "link" :size "small"
                                         :onClick #(on-select row)}
                            "字典数据"]
-                          [antd/button {:type "link" :size "small"
-                                        :onClick #(on-edit row)}
-                           "编辑"]
-                          [antd/popconfirm {:title "确认删除？" :okText "确认" :cancelText "取消"
-                                            :on-confirm #(on-delete (:dict_id row))}
-                           [antd/button {:type "link" :danger true :size "small"} "删除"]]])))}])
+                          [perm/when-allowed "system:dict:edit"
+                           [antd/button {:type "link" :size "small"
+                                         :onClick #(on-edit row)}
+                            "编辑"]]
+                          [perm/when-allowed "system:dict:remove"
+                           [antd/popconfirm {:title "确认删除？" :okText "确认" :cancelText "取消"
+                                             :on-confirm #(on-delete (:dict_id row))}
+                            [antd/button {:type "link" :danger true :size "small"} "删除"]]]])))}])
 
 (defn- type-search-form
   "字典类型搜索栏(纯展示)。搜索条件由父组件持有,这里只经参数接收值/setter/回调。"
@@ -92,11 +95,13 @@
   [{:keys [on-add on-export on-search on-refresh]}]
   [page-toolbar/page-toolbar
    {:left [page-toolbar/toolbar-left
-           [page-toolbar/toolbar-button {:kind :add
+           [page-toolbar/toolbar-button {:perm "system:dict:add"
+                                         :kind :add
                                          :icon (r/as-element [:> PlusOutlined])
                                          :on-click on-add
                                          :label "新增"}]
-           [page-toolbar/toolbar-button {:kind :export
+           [page-toolbar/toolbar-button {:perm "system:dict:export"
+                                         :kind :export
                                          :icon (r/as-element [:> DownloadOutlined])
                                          :on-click on-export
                                          :label "导出"}]]
@@ -199,12 +204,14 @@
                       (let [row (js->clj record :keywordize-keys true)]
                         (r/as-element
                          [antd/space
-                          [antd/button {:type "link" :size "small"
-                                        :onClick #(on-edit row)}
-                           "编辑"]
-                          [antd/popconfirm {:title "确认删除？" :okText "确认" :cancelText "取消"
-                                            :on-confirm #(on-delete (:dict_code row))}
-                           [antd/button {:type "link" :danger true :size "small"} "删除"]]])))}])
+                          [perm/when-allowed "system:dict:edit"
+                           [antd/button {:type "link" :size "small"
+                                         :onClick #(on-edit row)}
+                            "编辑"]]
+                          [perm/when-allowed "system:dict:remove"
+                           [antd/popconfirm {:title "确认删除？" :okText "确认" :cancelText "取消"
+                                             :on-confirm #(on-delete (:dict_code row))}
+                            [antd/button {:type "link" :danger true :size "small"} "删除"]]]])))}])
 
 (defn- data-header
   "字典数据区标题栏(纯展示)。"
@@ -219,7 +226,8 @@
   [{:keys [on-add on-refresh]}]
   [page-toolbar/page-toolbar
    {:left [page-toolbar/toolbar-left
-           [page-toolbar/toolbar-button {:kind :add
+           [page-toolbar/toolbar-button {:perm "system:dict:add"
+                                         :kind :add
                                          :icon (r/as-element [:> PlusOutlined])
                                          :on-click on-add
                                          :label "新增"}]]

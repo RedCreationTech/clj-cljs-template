@@ -77,8 +77,9 @@
                                (if (= 200 (:code result))
                                  (rf/dispatch [:auth/login-success (:data result)])
                                  (rf/dispatch [:auth/login-failure (:msg result)])))
+                             ;; HTTP 失败(网络、5xx)的提示由 transport 统一弹出,这里只复位按钮
                              (fn [_]
-                               (rf/dispatch [:auth/login-failure (i18n/tr "网络错误,请稍后重试")])))))
+                               (rf/dispatch [:auth/login-failure nil])))))
 
 (rf/reg-event-fx :auth/login-success
                  (fn [{:keys [db]} [_ data]]
@@ -92,10 +93,10 @@
 (rf/reg-event-fx :auth/login-failure
                  (fn [{:keys [db]} [_ msg]]
                    ;; failures 计数变化会让登录页换一张验证码(旧验证码提交后已作废)
-                   {:db (-> db
-                            (assoc-in [:auth :loading?] false)
-                            (update-in [:auth :failures] (fnil inc 0)))
-                    :auth/toast [:error (or msg (i18n/tr "登录失败"))]}))
+                   (cond-> {:db (-> db
+                                    (assoc-in [:auth :loading?] false)
+                                    (update-in [:auth :failures] (fnil inc 0)))}
+                     msg (assoc :auth/toast [:error msg]))))
 
 ;; ─── 续期与过期 ─────────────────────────────────────────────
 

@@ -16,6 +16,11 @@
             (fn [db _]
               (get-in db [:auth :user])))
 
+(rf/reg-sub :auth/current-user
+            ;; getInfo 返回 {:user .. :roles .. :permissions .. :menus ..},这里取其中的用户记录
+            (fn [db _]
+              (get-in db [:auth :user :user])))
+
 (rf/reg-sub :auth/loading?
             (fn [db _]
               (get-in db [:auth :loading?])))

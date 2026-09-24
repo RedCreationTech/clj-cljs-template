@@ -243,7 +243,7 @@
                                    (fn [result]
                                      (when (= 200 (:code result))
                                        (rf/dispatch [:users/set-list (:data result)])))
-                                   (fn [_] (antd/error! "网络错误")))))
+                                   (fn [_]))))
 
 (rf/reg-fx :api/create-user
            (fn [params]
@@ -255,7 +255,7 @@
                                         (rf/dispatch [:users/fetch {}]))
                                       (when (not= 200 (:code result))
                                         (antd/error! (:msg result))))
-                                    (fn [_] (antd/error! "网络错误")))))
+                                    (fn [_]))))
 
 (rf/reg-fx :api/update-user
            (fn [[id params]]
@@ -267,7 +267,7 @@
                                         (rf/dispatch [:users/fetch {}]))
                                       (when (not= 200 (:code result))
                                         (antd/error! (:msg result))))
-                                    (fn [_] (antd/error! "网络错误")))))
+                                    (fn [_]))))
 
 (rf/reg-fx :api/delete-user
            (fn [id]
@@ -278,7 +278,7 @@
                                         (rf/dispatch [:users/fetch {}]))
                                       (when (not= 200 (:code result))
                                         (antd/error! (:msg result))))
-                                    (fn [_] (antd/error! "网络错误")))))
+                                    (fn [_]))))
 
 (rf/reg-fx :api/get-user
            (fn [user-id]
@@ -286,7 +286,7 @@
                                  (fn [result]
                                    (when (= 200 (:code result))
                                      (rf/dispatch [:users/edit-user (:data result)])))
-                                 (fn [_] (antd/error! "获取用户详情失败")))))
+                                 (fn [_]))))
 
 (rf/reg-fx :api/batch-delete-users
            (fn [ids]
@@ -295,7 +295,7 @@
                                       (fn [result]
                                         (when (= 200 (:code result))
                                           (antd/success! "删除成功")))
-                                      (fn [_] (antd/error! "网络错误"))))
+                                      (fn [_])))
              (rf/dispatch [:users/fetch {}])))
 
 (rf/reg-fx :api/change-user-status
@@ -305,7 +305,7 @@
                                              (when (= 200 (:code result))
                                                (antd/success! "状态修改成功")
                                                (rf/dispatch [:users/fetch {}])))
-                                           (fn [_] (antd/error! "网络错误")))))
+                                           (fn [_]))))
 
 (rf/reg-fx :api/reset-user-password
            (fn [[user-id new-pwd]]
@@ -313,7 +313,7 @@
                                             (fn [result]
                                               (when (= 200 (:code result))
                                                 (antd/success! "密码重置成功")))
-                                            (fn [_] (antd/error! "网络错误")))))
+                                            (fn [_]))))
 
 (rf/reg-fx :api/get-user-roles
            (fn [user-id]
@@ -321,7 +321,7 @@
                                        (fn [result]
                                          (when (= 200 (:code result))
                                            (rf/dispatch [:users/set-auth-role-ids (:data result)])))
-                                       (fn [_] (antd/error! "获取用户角色失败")))))
+                                       (fn [_]))))
 
 (rf/reg-fx :api/update-user-roles
            (fn [[user-id role-ids]]
@@ -333,7 +333,7 @@
                                               (rf/dispatch [:users/fetch-with-params]))
                                             (when (not= 200 (:code result))
                                               (antd/error! (:msg result))))
-                                          (fn [_] (antd/error! "角色分配失败")))))
+                                          (fn [_]))))
 
 (rf/reg-event-fx :users/submit
                  (fn [{:keys [db]} [_ values]]

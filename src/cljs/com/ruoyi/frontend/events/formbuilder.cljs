@@ -55,7 +55,7 @@
                                                     (fn [result]
                                                       (when (= 200 (:code result))
                                                         (rf/dispatch [:form-template/set-list (:data result)])))
-                                                    (fn [_] (antd/error! "获取模板列表失败")))))
+                                                    (fn [_]))))
 
 (rf/reg-event-db :form-template/open-save-modal
                  (fn [db _]
@@ -131,4 +131,4 @@
                                                          (rf/dispatch [:form-template/fetch {}]))
                                                        (when (not= 200 (:code result))
                                                          (antd/error! (:msg result))))
-                                                     (fn [_] (antd/error! "删除失败")))))
+                                                     (fn [_]))))

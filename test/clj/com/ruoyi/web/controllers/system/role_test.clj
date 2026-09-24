@@ -19,12 +19,6 @@
                  :insert-user-role! nil
                  []))})
 
-(def mock-dept-service
-  {:query-fn (fn [q _p]
-               (case q
-                 :list-depts [{:dept_id 1 :dept_name "总部"}]
-                 []))})
-
 (deftest test-list-roles
   (testing "查询角色列表"
     (let [request {:query-params {}}
@@ -72,7 +66,11 @@
     (let [request {:parameters {:body {:role_id 1 :data_scope "1"}}}
           response (role/data-scope {:role-service mock-role-service} request)]
       (is (map? response))
-      (is (= 200 (get-in response [:body :code]))))))
+      (is (= 200 (get-in response [:body :code])))))
+  (testing "取值必须是 1~5"
+    (is (= 500 (get-in (role/data-scope {:role-service mock-role-service}
+                                        {:parameters {:body {:role_id 1 :data_scope "9"}}})
+                       [:body :code])))))
 
 (deftest test-option-select
   (testing "获取角色选项列表"
@@ -118,6 +116,6 @@
 (deftest test-dept-tree-by-role
   (testing "获取角色部门树"
     (let [request {:path-params {:id "1"}}
-          response (role/dept-tree-by-role {:role-service mock-role-service :dept-service mock-dept-service} request)]
+          response (role/dept-tree-by-role {:role-service mock-role-service} request)]
       (is (map? response))
       (is (= 200 (get-in response [:body :code]))))))

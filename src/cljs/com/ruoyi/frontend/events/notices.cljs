@@ -4,6 +4,7 @@
    [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api.notices :as notices-api]
+   [com.ruoyi.frontend.storage :as storage]
    [re-frame.core :as rf]))
 
 (rf/reg-event-fx :notices/search
@@ -37,7 +38,7 @@
                                        (fn [result]
                                          (when (= 200 (:code result))
                                            (rf/dispatch [:notices/set-list (:data result)])))
-                                       (fn [_] (antd/error! "网络错误")))))
+                                       (fn [_]))))
 
 (rf/reg-event-db :notices/set-list
                  (fn [db [_ data]]
@@ -78,7 +79,7 @@
                                           (when (= 200 (:code result))
                                             (antd/success! "创建成功")
                                             (rf/dispatch [:notices/fetch {}])))
-                                        (fn [_] (antd/error! "网络错误")))))
+                                        (fn [_]))))
 
 (rf/reg-fx :api/update-notice
            (fn [[id params]]
@@ -87,7 +88,7 @@
                                           (when (= 200 (:code result))
                                             (antd/success! "更新成功")
                                             (rf/dispatch [:notices/fetch {}])))
-                                        (fn [_] (antd/error! "网络错误")))))
+                                        (fn [_]))))
 
 (rf/reg-event-fx :notices/delete
                  (fn [_ [_ id]]
@@ -100,4 +101,29 @@
                                           (when (= 200 (:code result))
                                             (antd/success! "删除成功")
                                             (rf/dispatch [:notices/fetch {}])))
-                                        (fn [_] (antd/error! "网络错误")))))
+                                        (fn [_]))))
+
+;; ─── 顶部铃铛:最新通知与未读角标 ─────────────────────────────────
+;; 「已读」按浏览器记住上次打开铃铛时看到的最新 notice_id(localStorage),不做服务端已读回执。
+
+(rf/reg-event-fx :notice-bell/fetch
+                 (fn [_ _] {:api/latest-notices nil}))
+
+(rf/reg-fx :api/latest-notices
+           (fn [_]
+             (notices-api/latest-notices
+              #(when (= 200 (:code %)) (rf/dispatch [:notice-bell/set-items (:data %)]))
+              (fn [_]))))
+
+(rf/reg-event-db :notice-bell/set-items
+                 (fn [db [_ items]]
+                   (-> db
+                       (assoc-in [:notice-bell :items] (vec items))
+                       (update-in [:notice-bell :seen-id]
+                                  #(or % (some-> (storage/get-item :notice-seen) js/parseInt))))))
+
+(rf/reg-event-db :notice-bell/mark-seen
+                 (fn [db _]
+                   (let [latest (reduce max 0 (map :notice_id (get-in db [:notice-bell :items])))]
+                     (storage/set-item! :notice-seen latest)
+                     (assoc-in db [:notice-bell :seen-id] latest))))

@@ -11,6 +11,11 @@
                          total (if (sequential? data) (count data) (:total data 0))]
                      (-> db (assoc-in [:posts :items] items) (assoc-in [:posts :total] total) (assoc-in [:posts :loading?] false)))))
 
+(rf/reg-event-fx :posts/search
+                 ;; 按搜索表单里的条件查询(条件存在 app-db 的 [:posts :query-params])
+                 (fn [{:keys [db]} _]
+                   {:dispatch [:posts/fetch (get-in db [:posts :query-params] {})]}))
+
 (rf/reg-event-db :posts/update-query
                  (fn [db [_ k v]] (assoc-in db [:posts :query-params k] v)))
 
@@ -54,10 +59,10 @@
                        {:db (assoc-in db [:posts :modal-visible?] false) :api/create-post values}))))
 
 (rf/reg-fx :api/create-post
-           (fn [params] (posts-api/create-post params (fn [r] (when (= 200 (:code r)) (antd/success! "创建成功") (rf/dispatch [:posts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+           (fn [params] (posts-api/create-post params (fn [r] (when (= 200 (:code r)) (antd/success! "创建成功") (rf/dispatch [:posts/search]))) (fn [_]))))
 
 (rf/reg-fx :api/update-post
-           (fn [[id params]] (posts-api/update-post id params (fn [r] (when (= 200 (:code r)) (antd/success! "更新成功") (rf/dispatch [:posts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+           (fn [[id params]] (posts-api/update-post id params (fn [r] (when (= 200 (:code r)) (antd/success! "更新成功") (rf/dispatch [:posts/search]))) (fn [_]))))
 
 (rf/reg-event-fx :posts/delete
                  (fn [_ [_ id]] {:api/delete-post id}))
@@ -67,7 +72,7 @@
                    {:api/change-post-status [id status]}))
 
 (rf/reg-fx :api/delete-post
-           (fn [id] (posts-api/delete-post id (fn [r] (when (= 200 (:code r)) (antd/success! "删除成功") (rf/dispatch [:posts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+           (fn [id] (posts-api/delete-post id (fn [r] (when (= 200 (:code r)) (antd/success! "删除成功") (rf/dispatch [:posts/search]))) (fn [_]))))
 
 (rf/reg-fx :api/change-post-status
            (fn [[id status]]
@@ -75,5 +80,5 @@
                                            (fn [result]
                                              (when (= 200 (:code result))
                                                (antd/success! "状态修改成功")
-                                               (rf/dispatch [:posts/fetch {}])))
-                                           (fn [_] (antd/error! "网络错误")))))
+                                               (rf/dispatch [:posts/search])))
+                                           (fn [_]))))

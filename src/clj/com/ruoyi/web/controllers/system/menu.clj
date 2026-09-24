@@ -2,6 +2,7 @@
   "菜单管理控制器。"
   (:require
    [com.ruoyi.domain.system.menu :as menu-service]
+   [com.ruoyi.web.controllers.params :as params]
    [ring.util.response :as response]))
 
 (defn- ok ([data] (ok 200 "操作成功" data))
@@ -19,8 +20,7 @@
 (defn list-menus
   "查询菜单列表。"
   [{:keys [menu-service]} request]
-  (let [params (:query-params request)]
-    (ok (menu-service/list-menus menu-service params))))
+  (ok (menu-service/list-menus menu-service (params/query request))))
 
 (defn menu-tree
   [{:keys [menu-service]} _]

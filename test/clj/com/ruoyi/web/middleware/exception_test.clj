@@ -17,6 +17,8 @@
       (is (= "application/json;charset=utf-8" (get-in response [:headers "content-type"])))
       (let [body (parse-json-body response)]
         (is (= "test message" (:message body)))
+        (is (= 418 (:code body)))
+        (is (= "boom" (:msg body)) "4xx 把异常消息作为提示")
         (is (= "clojure.lang.ExceptionInfo" (:exception body)))
         (is (= {:detail "x"} (:data body)))
         (is (= "/api/test" (:uri body)))))))
@@ -28,6 +30,7 @@
       (is (= 500 (:status response)))
       (let [body (parse-json-body response)]
         (is (= "internal" (:message body)))
+        (is (= "服务器内部错误,请稍后重试" (:msg body)) "5xx 不泄露异常消息")
         (is (= "java.lang.RuntimeException" (:exception body)))))))
 
 (defn- make-throwing-handler [e]
@@ -52,6 +55,7 @@
       (is (= 400 (:status response)))
       (let [body (parse-json-body response)]
         (is (= "bad request" (:message body)))
+        (is (= {:code 400 :msg "参数错误"} (select-keys body [:code :msg])))
         (is (= "/api/users" (:uri body)))))))
 
 (deftest test-wrap-exception-not-found-exception
@@ -94,7 +98,7 @@
       (is (= 500 (:status response)))
       (let [body (parse-json-body response)]
         (is (= "default" (:message body)))
-        (is (= {:unknown true} (:data body)))
+        (is (not (contains? body :data)) "5xx 不返回 ex-data")
         (is (= "/api/unknown" (:uri body)))))))
 
 (deftest test-wrap-exception-runtime-exception

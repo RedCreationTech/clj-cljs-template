@@ -96,11 +96,19 @@
     (query-fn :insert-user-role! {:role_id role-id :user_id uid})))
 
 (defn dept-tree-by-role
-  "获取角色关联的部门树。"
-  [{:keys [query-fn]} dept-service role-id]
-  (let [role (query-fn :find-role-by-id {:role_id role-id})
-        depts (dept-service (:list-depts dept-service))]
-    {:depts depts :checked-keys (when role [(:dept_ids role)])}))
+  "角色数据权限弹窗用:全部部门(平铺,前端组树)+ 该角色自定义范围里已勾选的部门。"
+  [{:keys [query-fn]} role-id]
+  {:depts (query-fn :list-depts {:status nil :dept_name nil})
+   :checked-keys (mapv :dept_id (query-fn :list-role-dept-ids {:role_id role-id}))})
+
+(defn set-data-scope!
+  "设置角色数据范围(见 domain.system.data-scope);自定义(\"2\")时保存所选部门,其它范围清空自定义部门。"
+  [{:keys [query-fn] :as svc} role-id data-scope dept-ids]
+  (update-role! svc {:role-id role-id :data_scope data-scope})
+  (query-fn :delete-role-depts! {:role_id role-id})
+  (when (= "2" data-scope)
+    (doseq [dept-id (distinct dept-ids)]
+      (query-fn :insert-role-dept! {:role_id role-id :dept_id dept-id}))))
 
 (defn get-role-perms
   "获取角色的所有权限标识。"

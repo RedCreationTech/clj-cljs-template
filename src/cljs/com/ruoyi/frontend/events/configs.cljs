@@ -41,7 +41,7 @@
                                             (antd/success! "创建成功"))
                                           (when (not= 200 (:code result))
                                             (antd/error! (:msg result))))
-                                        (fn [_] (antd/error! "网络错误")))))
+                                        (fn [_]))))
 
 (rf/reg-event-fx :configs/created
                  (fn [_ _]
@@ -61,7 +61,7 @@
                                             (antd/success! "更新成功"))
                                           (when (not= 200 (:code result))
                                             (antd/error! (:msg result))))
-                                        (fn [_] (antd/error! "网络错误")))))
+                                        (fn [_]))))
 
 (rf/reg-event-fx :configs/updated
                  (fn [{:keys [db]} _]
@@ -82,7 +82,7 @@
                                             (antd/success! "删除成功"))
                                           (when (not= 200 (:code result))
                                             (antd/error! (:msg result))))
-                                        (fn [_] (antd/error! "网络错误")))))
+                                        (fn [_]))))
 
 (rf/reg-event-fx :configs/deleted
                  (fn [{:keys [db]} _]

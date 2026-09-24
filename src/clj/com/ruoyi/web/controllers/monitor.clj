@@ -3,6 +3,7 @@
   (:require
    [clojure.string :as str]
    [com.ruoyi.config :as config]
+   [com.ruoyi.domain.system.data-scope :as data-scope]
    [com.ruoyi.integrant.state :as integrant-state]
    [com.ruoyi.integrant.trace :as trace]
    [integrant.core :as ig]
@@ -156,7 +157,9 @@
   "首页仪表盘统计聚合接口，返回用户数、在线数、日志数、任务数、最近操作和系统信息。"
   [{:keys [query-fn]} _]
   (let [user-count (:total (query-fn :count-users
-                                     {:user_name nil :phonenumber nil :status nil :dept_id nil}))
+                                     (merge {:user_name nil :phonenumber nil :status nil
+                                             :dept_id nil :dept_ids [-1]}
+                                            data-scope/unrestricted)))
         online-count (:total (query-fn :count-online-users {:ipaddr nil :login_name nil}))
         oper-log-count (:total (query-fn :count-oper-logs
                                          {:title nil :oper_name nil :oper_ip nil

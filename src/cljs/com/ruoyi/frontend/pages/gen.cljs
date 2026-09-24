@@ -8,6 +8,7 @@
    [clojure.string :as str]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -80,21 +81,25 @@
 (defn- gen-toolbar [selected-tables]
   [page-toolbar/page-toolbar
    {:left [page-toolbar/toolbar-left
-           [page-toolbar/toolbar-button {:kind :default
+           [page-toolbar/toolbar-button {:perm "tool:gen:code"
+                                         :kind :default
                                          :icon (r/as-element [:> SettingOutlined])
                                          :on-click #(rf/dispatch [:gen/open-config])
                                          :label "生成配置"}]
            (when (seq selected-tables)
              [:<>
-              [page-toolbar/toolbar-button {:kind :add
+              [page-toolbar/toolbar-button {:perm "tool:gen:code"
+                                            :kind :add
                                             :icon (r/as-element [:> CodeOutlined])
                                             :on-click #(rf/dispatch [:gen/generate selected-tables])
                                             :label (str "批量生成 (" (count selected-tables) " 个表)")}]
-              [page-toolbar/toolbar-button {:kind :export
+              [page-toolbar/toolbar-button {:perm "tool:gen:code"
+                                            :kind :export
                                             :icon (r/as-element [:> DownloadOutlined])
                                             :on-click #(rf/dispatch [:gen/download selected-tables])
                                             :label "下载ZIP"}]
-              [page-toolbar/toolbar-button {:kind :add
+              [page-toolbar/toolbar-button {:perm "tool:gen:code"
+                                            :kind :add
                                             :icon (r/as-element [:> CloudUploadOutlined])
                                             :on-click #(rf/dispatch [:gen/deploy selected-tables])
                                             :label (str "部署到项目 (" (count selected-tables) " 个表)")}]])]
@@ -113,18 +118,21 @@
      :render (fn [_ ^js record]
                (r/as-element
                 [antd/space
-                 [antd/button {:type "link" :size "small"
-                               :icon (r/as-element [:> EyeOutlined])
-                               :onClick #(rf/dispatch [:gen/preview (.-table_name record)])}
-                  "预览"]
-                 [antd/button {:type "link" :size "small"
-                               :icon (r/as-element [:> DownloadOutlined])
-                               :onClick #(rf/dispatch [:gen/download [(.-table_name record)]])}
-                  "下载"]
-                 [antd/button {:type "link" :size "small"
-                               :icon (r/as-element [:> CloudUploadOutlined])
-                               :onClick #(rf/dispatch [:gen/deploy [(.-table_name record)]])}
-                  "部署"]]))}]))
+                 [perm/when-allowed "tool:gen:preview"
+                  [antd/button {:type "link" :size "small"
+                                :icon (r/as-element [:> EyeOutlined])
+                                :onClick #(rf/dispatch [:gen/preview (.-table_name record)])}
+                   "预览"]]
+                 [perm/when-allowed "tool:gen:code"
+                  [antd/button {:type "link" :size "small"
+                                :icon (r/as-element [:> DownloadOutlined])
+                                :onClick #(rf/dispatch [:gen/download [(.-table_name record)]])}
+                   "下载"]]
+                 [perm/when-allowed "tool:gen:code"
+                  [antd/button {:type "link" :size "small"
+                                :icon (r/as-element [:> CloudUploadOutlined])
+                                :onClick #(rf/dispatch [:gen/deploy [(.-table_name record)]])}
+                   "部署"]]]))}]))
 
 ;; ─── 表格卡片 ──────────────────────────────────────────────────────
 

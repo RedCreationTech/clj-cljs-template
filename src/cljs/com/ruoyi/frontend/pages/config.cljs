@@ -6,6 +6,7 @@
    [com.ruoyi.frontend.api.impexp :as impexp-api]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -22,7 +23,7 @@
                     :on-change #(set-keyword! (.. % -target -value))}]]
       [page-search/search-actions
        [page-toolbar/search-button {:icon (r/as-element [:> SearchOutlined])
-                                    :on-click #(rf/dispatch [:configs/fetch {:configName keyword}])}]
+                                    :on-click #(rf/dispatch [:configs/fetch {:config_name keyword}])}]
        [page-toolbar/reset-button {:icon (r/as-element [:> ReloadOutlined])
                                    :on-click #(do (set-keyword! "")
                                                   (rf/dispatch [:configs/fetch {}]))}]]]]))
@@ -44,12 +45,14 @@
                       (let [row (js->clj record :keywordize-keys true)]
                         (r/as-element
                          [antd/space
-                          [antd/button {:type "link" :size "small"
-                                        :onClick #(on-edit row)}
-                           "编辑"]
-                          [antd/popconfirm {:title "确认删除？" :okText "确认" :cancelText "取消"
-                                            :on-confirm #(on-delete (:config_id row))}
-                           [antd/button {:type "link" :danger true :size "small"} "删除"]]])))}])
+                          [perm/when-allowed "system:config:edit"
+                           [antd/button {:type "link" :size "small"
+                                         :onClick #(on-edit row)}
+                            "编辑"]]
+                          [perm/when-allowed "system:config:remove"
+                           [antd/popconfirm {:title "确认删除？" :okText "确认" :cancelText "取消"
+                                             :on-confirm #(on-delete (:config_id row))}
+                            [antd/button {:type "link" :danger true :size "small"} "删除"]]]])))}])
 
 (defn- config-modal [{:keys [visible? editing on-ok on-cancel]}]
   (let [[form set-form!] (hooks/use-state {})]
@@ -93,11 +96,13 @@
      [search-bar]
      [page-toolbar/page-toolbar
       {:left [page-toolbar/toolbar-left
-              [page-toolbar/toolbar-button {:kind :add
+              [page-toolbar/toolbar-button {:perm "system:config:add"
+                                            :kind :add
                                             :icon (r/as-element [:> PlusOutlined])
                                             :on-click #(do (set-editing! nil) (set-modal-visible! true))
                                             :label "新增"}]
-              [page-toolbar/toolbar-button {:kind :export
+              [page-toolbar/toolbar-button {:perm "system:config:export"
+                                            :kind :export
                                             :icon (r/as-element [:> DownloadOutlined])
                                             :on-click #(impexp-api/export-configs {})
                                             :label "导出"}]]

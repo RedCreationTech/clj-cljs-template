@@ -6,6 +6,7 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -31,12 +32,14 @@
             :render (fn [_ ^js record]
                       (r/as-element
                        [antd/space
-                        [antd/button {:type "link" :size "small"
-                                      :on-click #(rf/dispatch [:notices/edit (js->clj record :keywordize-keys true)])}
-                         "编辑"]
-                        [antd/button {:type "link" :danger true :size "small"
-                                      :on-click #(rf/dispatch [:notices/delete (.-notice_id ^js record)])}
-                         "删除"]]))}])
+                        [perm/when-allowed "system:notice:edit"
+                         [antd/button {:type "link" :size "small"
+                                       :on-click #(rf/dispatch [:notices/edit (js->clj record :keywordize-keys true)])}
+                          "编辑"]]
+                        [perm/when-allowed "system:notice:remove"
+                         [antd/button {:type "link" :danger true :size "small"
+                                       :on-click #(rf/dispatch [:notices/delete (.-notice_id ^js record)])}
+                          "删除"]]]))}])
 
 (defn- notice-modal []
   (let [visible? @(rf/subscribe [:notices/modal-visible?])
@@ -93,13 +96,14 @@
                        :onChange #(set-title! (-> % .-target .-value))}]]
          [page-search/search-actions
           [page-toolbar/search-button {:icon (r/as-element [:> SearchOutlined])
-                                       :on-click #(rf/dispatch [:notices/search {:notice_title title}])}]
+                                       :on-click #(rf/dispatch [:notices/search {:notice_name title}])}]
           [page-toolbar/reset-button {:icon (r/as-element [:> ReloadOutlined])
                                       :on-click #(do (set-title! "")
                                                      (rf/dispatch [:notices/fetch {}]))}]]]])
      [page-toolbar/page-toolbar
       {:left [page-toolbar/toolbar-left
-              [page-toolbar/toolbar-button {:kind :add
+              [page-toolbar/toolbar-button {:perm "system:notice:add"
+                                            :kind :add
                                             :icon (r/as-element [:> PlusOutlined])
                                             :on-click #(rf/dispatch [:notices/open-modal])
                                             :label "新增"}]]

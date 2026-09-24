@@ -2,7 +2,7 @@
   "字典管理控制器。"
   (:require
    [com.ruoyi.domain.system.dict :as dict-service]
-   [com.ruoyi.infra.data-perm :as data-perm]
+   [com.ruoyi.web.controllers.params :as params]
    [ring.util.response :as response]))
 
 (defn- ok ([data] (ok 200 "操作成功" data))
@@ -18,13 +18,9 @@
   (get-in request [:identity :user-name] ""))
 
 (defn list-dict-types
-  "查询字典类型列表（带数据权限过滤）。"
+  "查询字典类型列表。"
   [{:keys [dict-service]} request]
-  (let [params (:query-params request)
-        identity (:identity request)
-        data-perm-filter (data-perm/data-perm-filter identity "default" :alias "u")
-        params (merge params (:params data-perm-filter))]
-    (ok (dict-service/list-dict-types dict-service params))))
+  (ok (dict-service/list-dict-types dict-service (params/query request))))
 
 (defn get-dict-type
   [{:keys [dict-service]} request]
@@ -59,13 +55,9 @@
     (ok "删除成功")))
 
 (defn list-dict-data
-  "查询字典数据列表（带数据权限过滤）。"
+  "查询字典数据列表。"
   [{:keys [dict-service]} request]
-  (let [params (:query-params request)
-        identity (:identity request)
-        data-perm-filter (data-perm/data-perm-filter identity "default" :alias "u")
-        params (merge params (:params data-perm-filter))]
-    (ok (dict-service/list-dict-data dict-service params))))
+  (ok (dict-service/list-dict-data dict-service (params/query request))))
 
 (defn get-dict-data
   [{:keys [dict-service]} request]

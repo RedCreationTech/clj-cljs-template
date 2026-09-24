@@ -3,6 +3,8 @@
   (:require
    [clojure.string :as str]
    [com.ruoyi.domain.system.log :as log-service]
+   [com.ruoyi.infra.login-guard :as guard]
+   [com.ruoyi.web.controllers.params :as params]
    [ring.util.response :as response]))
 
 (defn- ok ([data] (ok 200 "操作成功" data))
@@ -19,13 +21,13 @@
 (defn list-oper-logs
   "查询操作日志列表。"
   [{:keys [log-service]} request]
-  (let [result (log-service/list-oper-logs log-service (:query-params request))]
+  (let [result (log-service/list-oper-logs log-service (params/query request))]
     (ok {:total (:total result) :rows (:rows result)})))
 
 (defn clear-oper-logs
   "清空操作日志。"
   [{:keys [log-service]} request]
-  (log-service/clear-oper-logs! log-service (:query-params request))
+  (log-service/clear-oper-logs! log-service (params/query request))
   (ok "清空成功"))
 
 (defn delete-oper-logs
@@ -37,13 +39,13 @@
 (defn list-login-logs
   "查询登录日志列表。"
   [{:keys [log-service]} request]
-  (let [result (log-service/list-login-logs log-service (:query-params request))]
+  (let [result (log-service/list-login-logs log-service (params/query request))]
     (ok {:total (:total result) :rows (:rows result)})))
 
 (defn clear-login-logs
   "清空登录日志。"
   [{:keys [log-service]} request]
-  (log-service/clear-login-logs! log-service (:query-params request))
+  (log-service/clear-login-logs! log-service (params/query request))
   (ok "清空成功"))
 
 (defn delete-login-logs
@@ -52,10 +54,17 @@
   (log-service/delete-login-logs! log-service (parse-ids (get-in request [:path-params :ids])))
   (ok "删除成功"))
 
+(defn unlock-user
+  "解除用户的登录失败锁定(见 infra.login-guard)。"
+  [_ctx request]
+  (let [user-name (get-in request [:path-params :userName])]
+    (guard/unlock! user-name)
+    (ok (str "用户 " user-name " 已解锁"))))
+
 (defn list-online-users
   "查询在线用户列表。"
   [{:keys [log-service]} request]
-  (let [result (log-service/list-online-users log-service (:query-params request))]
+  (let [result (log-service/list-online-users log-service (params/query request))]
     (ok {:total (:total result) :rows (:rows result)})))
 
 (defn kick-online-user

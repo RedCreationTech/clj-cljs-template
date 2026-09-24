@@ -7,8 +7,8 @@
    [com.ruoyi.frontend.api.impexp :as impexp-api]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
-   [re-frame.db]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
 
@@ -38,7 +38,7 @@
         [antd/select-option {:value "1"} "停用"]]]
       [page-search/search-actions
        [page-toolbar/search-button {:icon (r/as-element [:> SearchOutlined])
-                                    :on-click #(rf/dispatch [:posts/fetch (:posts/query-params @re-frame.db/app-db)])}]
+                                    :on-click #(rf/dispatch [:posts/search])}]
        [page-toolbar/reset-button {:icon (r/as-element [:> ReloadOutlined])
                                    :on-click #(do (rf/dispatch [:posts/reset-query])
                                                   (rf/dispatch [:posts/fetch {}]))}]]]]))
@@ -48,26 +48,20 @@
 (defn- toolbar []
   [page-toolbar/page-toolbar
    {:left [page-toolbar/toolbar-left
-           [page-toolbar/toolbar-button {:kind :add
+           [page-toolbar/toolbar-button {:perm "system:post:add"
+                                         :kind :add
                                          :icon (r/as-element [:> PlusOutlined])
                                          :on-click #(rf/dispatch [:posts/open-modal])
                                          :label "新增"}]
-           [page-toolbar/toolbar-button {:kind :edit
-                                         :icon (r/as-element [:> EditOutlined])
-                                         :disabled? true
-                                         :label "修改"}]
-           [page-toolbar/toolbar-button {:kind :delete
-                                         :icon (r/as-element [:> DeleteOutlined])
-                                         :disabled? true
-                                         :label "删除"}]
-           [page-toolbar/toolbar-button {:kind :export
+           [page-toolbar/toolbar-button {:perm "system:post:export"
+                                         :kind :export
                                          :icon (r/as-element [:> DownloadOutlined])
                                          :on-click #(impexp-api/export-posts {})
                                          :label "导出"}]]
     :right [page-toolbar/toolbar-right
             [page-toolbar/round-tool-button {:title "搜索"
                                              :icon (r/as-element [:> SearchOutlined])
-                                             :on-click #(rf/dispatch [:posts/fetch (:posts/query-params @re-frame.db/app-db)])}]
+                                             :on-click #(rf/dispatch [:posts/search])}]
             [page-toolbar/round-tool-button {:title "刷新"
                                              :icon (r/as-element [:> ReloadOutlined])
                                              :on-click #(rf/dispatch [:posts/fetch {}])}]]}])
@@ -89,11 +83,13 @@
             :render (fn [_ ^js record]
                       (r/as-element
                        [antd/space
-                        [antd/button {:type "link" :size "small" :icon (r/as-element [:> EditOutlined])
-                                      :on-click #(rf/dispatch [:posts/edit (js->clj record :keywordize-keys true)])} "编辑"]
-                        [antd/popconfirm {:title "确认删除该岗位？"
-                                          :onConfirm #(rf/dispatch [:posts/delete (.-post_id record)])}
-                         [antd/button {:type "link" :danger true :size "small" :icon (r/as-element [:> DeleteOutlined])} "删除"]]]))}])
+                        [perm/when-allowed "system:post:edit"
+                         [antd/button {:type "link" :size "small" :icon (r/as-element [:> EditOutlined])
+                                       :on-click #(rf/dispatch [:posts/edit (js->clj record :keywordize-keys true)])} "编辑"]]
+                        [perm/when-allowed "system:post:remove"
+                         [antd/popconfirm {:title "确认删除该岗位？"
+                                           :onConfirm #(rf/dispatch [:posts/delete (.-post_id record)])}
+                          [antd/button {:type "link" :danger true :size "small" :icon (r/as-element [:> DeleteOutlined])} "删除"]]]]))}])
 
 ;; ─── 编辑弹窗 ──────────────────────────────────────────────────────
 
