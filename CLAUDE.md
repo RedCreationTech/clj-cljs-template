@@ -15,8 +15,9 @@
 bb dev                    # 后端 3000 / nREPL 7000 + 前端 watch(--reset-db 清空本地库)
 bb test                   # 后端测试(独立 test.db);单个命名空间:bb test -n com.ruoyi.web.handler-test
 bb test:mysql             # MySQL 上跑测试(docker compose 或 JDBC_URL)
+bb test:cljs              # 前端单元测试(test/cljs,Node)
 bb e2e                    # Playwright(需后端已在 3000 运行)
-bb ci                     # 提交前:lint(clj-kondo + 迁移 + 规模约束)+ fmt:check + test
+bb ci                     # 提交前:lint(clj-kondo + 迁移 + 规模约束)+ fmt:check + test + test:cljs
 bb fmt                    # cljfmt 自动格式化
 bb new-module <名称> --label 中文名 --fields "title:string:required:标题,..."   # 生成 CRUD 模块
 ```

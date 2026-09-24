@@ -12,9 +12,9 @@ RUN clojure -T:build all
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
-COPY --from=build /app/target/rouyi-standalone.jar /app/rouyi-standalone.jar
+COPY --from=build /app/target/ruoyi-standalone.jar /app/ruoyi-standalone.jar
 
 ENV PORT=3000
 EXPOSE 3000
 
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/rouyi-standalone.jar"]
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/ruoyi-standalone.jar"]

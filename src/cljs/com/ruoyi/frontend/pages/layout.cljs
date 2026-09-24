@@ -5,6 +5,7 @@
    [com.ruoyi.frontend.components.error-boundary :as error-boundary]
    [com.ruoyi.frontend.components.layout-settings :as layout-settings]
    [com.ruoyi.frontend.config :as config]
+   [com.ruoyi.frontend.i18n :as i18n]
    [com.ruoyi.frontend.pages.layout.header :as layout-header]
    [com.ruoyi.frontend.pages.layout.menu-build :as menu-build]
    [com.ruoyi.frontend.pages.layout.menu-data :as menu-data]
@@ -145,8 +146,8 @@
   [:div {:class "app-layout-footer"
          :style {:position "fixed" :left content-left :right 0 :bottom 0
                  :height 36 :display "flex" :alignItems "center" :justifyContent "flex-end"
-                 :padding "0 20px" :borderTop "1px solid #ebeef5"
-                 :color "#808080" :fontSize 14 :background "#fff" :zIndex 10}}
+                 :padding "0 20px" :borderTop "1px solid var(--app-border-light)"
+                 :color "var(--app-text-secondary)" :fontSize 14 :background "var(--app-bg)" :zIndex 10}}
    "Copyright © 2018-2026 RuoYi. All Rights Reserved."])
 
 ;; 主内容区(带 Error Boundary,避免单个页面崩溃导致整个布局白屏)。
@@ -154,7 +155,7 @@
   [{:keys [page content-left open-tags? show-footer?]}]
   [:> Layout.Content {:style {:margin 0
                               :padding 0
-                              :background "#fff"
+                              :background "var(--app-bg)"
                               :minHeight (if open-tags?
                                            "calc(100vh - 96px)"
                                            "calc(100vh - 56px)")
@@ -174,8 +175,8 @@
   [:> Layout.Header {:style {:padding "0 16px"
                              :display "flex" :justifyContent "space-between"
                              :alignItems "center" :height 56
-                             :background "#fff"
-                             :borderBottom "1px solid #e4e7ed"
+                             :background "var(--app-bg)"
+                             :borderBottom "1px solid var(--app-border)"
                              :boxShadow "0 1px 4px rgba(0,21,41,0.08)"
                              :position (when fixed-header? "sticky")
                              :top 0
@@ -209,12 +210,12 @@
      (fn []
        (set! (.-title js/document)
              (if (:dynamic-title? view)
-               (str (last (:breadcrumbs view)) " - " config/app-name)
+               (str (i18n/tr (last (:breadcrumbs view))) " - " config/app-name)
                config/app-name))
        js/undefined)
      [page (:dynamic-title? view)])
     [:> Layout {:style {:minHeight "100vh"
-                        :background "#fff"
+                        :background "var(--app-bg)"
                         :fontFamily "\"Helvetica Neue\", Helvetica, \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", Arial, sans-serif"
                         :fontSize 14}}
      [tab-animation-styles]
@@ -223,7 +224,7 @@
                          :set-collapsed! set-collapsed!
                          :sider-width sider-width
                          :collapsed-width collapsed-width)])
-     [:> Layout {:style {:background "#fff"}}
+     [:> Layout {:style {:background "var(--app-bg)"}}
       [app-header (assoc view :user user
                          :collapsed collapsed
                          :set-collapsed! set-collapsed!

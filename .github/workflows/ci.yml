@@ -2,7 +2,7 @@
 #   lint        clj-kondo / 迁移文件 / 规模约束 / cljfmt
 #   test-sqlite 后端测试 + 迁移往返(SQLite)
 #   test-mysql  后端测试 + 迁移往返(MySQL 8.4 service)
-#   e2e         前端生产构建(warning 即失败)+ Playwright
+#   e2e         前端单元测试 + 生产构建(warning 即失败)+ Playwright
 #   scaffold    bb new-module 生成一个模块后,整套检查、测试与生成的 E2E 都要通过
 name: CI
 
@@ -74,7 +74,7 @@ jobs:
         run: bb db:roundtrip
 
   e2e:
-    name: 前端构建 + E2E
+    name: 前端测试、构建 + E2E
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -82,6 +82,8 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           node: "true"
+      - name: 前端单元测试
+        run: bb test:cljs
       - name: 前端生产构建
         run: bb release
       - name: 启动后端并等待就绪

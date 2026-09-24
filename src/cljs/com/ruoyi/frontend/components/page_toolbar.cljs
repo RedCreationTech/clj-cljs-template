@@ -1,7 +1,8 @@
 (ns com.ruoyi.frontend.components.page-toolbar
   "页面工具栏容器。"
   (:require
-   [com.ruoyi.frontend.antd :as antd]))
+   [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.i18n :as i18n]))
 
 (defn page-toolbar [{:keys [left right style]}]
   [:div {:style (merge {:display "flex"
@@ -9,7 +10,7 @@
                         :alignItems "center"
                         :gap 12
                         :padding "12px 22px 14px 22px"
-                        :background "#fff"}
+                        :background "var(--app-bg)"}
                        style)}
    left
    right])
@@ -18,7 +19,7 @@
   {:add {:color "#409eff" :border "1px solid #a0cfff" :background "#ecf5ff"}
    :edit {:color "#67c23a" :border "1px solid #b3e19d" :background "#f0f9eb"}
    :delete {:color "#f56c6c" :border "1px solid #fab6b6" :background "#fef0f0"}
-   :import {:color "#909399" :border "1px solid #d3d4d6" :background "#f4f4f5"}
+   :import {:color "var(--app-text-secondary)" :border "1px solid #d3d4d6" :background "#f4f4f5"}
    :export {:color "#e6a23c" :border "1px solid #f3d19e" :background "#fdf6ec"}
    :default {:height 36 :borderRadius 4}})
 
@@ -51,7 +52,7 @@
                         :fontSize 14
                         :background "#409eff"
                         :border "1px solid #409eff"}}
-   (or label "搜索")])
+   (or label (i18n/tr "搜索"))])
 
 (defn reset-button [{:keys [icon on-click label]}]
   [antd/button {:icon icon
@@ -60,9 +61,9 @@
                         :minWidth 86
                         :borderRadius 4
                         :fontSize 14
-                        :color "#606266"
-                        :border "1px solid #dcdfe6"}}
-   (or label "重置")])
+                        :color "var(--app-text-regular)"
+                        :border "1px solid var(--app-border)"}}
+   (or label (i18n/tr "重置"))])
 
 (defn round-tool-button [{:keys [icon on-click title]}]
   [antd/tooltip {:title title}
@@ -74,8 +75,8 @@
                          :display "inline-flex"
                          :alignItems "center"
                          :justifyContent "center"
-                         :color "#606266"
-                         :border "1px solid #dcdfe6"
+                         :color "var(--app-text-regular)"
+                         :border "1px solid var(--app-border)"
                          :boxShadow "0 2px 8px rgba(0,0,0,0.06)"}}]])
 
 (defn toolbar-right [& children]

@@ -46,7 +46,7 @@
      ;; 展开/折叠箭头
      (if has-children?
        [:span {:style {:display "inline-flex" :width 14 :fontSize 10
-                       :marginRight 4 :color "#a8abb2"
+                       :marginRight 4 :color "var(--app-text-placeholder)"
                        :transform (if expanded? "rotate(90deg)" "rotate(0deg)")
                        :transition "transform 0.2s"}}
         "▶"]
@@ -68,12 +68,12 @@
 
 (defn- dept-tree-header [on-reload]
   [:div {:style {:height 50 :display "flex" :alignItems "center" :justifyContent "space-between"
-                 :padding "0 14px" :borderBottom "1px solid #ebeef5"}}
+                 :padding "0 14px" :borderBottom "1px solid var(--app-border-light)"}}
    [:div {:style {:display "flex" :alignItems "center" :gap 8
-                  :fontWeight 700 :fontSize 15 :color "#303133"}}
+                  :fontWeight 700 :fontSize 15 :color "var(--app-text-primary)"}}
     [:> FileTextOutlined {:style {:color "#409eff"}}]
     "组织机构"]
-   [:div {:style {:display "flex" :alignItems "center" :gap 16 :color "#a8abb2"}}
+   [:div {:style {:display "flex" :alignItems "center" :gap 16 :color "var(--app-text-placeholder)"}}
     [:span {:style {:fontSize 18 :lineHeight 1 :cursor "pointer"}} "⌄"]
     [:> ReloadOutlined {:style {:fontSize 15 :cursor "pointer"}
                         :on-click on-reload}]]])
@@ -81,7 +81,7 @@
 (defn- dept-tree-search []
   [:div {:style {:padding "12px 12px 8px"}}
    [antd/input {:placeholder "请输入部门名称"
-                :prefix (r/as-element [:> SearchOutlined {:style {:color "#c0c4cc"}}])
+                :prefix (r/as-element [:> SearchOutlined {:style {:color "var(--app-text-placeholder)"}}])
                 :style {:height 36 :borderRadius 4 :fontSize 14}}]])
 
 (defn dept-tree-sidebar
@@ -99,19 +99,19 @@
                                      (conj ids dept-id)))))]
     [:div {:style {:width (if collapsed? 0 280)
                    :minWidth (if collapsed? 0 280)
-                   :flexShrink 0 :background "#fff"
-                   :borderRight "1px solid #e4e7ed"
+                   :flexShrink 0 :background "var(--app-bg)"
+                   :borderRight "1px solid var(--app-border)"
                    :minHeight "calc(100vh - 200px)"
                    :display "flex" :flexDirection "column"
                    :position "relative"
                    :transition "width 0.2s ease, min-width 0.2s ease"}}
      [:button {:type "button"
                :style {:position "absolute" :right -12 :top 450
-                       :width 24 :height 36 :border "1px solid #ebeef5"
-                       :borderRadius "4px 0 0 4px" :background "#fff"
+                       :width 24 :height 36 :border "1px solid var(--app-border-light)"
+                       :borderRadius "4px 0 0 4px" :background "var(--app-bg)"
                        :boxShadow "0 2px 8px rgba(0,0,0,0.08)"
                        :display "flex" :alignItems "center" :justifyContent "center"
-                       :color "#a8abb2" :fontSize 20 :cursor "pointer" :zIndex 12}
+                       :color "var(--app-text-placeholder)" :fontSize 20 :cursor "pointer" :zIndex 12}
                :on-click #(set-collapsed! (not collapsed?))}
       (if collapsed? "»" "«")]
      (when-not collapsed?

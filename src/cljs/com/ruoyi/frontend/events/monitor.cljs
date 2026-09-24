@@ -2,7 +2,7 @@
   "仪表盘、服务器、缓存、数据源与 Integrant 监控事件。"
   (:require
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.monitor :as monitor-api]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :dashboard/set-stats
@@ -18,7 +18,7 @@
 
 (rf/reg-fx :api/get-dashboard-stats
            (fn [_]
-             (api/get-dashboard-stats
+             (monitor-api/get-dashboard-stats
               (fn [r] (when (= 200 (:code r))
                         (rf/dispatch [:dashboard/set-stats (:data r)])))
               (fn [_] (rf/dispatch [:dashboard/set-stats nil])))))
@@ -33,7 +33,7 @@
 
 (rf/reg-fx :api/get-server-info
            (fn [_]
-             (api/get-server-info
+             (monitor-api/get-server-info
               (fn [r] (when (= 200 (:code r)) (rf/dispatch [:server/set-data (:data r)])))
               (fn [_] (rf/dispatch [:server/set-data nil])))))
 
@@ -50,7 +50,7 @@
 
 (rf/reg-fx :api/get-cache-info
            (fn [_]
-             (api/get-cache-info
+             (monitor-api/get-cache-info
               (fn [r] (when (= 200 (:code r)) (rf/dispatch [:cache/set-info (:data r)])))
               (fn [_]))))
 
@@ -64,7 +64,7 @@
 
 (rf/reg-fx :api/get-cache-names
            (fn [_]
-             (api/get-cache-names
+             (monitor-api/get-cache-names
               (fn [r] (when (= 200 (:code r)) (rf/dispatch [:cache/set-names (:data r)])))
               (fn [_]))))
 
@@ -85,7 +85,7 @@
 
 (rf/reg-fx :api/get-cache-keys-by-name
            (fn [cache-name]
-             (api/get-cache-keys-by-name
+             (monitor-api/get-cache-keys-by-name
               cache-name
               (fn [r] (when (= 200 (:code r)) (rf/dispatch [:cache/set-keys (:data r)])))
               (fn [_]))))
@@ -110,7 +110,7 @@
 
 (rf/reg-fx :api/get-cache-value
            (fn [[cache-name cache-key]]
-             (api/get-cache-value
+             (monitor-api/get-cache-value
               cache-name cache-key
               (fn [r] (when (= 200 (:code r))
                         (rf/dispatch [:cache/set-value (get-in r [:data :value] "")])
@@ -123,7 +123,7 @@
 
 (rf/reg-fx :api/clear-cache
            (fn [_]
-             (api/clear-cache
+             (monitor-api/clear-cache
               (fn [r]
                 (when (= 200 (:code r))
                   (antd/success! "缓存已清空")
@@ -138,7 +138,7 @@
 
 (rf/reg-fx :api/clear-cache-name
            (fn [cache-name]
-             (api/clear-cache-name
+             (monitor-api/clear-cache-name
               cache-name
               (fn [r]
                 (when (= 200 (:code r))
@@ -154,7 +154,7 @@
 
 (rf/reg-fx :api/clear-cache-key
            (fn [[cache-name cache-key]]
-             (api/clear-cache-key
+             (monitor-api/clear-cache-key
               cache-name cache-key
               (fn [r]
                 (when (= 200 (:code r))
@@ -176,7 +176,7 @@
 
 (rf/reg-fx :api/get-datasource
            (fn [_]
-             (api/get-datasource
+             (monitor-api/get-datasource
               (fn [r] (when (= 200 (:code r)) (rf/dispatch [:server/set-datasource (:data r)])))
               (fn [_] (rf/dispatch [:server/set-datasource nil])))))
 
@@ -190,7 +190,7 @@
 
 (rf/reg-fx :api/get-integrant-info
            (fn [_]
-             (api/get-integrant-info
+             (monitor-api/get-integrant-info
               (fn [r] (when (= 200 (:code r)) (rf/dispatch [:integrant/set-data (:data r)])))
               (fn [_]))))
 
@@ -204,7 +204,7 @@
 
 (rf/reg-fx :api/set-integrant-trace
            (fn [[key enabled?]]
-             (api/set-integrant-trace
+             (monitor-api/set-integrant-trace
               key enabled?
               (fn [r] (when (= 200 (:code r)) (rf/dispatch [:integrant/set-trace key (:data r)])))
               (fn [_]))))
@@ -215,7 +215,7 @@
 
 (rf/reg-fx :api/get-integrant-trace-logs
            (fn [key]
-             (api/get-integrant-trace-logs
+             (monitor-api/get-integrant-trace-logs
               key
               (fn [r] (when (= 200 (:code r)) (rf/dispatch [:integrant/set-trace key (:data r)])))
               (fn [_]))))

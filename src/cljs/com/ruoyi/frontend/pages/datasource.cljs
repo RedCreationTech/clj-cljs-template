@@ -9,8 +9,8 @@
    [reagent.hooks :as hooks]))
 
 (def card-style
-  {:background "#fff"
-   :border "1px solid #e6ebf5"
+  {:background "var(--app-bg)"
+   :border "1px solid var(--app-border-light)"
    :borderRadius 4
    :boxShadow "0 2px 12px 0 rgba(0,0,0,0.06)"})
 
@@ -24,10 +24,10 @@
                    :alignItems "center"
                    :gap 8
                    :padding "0 18px"
-                   :borderBottom "1px solid #ebeef5"
+                   :borderBottom "1px solid var(--app-border-light)"
                    :fontSize 16
                    :fontWeight 600
-                   :color "#303133"}}
+                   :color "var(--app-text-primary)"}}
      icon
      [:span title]]]
    children))
@@ -75,15 +75,15 @@
    [])
   (let [data @(rf/subscribe [:server/datasource])
         loading? @(rf/subscribe [:server/datasource-loading?])]
-    [:div {:style {:padding 16 :background "#f5f7fa" :minHeight "calc(100vh - 112px)"}}
+    [:div {:style {:padding 16 :background "var(--app-fill)" :minHeight "calc(100vh - 112px)"}}
      [:div {:style {:display "flex" :justifyContent "flex-end" :marginBottom 12}}
       [antd/button {:icon (r/as-element [:> ReloadOutlined])
                     :onClick #(rf/dispatch [:server/fetch-datasource])}
        "刷新"]]
      (if loading?
-       [:div {:style {:textAlign "center" :padding 48 :background "#fff"}}
+       [:div {:style {:textAlign "center" :padding 48 :background "var(--app-bg)"}}
         [:> Spin {:size "large"}]]
        [monitor-card {:title "连接池信息" :icon (r/as-element [:> DatabaseOutlined])}
         (if data
           [pool-table data]
-          [:div {:style {:padding 48 :textAlign "center" :color "#909399"}} "暂无数据"])])]))
+          [:div {:style {:padding 48 :textAlign "center" :color "var(--app-text-secondary)"}} "暂无数据"])])]))

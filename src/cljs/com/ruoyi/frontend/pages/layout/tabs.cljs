@@ -6,6 +6,7 @@
    ["antd" :refer [Dropdown]]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.icon-picker :as icon-picker]
+   [com.ruoyi.frontend.i18n :as i18n]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
@@ -15,22 +16,22 @@
   [key has-others? has-right?]
   (clj->js
    [{:key "refresh"
-     :label "刷新页面"
+     :label (i18n/tr "刷新页面")
      :icon (r/as-element [:> ReloadOutlined])}
     {:key "close-current"
-     :label "关闭当前"
+     :label (i18n/tr "关闭当前")
      :icon (r/as-element [:> CloseOutlined])
      :disabled (= key :dashboard)}
     {:key "close-others"
-     :label "关闭其他"
+     :label (i18n/tr "关闭其他")
      :icon (r/as-element [:> CloseCircleOutlined])
      :disabled (not has-others?)}
     {:key "close-right"
-     :label "关闭右侧"
+     :label (i18n/tr "关闭右侧")
      :icon (r/as-element [:> ArrowRightOutlined])
      :disabled (not has-right?)}
     {:key "close-all"
-     :label "全部关闭"
+     :label (i18n/tr "全部关闭")
      :icon (r/as-element [:> CloseCircleOutlined])}]))
 
 ;; Tab 项内联样式(随 active / card 风格变化)。
@@ -42,8 +43,8 @@
    :height (if card-style? 34 38)
    :padding (if card-style? "0 16px" "0 18px")
    :marginRight (if card-style? 6 2)
-   :background (if active? "#e8f4ff" "#fff")
-   :color (if active? "#409eff" "#606266")
+   :background (if active? "var(--ant-color-primary-bg, #e8f4ff)" "var(--app-bg)")
+   :color (if active? "#409eff" "var(--app-text-regular)")
    :borderRadius (cond
                    card-style? 4
                    active? "14px 14px 0 0"
@@ -51,8 +52,8 @@
    :cursor "pointer"
    :fontSize 14
    :transition "background 0.2s, color 0.2s"
-   :border "1px solid #ebeef5"
-   :borderBottom (if active? "1px solid #e8f4ff" "1px solid #ebeef5")
+   :border "1px solid var(--app-border-light)"
+   :borderBottom (if active? "1px solid var(--ant-color-primary-bg, #e8f4ff)" "1px solid var(--app-border-light)")
    :boxShadow (if (and card-style? active?) "0 1px 4px rgba(64,158,255,0.18)" "none")
    :whiteSpace "nowrap"
    :position "relative"
@@ -92,7 +93,7 @@
             icon-el)
           (when (= key :dashboard)
             [:> HomeOutlined {:style {:marginRight 6 :fontSize 12}}])))
-      [:span label]
+      [:span (i18n/tr label)]
       (when (and closable (not= key :dashboard))
         [:> CloseOutlined {:style {:marginLeft 8 :fontSize 10
                                    :opacity (if active? 0.8 0.4)
@@ -198,27 +199,27 @@
   [container-ref tabs active]
   (let [active-idx (.indexOf (clj->js (mapv :key tabs)) active)]
     [:div {:style {:display "flex" :alignItems "center" :marginLeft 0 :height 40
-                   :borderLeft "1px solid #ebeef5"}}
-     [antd/tooltip {:title "向左滚动"}
-      [:> LeftOutlined {:style {:cursor "pointer" :color "#909399"
+                   :borderLeft "1px solid var(--app-border-light)"}}
+     [antd/tooltip {:title (i18n/tr "向左滚动")}
+      [:> LeftOutlined {:style {:cursor "pointer" :color "var(--app-text-secondary)"
                                 :fontSize 13 :padding "13px 12px"
-                                :borderRight "1px solid #ebeef5"}
+                                :borderRight "1px solid var(--app-border-light)"}
                         :on-click #(scroll-tabs container-ref -1)}]]
-     [antd/tooltip {:title "向右滚动"}
-      [:> RightOutlined {:style {:cursor "pointer" :color "#909399"
+     [antd/tooltip {:title (i18n/tr "向右滚动")}
+      [:> RightOutlined {:style {:cursor "pointer" :color "var(--app-text-secondary)"
                                  :fontSize 13 :padding "13px 12px"
-                                 :borderRight "1px solid #ebeef5"}
+                                 :borderRight "1px solid var(--app-border-light)"}
                          :on-click #(scroll-tabs container-ref 1)}]]
-     [antd/tooltip {:title "刷新当前页"}
-      [:> ReloadOutlined {:style {:cursor "pointer" :color "#909399"
+     [antd/tooltip {:title (i18n/tr "刷新当前页")}
+      [:> ReloadOutlined {:style {:cursor "pointer" :color "var(--app-text-secondary)"
                                   :fontSize 14 :padding "13px 12px"
-                                  :borderRight "1px solid #ebeef5"}
+                                  :borderRight "1px solid var(--app-border-light)"}
                           :on-click #(.reload js/location)}]]
      [antd/dropdown {:menu {:items (tab-context-menu active
                                                      (> (count tabs) 1)
                                                      (< active-idx (dec (count tabs))))
                             :onClick (tab-menu-onclick active)}}
-      [:> DownOutlined {:style {:cursor "pointer" :color "#909399"
+      [:> DownOutlined {:style {:cursor "pointer" :color "var(--app-text-secondary)"
                                 :fontSize 12 :padding "14px 12px"}}]]]))
 
 (defn tab-bar
@@ -229,12 +230,12 @@
         [container-ref show-scroll? can-left? can-right? check-scroll]
         (use-tab-scroll (count tabs) active)]
     [:div {:class "app-tab-bar"
-           :style {:borderBottom "1px solid #dcdfe6"
+           :style {:borderBottom "1px solid var(--app-border)"
                    :padding "0 0 0 0"
                    :display "flex"
                    :alignItems "center"
                    :height 40
-                   :background "#fff"
+                   :background "var(--app-bg)"
                    :boxShadow "0 1px 2px rgba(0,0,0,0.04)"}}
      (when show-scroll? [tab-scroll-side-btn :left can-left? container-ref])
      [tab-scroll-container container-ref tabs active check-scroll]

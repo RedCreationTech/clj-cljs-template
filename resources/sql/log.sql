@@ -88,5 +88,16 @@ WHERE session_id = :session_id
 -- :name delete-online-user! :! :n
 DELETE FROM sys_online WHERE session_id = :session_id
 
+-- :name delete-idle-online-users! :! :n
+-- :doc 删除 last_access_time 早于给定时间(毫秒)的会话
+DELETE FROM sys_online WHERE last_access_time < :last_access_time
+
+-- :name rename-online-session! :! :n
+-- :doc 令牌续期:会话改挂到新的 session_id
+UPDATE sys_online
+SET session_id = :session_id,
+    last_access_time = :last_access_time
+WHERE session_id = :old_session_id
+
 -- :name find-online-user-by-session :? :1
 SELECT * FROM sys_online WHERE session_id = :session_id

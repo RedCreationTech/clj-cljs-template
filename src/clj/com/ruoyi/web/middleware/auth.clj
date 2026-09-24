@@ -6,18 +6,13 @@
    [ring.util.response :as response]))
 
 (defn wrap-jwt-auth
-  "为请求附加当前认证用户，并更新在线心跳。
-  如果令牌无效，继续执行但 :identity 为 nil。"
+  "解析 Bearer 令牌并校验会话(见 infra.online):签名与有效期通过、且会话仍在线时,
+   把 claims 放进 :identity 并刷新心跳;否则继续执行但 :identity 为 nil,由 require-auth 决定是否拒绝。"
   [handler]
   (fn [request]
-    (let [token (security/extract-token request)
-          claims (when token (security/parse-token token))
-          blacklisted? (and token (online/blacklisted? token))
-          _ (when (and claims (not blacklisted?)) (online/heartbeat! token))
-          request (if (and claims (not blacklisted?))
-                    (assoc request :identity claims)
-                    request)]
-      (handler request))))
+    (let [claims (some-> (security/extract-token request) security/parse-token)
+          identity (when (and claims (online/active? (:jti claims))) claims)]
+      (handler (cond-> request identity (assoc :identity identity))))))
 
 (defn require-auth
   "要求请求必须通过认证，否则返回 401。"

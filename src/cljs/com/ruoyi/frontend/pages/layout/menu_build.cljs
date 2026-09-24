@@ -2,6 +2,7 @@
   "把后端返回的菜单树转换为 antd Menu 结构,并派生页面标签/图标/展开键。"
   (:require
    [com.ruoyi.frontend.components.icon-picker :as icon-picker]
+   [com.ruoyi.frontend.i18n :as i18n]
    [com.ruoyi.frontend.router :as router]))
 
 (defn filter-visible-menus
@@ -29,7 +30,7 @@
                              full-path
                              (str "menu-" (:menu_id m)))
                   item {:key item-key
-                        :label (:menu_name m)}
+                        :label (i18n/tr (:menu_name m))}
                   icon-name (or (and (seq (:icon m)) (not= (:icon m) "#") (:icon m))
                                 "ContainerOutlined")
                   icon-el (icon-picker/icon-element icon-name {:style {:fontSize 14}})]

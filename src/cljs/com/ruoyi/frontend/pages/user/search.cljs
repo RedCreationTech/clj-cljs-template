@@ -12,7 +12,7 @@
 
 (defn- search-field [label width input]
   [:div {:style {:display "flex" :alignItems "center" :gap 8 :width width}}
-   [:span {:style {:whiteSpace "nowrap" :fontSize 14 :fontWeight 600 :color "#606266"
+   [:span {:style {:whiteSpace "nowrap" :fontSize 14 :fontWeight 600 :color "var(--app-text-regular)"
                    :width (if (= label "状态") 42 58) :textAlign "right"}} label]
    input])
 
@@ -83,7 +83,7 @@
                    :height height
                    :opacity (if show-search? 1 0)
                    :transition "height 0.3s ease, opacity 0.3s ease"}}
-     [:div {:style {:background "#fff" :padding "8px 22px 4px 22px"}}
+     [:div {:style {:background "var(--app-bg)" :padding "8px 22px 4px 22px"}}
       [search-fields props]]]))
 
 (defn- column-toggle-dropdown [columns on-toggle-column]
@@ -102,7 +102,7 @@
                    :trigger #js ["click"]}
     [antd/button {:shape "circle"
                   :icon (r/as-element [:> AppstoreOutlined])
-                  :style {:width 38 :height 38 :borderColor "#dcdfe6" :color "#606266"}}]]])
+                  :style {:width 38 :height 38 :borderColor "var(--app-border)" :color "var(--app-text-regular)"}}]]])
 
 (defn- toolbar-left [{:keys [selected-empty? on-add on-edit-selected on-batch-delete on-import on-export]}]
   [:div {:style {:display "flex" :gap 8}}
@@ -124,7 +124,7 @@
                  :on-click on-batch-delete}
     "删除"]
    [antd/button {:ghost true
-                 :style {:height 34 :borderRadius 4 :color "#909399" :borderColor "#d3d4d6" :background "#f4f4f5"}
+                 :style {:height 34 :borderRadius 4 :color "var(--app-text-secondary)" :borderColor "#d3d4d6" :background "#f4f4f5"}
                  :icon (r/as-element [:> UploadOutlined])
                  :on-click on-import}
     "导入"]
@@ -139,18 +139,18 @@
    :on-batch-delete :on-import :on-export :on-toggle-search :on-refresh :on-toggle-column"
   [{:keys [show-search? columns] :as props}]
   [:div {:style {:display "flex" :justifyContent "space-between" :alignItems "center"
-                 :padding "8px 22px 8px 22px" :background "#fff"}}
+                 :padding "8px 22px 8px 22px" :background "var(--app-bg)"}}
    [toolbar-left props]
    [:div {:style {:display "flex" :gap 12}}
     [antd/tooltip {:title "显示搜索"}
      [antd/button {:shape "circle"
                    :icon (r/as-element [:> SearchOutlined])
-                   :style {:width 38 :height 38 :borderColor "#dcdfe6" :color "#606266"
-                           :background (if show-search? "#fff" "#f5f7fa")}
+                   :style {:width 38 :height 38 :borderColor "var(--app-border)" :color "var(--app-text-regular)"
+                           :background (if show-search? "var(--app-bg)" "var(--app-fill)")}
                    :on-click (:on-toggle-search props)}]]
     [antd/tooltip {:title "刷新"}
      [antd/button {:shape "circle"
                    :icon (r/as-element [:> ReloadOutlined])
-                   :style {:width 38 :height 38 :borderColor "#dcdfe6" :color "#606266"}
+                   :style {:width 38 :height 38 :borderColor "var(--app-border)" :color "var(--app-text-regular)"}
                    :on-click (:on-refresh props)}]]
     [column-toggle-dropdown columns (:on-toggle-column props)]]])

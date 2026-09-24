@@ -3,7 +3,7 @@
   (:require
    [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.logs :as logs-api]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :oper-logs/set-list
@@ -22,11 +22,11 @@
 
 (rf/reg-fx :api/list-oper-logs
            (fn [params]
-             (api/list-oper-logs params
-                                 (fn [result]
-                                   (when (= 200 (:code result))
-                                     (rf/dispatch [:oper-logs/set-list (:data result)])))
-                                 (fn [_]))))
+             (logs-api/list-oper-logs params
+                                      (fn [result]
+                                        (when (= 200 (:code result))
+                                          (rf/dispatch [:oper-logs/set-list (:data result)])))
+                                      (fn [_]))))
 
 (rf/reg-event-fx :oper-logs/clear
                  (fn [{:keys [db]} _]
@@ -40,18 +40,18 @@
 
 (rf/reg-fx :api/delete-oper-logs
            (fn [ids]
-             (api/delete-oper-logs ids
-                                   (fn [result]
-                                     (when (= 200 (:code result))
-                                       (antd/success! "删除成功")
-                                       (rf/dispatch [:oper-logs/fetch {}]))
-                                     (when (not= 200 (:code result))
-                                       (antd/error! (:msg result))))
-                                   (fn [_] (antd/error! "网络错误")))))
+             (logs-api/delete-oper-logs ids
+                                        (fn [result]
+                                          (when (= 200 (:code result))
+                                            (antd/success! "删除成功")
+                                            (rf/dispatch [:oper-logs/fetch {}]))
+                                          (when (not= 200 (:code result))
+                                            (antd/error! (:msg result))))
+                                        (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/clear-oper-logs
            (fn [_]
-             (api/clear-oper-logs
+             (logs-api/clear-oper-logs
               (fn [result]
                 (when (= 200 (:code result))
                   (rf/dispatch [:oper-logs/cleared])
@@ -104,11 +104,11 @@
 
 (rf/reg-fx :api/list-login-logs
            (fn [params]
-             (api/list-login-logs params
-                                  (fn [result]
-                                    (when (= 200 (:code result))
-                                      (rf/dispatch [:login-logs/set-list (:data result)])))
-                                  (fn [_]))))
+             (logs-api/list-login-logs params
+                                       (fn [result]
+                                         (when (= 200 (:code result))
+                                           (rf/dispatch [:login-logs/set-list (:data result)])))
+                                       (fn [_]))))
 
 (rf/reg-event-fx :login-logs/clear
                  (fn [{:keys [db]} _]
@@ -122,14 +122,14 @@
 
 (rf/reg-fx :api/delete-login-logs
            (fn [ids]
-             (api/delete-login-logs ids
-                                    (fn [result]
-                                      (when (= 200 (:code result))
-                                        (antd/success! "删除成功")
-                                        (rf/dispatch [:login-logs/fetch {}]))
-                                      (when (not= 200 (:code result))
-                                        (antd/error! (:msg result))))
-                                    (fn [_] (antd/error! "网络错误")))))
+             (logs-api/delete-login-logs ids
+                                         (fn [result]
+                                           (when (= 200 (:code result))
+                                             (antd/success! "删除成功")
+                                             (rf/dispatch [:login-logs/fetch {}]))
+                                           (when (not= 200 (:code result))
+                                             (antd/error! (:msg result))))
+                                         (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-event-fx :login-logs/unlock
                  (fn [{:keys [db]} [_ username]]
@@ -138,7 +138,7 @@
 
 (rf/reg-fx :api/clear-login-logs
            (fn [_]
-             (api/clear-login-logs
+             (logs-api/clear-login-logs
               (fn [result]
                 (when (= 200 (:code result))
                   (rf/dispatch [:login-logs/cleared])

@@ -4,10 +4,10 @@
 
 (def defaults
   {:init       (fn []
-                 (log/info "\n-=[rouyi starting]=-"))
+                 (log/info "\n-=[ruoyi starting]=-"))
    :start      (fn []
-                 (log/info "\n-=[rouyi started successfully]=-"))
+                 (log/info "\n-=[ruoyi started successfully]=-"))
    :stop       (fn []
-                 (log/info "\n-=[rouyi has shut down successfully]=-"))
+                 (log/info "\n-=[ruoyi has shut down successfully]=-"))
    :middleware (fn [handler _] handler)
    :opts       {:profile :prod}})

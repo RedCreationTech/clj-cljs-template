@@ -1,43 +1,42 @@
 (ns com.ruoyi.web.routes.auth
-  "认证路由。"
+  "认证路由。login / config / register 可匿名访问;refresh / getInfo 需要有效会话;
+   logout 不强制登录(令牌已失效时也返回成功)。"
   (:require
-   [clojure.string]
-   [com.ruoyi.infra.security :as security]
    [com.ruoyi.web.controllers.auth :as auth]
    [com.ruoyi.web.controllers.register :as register]
-   [ring.util.response :as response]))
+   [com.ruoyi.web.middleware.auth :as auth-mw]))
 
-(defn- wrap-parse-token
-  "简单的 JWT 解析中间件，不依赖 auth-middleware 的复杂逻辑。"
-  [handler]
-  (fn [request]
-    (let [token (some-> (get-in request [:headers "authorization"])
-                        (clojure.string/replace-first #"(?i)Bearer\s+" ""))
-          claims (when token (security/parse-token token))
-          request (if claims (assoc request :identity claims) request)]
-      (handler request))))
+(def ^:private LoginBody
+  [:map
+   [:username {:optional true} [:maybe :string]]
+   [:password {:optional true} [:maybe :string]]
+   [:captcha {:optional true} [:maybe :string]]
+   [:uuid {:optional true} [:maybe :string]]])
 
-(defn- require-identity
-  [handler]
-  (fn [request]
-    (if (:identity request)
-      (handler request)
-      (-> (response/response {:code 401 :msg "未登录或令牌已过期"})
-          (response/status 401)
-          (response/content-type "application/json")))))
-
-(defn auth-routes [{:keys [user-service log-service menu-service]}]
-  ["/auth"
-   {:swagger {:tags ["认证"]}}
-   ["/login" {:post {:summary    "登录"
-                     :description "用户名密码登录，返回 Token"
-                     :handler    (partial auth/login {:user-service user-service :log-service log-service})}}]
-   ["/logout" {:post {:summary     "退出登录"
-                      :description "清除当前用户会话"
-                      :middleware  [wrap-parse-token require-identity]
-                      :handler     (partial auth/logout {})}}]
-   ["/getInfo" {:get {:summary     "获取用户信息"
-                      :description "获取当前用户信息（角色/权限/菜单）"
-                      :middleware  [wrap-parse-token require-identity]
-                      :handler     (partial auth/get-info {:user-service user-service :menu-service menu-service})}}]
-   ["/register" {:post {:summary "用户注册" :handler (partial register/register {:user-service user-service})}}]])
+(defn auth-routes [{:keys [user-service log-service menu-service auth-config]}]
+  (let [ctx {:user-service user-service :log-service log-service
+             :menu-service menu-service :auth-config auth-config}]
+    ["/auth"
+     {:swagger {:tags ["认证"]}}
+     ["/config" {:get {:summary     "登录页配置"
+                       :description "是否显示验证码、是否开放注册;开发/测试环境附带演示账号"
+                       :handler     (partial auth/login-config ctx)}}]
+     ["/login" {:post {:summary     "登录"
+                       :description "用户名密码登录,返回 Token;连续失败会被临时锁定"
+                       :parameters  {:body LoginBody}
+                       :handler     (partial auth/login ctx)}}]
+     ["/refresh" {:post {:summary     "令牌续期"
+                         :description "用当前有效令牌换新令牌(滑动续期),旧令牌短暂宽限后失效"
+                         :middleware  [(auth-mw/auth-middleware {:required? true})]
+                         :handler     (partial auth/refresh ctx)}}]
+     ["/logout" {:post {:summary     "退出登录"
+                        :description "删除当前会话,令牌立即失效"
+                        :middleware  [(auth-mw/auth-middleware)]
+                        :handler     auth/logout}}]
+     ["/getInfo" {:get {:summary     "获取用户信息"
+                        :description "获取当前用户信息(角色/权限/菜单)"
+                        :middleware  [(auth-mw/auth-middleware {:required? true})]
+                        :handler     (partial auth/get-info ctx)}}]
+     ["/register" {:post {:summary "用户注册"
+                          :description "默认关闭;开启后只接受用户名与密码,新用户没有任何角色"
+                          :handler (partial register/register ctx)}}]]))

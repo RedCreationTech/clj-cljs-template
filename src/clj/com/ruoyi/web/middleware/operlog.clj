@@ -16,12 +16,21 @@
   "GET 请求不记录日志（仅 health 和 login 特殊处理）"
   #{:get :head :options})
 
+(defn mask-sensitive
+  "参数里的密码、令牌、密钥类字段替换成 ******,不写进日志。"
+  [params]
+  (if (map? params)
+    (into {} (map (fn [[k v]]
+                    [k (if (re-find #"(?i)password|passwd|token|secret" (name k)) "******" (mask-sensitive v))]))
+          params)
+    params))
+
 (defn- format-params
-  "格式化请求参数，过长时截断。"
+  "格式化请求参数(敏感字段打码),过长时截断。"
   [params]
   (let [s (if (instance? String params)
             params
-            (try (json/generate-string params)
+            (try (json/generate-string (mask-sensitive params))
                  (catch Exception _ (str params))))]
     (if (> (count s) 200)
       (str (subs s 0 200) "...")

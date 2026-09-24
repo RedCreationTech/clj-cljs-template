@@ -12,10 +12,10 @@
 |------|------|
 | 后端 | Clojure 1.12.6, Kit 1.0.x, Integrant, Reitit 0.11, Ring 1.15, Undertow, next.jdbc / conman (HugSQL), Migratus, Malli 0.20, HikariCP 7 |
 | 数据库 | SQLite 3.53（默认，零配置）；MySQL 8.4（Connector/J 26.7，切换环境变量即可；`docker-compose.yml` 提供本地实例） |
-| 安全 | Buddy（JWT + bcrypt），图片验证码，XSS/Frame 防护；prod 下强制校验 `JWT_SECRET` / `COOKIE_SECRET` |
-| 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0 (函数组件 + Hooks), re-frame 1.4, React 19.3, Ant Design 6.6 |
+| 安全 | Buddy（JWT + bcrypt）；会话以 `sys_online` 为准（登出/强退/空闲超时即失效）+ 滑动续期；登录失败限流；验证码开关（生产默认开）；CORS 白名单；上传下载防目录穿越；prod 下强制校验 `JWT_SECRET` / `COOKIE_SECRET` |
+| 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0 (函数组件 + Hooks), re-frame 1.4, React 19.3, Ant Design 6.6；中英文界面切换（`i18n/tr`）、浅色/暗色主题 |
 | 任务调度 | Quartz 2.5（`sys_job` 表驱动，支持暂停/恢复/立即执行） |
-| 工具链 | babashka（`bb.edn` 统一任务入口 + `bb new-module` 脚手架）, Clojure CLI (`deps.edn`), tools.build 0.10, clj-kondo 2026.08, cljfmt 0.16, Playwright 1.63 (E2E), cloverage, GitHub Actions |
+| 工具链 | babashka（`bb.edn` 统一任务入口 + `bb new-module` 脚手架）, Clojure CLI (`deps.edn`), tools.build 0.10, clj-kondo 2026.08, cljfmt 0.16, cljs.test（Node）, Playwright 1.63 (E2E), cloverage, GitHub Actions |
 
 ---
 
@@ -23,7 +23,7 @@
 
 **系统管理**：用户、角色（RBAC + 数据权限）、菜单（树形 + 按钮权限）、部门（树形）、岗位、字典、参数配置、通知公告、文件管理。
 
-**权限控制**：JWT Bearer 认证；按角色动态下发菜单树与权限标识（`perms`）；在线用户与强制下线。按钮级 `perms` 校验与数据权限（`data_scope` 1~5）的 SQL 片段生成器已就位但尚未接入路由/查询，接入方式见 C4 文档 §13。
+**权限控制**：JWT Bearer 认证，令牌带会话 ID（`jti`），会话存 `sys_online`：登出、强退、空闲 30 分钟后令牌立即失效；前端在令牌过半时自动续期，任何 401 都回到登录页。按角色动态下发菜单树与权限标识（`perms`）；在线用户与强制下线；登录失败限流、验证码开关、默认关闭的自助注册。按钮级 `perms` 校验与数据权限（`data_scope` 1~5）的 SQL 片段生成器已就位但尚未接入路由/查询，接入方式见 C4 文档 §13。
 
 **日志审计**：操作日志中间件自动记录所有 API 请求；登录日志记录 IP / 浏览器 / 结果。
 
@@ -57,7 +57,7 @@
 ├── src/clj/com/ruoyi/           # 后端
 │   ├── core.clj                 # 入口：密钥校验 → 加载 edge / domain / routes → 启动 Integrant
 │   ├── config.clj               # 读取 system.edn（aero）
-│   ├── infra/                   # 基础设施：db 抽象、security(JWT)、secrets、online、data-perm、cache、scheduler
+│   ├── infra/                   # 基础设施：db 抽象、security(JWT)、secrets、online(会话)、login-guard(限流)、files、data-perm、cache、scheduler
 │   ├── domain/                  # 领域服务（system/*：user, role, menu, dept, ...；gen）
 │   ├── web/handler.clj          # Ring handler / 路由器 / SPA fallback
 │   ├── web/middleware/          # auth、operlog、exception、formats、core
@@ -70,12 +70,15 @@
 │   ├── db.cljs                  # re-frame 初始 app-db
 │   ├── events.cljs, events/     # re-frame 事件（按领域拆分）
 │   ├── subs.cljs, subs/         # re-frame 订阅
-│   ├── api.cljs, api/           # HTTP 客户端（transport + 各领域 api）
+│   ├── api/                     # HTTP 客户端:transport(续期 / 401)、token、各领域 api
+│   ├── i18n.cljs                # 界面多语言:(tr "中文原文"),英文词典在同一文件
+│   ├── storage.cljs             # localStorage 唯一入口(ruoyi_ 前缀、不可用时降级)
 │   ├── antd.cljs                # Ant Design 组件适配
 │   ├── components/              # 通用组件（page-card、page-search、pagination、...）
 │   └── pages/                   # 页面（layout/ 为主布局：菜单、Tab、面包屑、页面分发）
 ├── env/{dev,test,prod}          # 环境差异：dev 中间件、user.clj REPL 助手、logback
 ├── test/clj                     # 后端单元/集成测试（clojure.test）
+├── test/cljs                    # 前端单元测试（cljs.test,Node 运行）
 ├── tests/e2e                    # Playwright 端到端测试
 ├── scripts/db.clj               # 数据库重置 / 迁移往返检查(bb test:mysql、bb db:roundtrip 调用)
 └── docs/
@@ -112,7 +115,7 @@ bb ci                            # lint + 格式检查 + 后端测试,确认改�
 
 ```bash
 bb dev                 # 后端 3000 / nREPL 7000 + 前端 shadow-cljs watch(9630)
-bb dev --reset-db      # 先删除本地 SQLite 库(rouyi.db)再启动
+bb dev --reset-db      # 先删除本地 SQLite 库(ruoyi.db)再启动
 bb dev --backend-only  # 只起后端
 PORT=3200 NREPL_PORT=7200 bb dev   # 端口被占用时换端口
 ```
@@ -123,9 +126,10 @@ PORT=3200 NREPL_PORT=7200 bb dev   # 端口被占用时换端口
 
 ```bash
 docker compose up -d mysql       # 或使用已有实例
-JDBC_URL="jdbc:mysql://127.0.0.1:3308/ruoyi?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true" \
-MIGRATION_DIR=migrations bb dev
+JDBC_URL="jdbc:mysql://127.0.0.1:3308/ruoyi?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true" bb dev
 ```
+
+`JDBC_URL` 是 MySQL 时自动使用 `resources/migrations`（SQLite 用 `migrations-sqlite`）；也可以用 `MIGRATION_DIR` 显式指定。
 
 ### 3. 生成第一个业务模块
 
@@ -141,13 +145,26 @@ bb dev                                                      # 重启后菜单「
 ### 4. 生产构建与部署
 
 ```bash
-bb uberjar                                   # 前端 release(warning 即失败)+ target/rouyi-standalone.jar
+bb uberjar                                   # 前端 release(warning 即失败)+ target/ruoyi-standalone.jar
 JWT_SECRET=$(openssl rand -hex 32) \
 COOKIE_SECRET=$(openssl rand -hex 8) \
-java -jar target/rouyi-standalone.jar        # PORT / JDBC_URL / MIGRATION_DIR 等同样由环境变量注入
+java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量注入,见下表
 ```
 
 **生产密钥是强制的**：prod profile（uberjar / Docker 镜像）下，`JWT_SECRET` 缺失、等于内置默认值或短于 32 字符，或 `COOKIE_SECRET` 缺失、等于默认值或不是 16 字节时，应用拒绝启动并打印原因与生成命令（`com.ruoyi.infra.secrets`）。dev / test 继续使用内置默认值，无需配置。
+
+常用环境变量（完整说明见 C4 文档 §8.1）：
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `JWT_SECRET` / `COOKIE_SECRET` | 开发值 | prod 必填，见上 |
+| `JDBC_URL` / `MIGRATION_DIR` | `jdbc:sqlite:ruoyi.db` / 按 URL 推导 | 数据库连接与迁移目录 |
+| `PORT` / `NREPL_PORT` | 3000 / 7000 | HTTP 与 nREPL 端口 |
+| `CAPTCHA_ENABLED` | prod `true`，dev/test `false` | 登录验证码；开启后留空验证码判失败 |
+| `TOKEN_TTL_MINUTES` | 720 | 令牌有效期；活跃用户在过半时自动续期 |
+| `LOGIN_MAX_FAILURES` / `LOGIN_LOCK_MINUTES` | 5 / 10 | 同一用户名失败次数上限与锁定时长 |
+| `REGISTER_ENABLED` | `false` | 自助注册；开启后只接受用户名密码，新用户无角色 |
+| `CORS_ORIGINS` | 空（只允许同源） | 允许跨域的前端地址，逗号分隔；`*` 仅建议开发用 |
 
 `Dockerfile` 提供多阶段镜像构建（`clojure:temurin-21-tools-deps` 构建 → `eclipse-temurin:21-jre-alpine` 运行）；构建镜像前先执行 `bb release`，运行时用 `-e JWT_SECRET=… -e COOKIE_SECRET=…` 注入密钥。
 
@@ -160,7 +177,8 @@ java -jar target/rouyi-standalone.jar        # PORT / JDBC_URL / MIGRATION_DIR �
 | 任务 | 命令 |
 |------|------|
 | 开发 | `bb dev`（前后端）、`bb backend` / `bb frontend`（单独起）、`bb nrepl` / `bb cider`（只起 REPL，在 REPL 里 `(user/go)`） |
-| 后端测试 | `bb test`（独立的 `test.db`、端口 3100/7100，不影响正在运行的 `bb dev`）；单个命名空间 `bb test -n com.ruoyi.web.handler-test`，按正则 `bb test -r '.*user.*'` |
+| 后端测试 | `bb test`（独立的 `test.db`、端口 3100/7100，不影响正在运行的 `bb dev`；约 30 秒）；单个命名空间 `bb test -n com.ruoyi.web.handler-test`，按正则 `bb test -r '.*user.*'` |
+| 前端单元测试 | `bb test:cljs`（`test/cljs` 下 `*-test` 命名空间，shadow-cljs `:test` 构建，Node 运行） |
 | MySQL 测试 | `bb test:mysql`（自动 `docker compose up -d mysql`；设置 `JDBC_URL` 则用已有实例，每次先清空库） |
 | 迁移往返 | `bb db:roundtrip`（up → down → up；默认临时 SQLite，设 `JDBC_URL` 则检查该库） |
 | E2E | `bb e2e`（需后端已在 3000 运行；首次运行先 `npx playwright install chromium`）；单个用例 `bb e2e tests/e2e/post-crud.spec.js` |
@@ -168,7 +186,7 @@ java -jar target/rouyi-standalone.jar        # PORT / JDBC_URL / MIGRATION_DIR �
 | 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束） |
 | 格式化 | `bb fmt`（cljfmt 修改）/ `bb fmt:check`（只检查） |
 | 构建 | `bb release`（前端）、`bb uberjar`（前端 + 后端 jar）、`bb cljs:check`（快速编译检查） |
-| 与 CI 相同的快速检查 | `bb ci`（lint + fmt:check + test） |
+| 与 CI 相同的快速检查 | `bb ci`（lint + fmt:check + test + test:cljs） |
 | 其它 | `bb new-module`、`bb rename`、`bb docs`（重新生成架构文档 HTML）、`bb clean` |
 
 REPL 热重载助手在 `env/dev/clj/user.clj`：`(user/rd)` 重载领域层，`(user/rroutes)` 重载路由，`(user/rr)` 重启 Integrant 系统，`(user/reset-db)` 重建数据库。详见 `AGENTS.md`。
@@ -215,7 +233,7 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 | lint | `bb lint`（clj-kondo、迁移检查、规模约束）+ `bb fmt:check` |
 | test-sqlite | `bb test` + `bb db:roundtrip` |
 | test-mysql | MySQL 8.4 service 上 `bb test:mysql` + `bb db:roundtrip` |
-| e2e | `bb release`（warning 即失败）→ 启动后端 → `bb e2e`，失败时上传报告与后端日志 |
+| e2e | `bb test:cljs` → `bb release`（warning 即失败）→ 启动后端 → `bb e2e`，失败时上传报告与后端日志 |
 | scaffold | `bb new-module` 生成示例模块后跑 lint、格式、生成的测试、迁移往返、`bb cljs:check`、生成的 E2E |
 
 公共环境（JDK 21、Clojure CLI、bb、clj-kondo、Node、依赖缓存）封装在 `.github/actions/setup`。
@@ -234,7 +252,10 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 
 | 路径 | 说明 |
 |------|------|
-| POST /api/auth/login | 登录（返回 JWT） |
+| GET /api/auth/config | 登录页配置（是否显示验证码、是否开放注册；开发环境附演示账号） |
+| POST /api/auth/login | 登录（返回 JWT；连续失败会被临时锁定） |
+| POST /api/auth/refresh | 令牌续期（前端自动调用） |
+| POST /api/auth/logout | 登出（会话立即失效） |
 | GET /api/auth/getInfo | 当前用户信息（角色/权限/菜单） |
 | GET /api/system/{user,role,menu,dept,post,notice,config} | 系统管理 CRUD |
 | GET /api/system/dict/{type,data} | 字典 |
@@ -258,6 +279,7 @@ Swagger UI：http://localhost:3000/api
 - clj-kondo 零 warning、cljfmt 格式一致（`bb lint`、`bb fmt:check`，CI 强制）。
 - SQL 统一放 `resources/sql/*.sql`；两套迁移目录必须同步（`bb lint:migrations` 检查）；共用 SQL 只写两库都支持的语法（如 `INSTR` 代替 `||`、派生表代替 `DUAL`）。
 - 前端状态统一 re-frame；组件局部状态用 Hooks，不用 `reagent/atom`；分页参数固定 `page` / `size`。
+- 前端界面文案用 `(i18n/tr "中文原文")` 包裹、英文译文加到 `i18n.cljs`（外壳与通用组件已完成，业务页面可逐步迁移）；localStorage 只通过 `storage` 命名空间访问；内联样式的颜色用 `var(--app-*)` 变量（见 `resources/public/css/app.css`），暗色主题才能自动适配。
 - 中文 docstring 描述职责、参数与返回值。
 - 更多 antd 6 适配与坑位清单见 `AGENTS.md`。
 

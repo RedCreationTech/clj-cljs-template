@@ -100,7 +100,7 @@ flowchart TB
     spa["Web 前端 (SPA)<br/>[Container: ClojureScript 1.12, shadow-cljs 3.5,<br/>Reagent 2.0, re-frame 1.4, React 19.3, antd 6.6]<br/>登录、布局(侧边菜单 / 多 Tab)、系统管理 / 监控 / 工具页面<br/>编译产物 resources/public/js/app.js"]:::container
     backend["后端服务 (JVM)<br/>[Container: JDK 21, Clojure 1.12.6, Kit 1.0,<br/>Integrant, Undertow, Reitit 0.11, Ring 1.15]<br/>REST API(/api)、静态资源、SPA fallback、Swagger、Quartz 调度<br/>端口 3000"]:::container
     nrepl["nREPL 服务<br/>[Container: kit-nrepl]<br/>开发期热重载入口;端口 7000,仅绑定 127.0.0.1"]:::container
-    db[("数据库<br/>[Container: SQLite 文件 rouyi.db 或 MySQL]<br/>sys_user / role / menu / dept / post / dict / config /<br/>notice / log / job / online / form_template")]:::container
+    db[("数据库<br/>[Container: SQLite 文件 ruoyi.db 或 MySQL]<br/>sys_user / role / menu / dept / post / dict / config /<br/>notice / log / job / online / form_template")]:::container
     fs["本地文件<br/>[Container: 文件系统]<br/>上传目录(通用上传 / 头像)、日志 log/、SQLite 文件"]:::container
   end
   admin -- "访问 [HTTPS]" --> spa
@@ -144,11 +144,11 @@ flowchart TB
   subgraph WEB["web 层 (com.ruoyi.web)"]
     direction TB
     handler["handler<br/>[Reitit ring-handler]<br/>静态资源 · Swagger UI · SPA fallback<br/>路由器(dev 每请求重建)"]:::comp
-    mwcore["middleware.core<br/>[Ring]<br/>wrap-base:ring-defaults + CORS +<br/>operlog + query-fn 注入 + JSON body"]:::comp
+    mwcore["middleware.core<br/>[Ring]<br/>wrap-base:ring-defaults + CORS 白名单 +<br/>静态资源 no-cache + operlog(敏感字段打码)+<br/>query-fn 注入 + JSON body"]:::comp
     routes["routes.api + routes.*<br/>[Reitit 数据路由]<br/>/api 聚合:auth · system · gen · common · captcha<br/>Malli 参数校验 · Swagger 元数据"]:::comp
     mwfmt["middleware.formats + exception<br/>[Muuntaja / Ring]<br/>JSON/Transit 协商 · 统一异常 → {:code :msg}"]:::comp
-    mwauth["middleware.auth<br/>[Ring]<br/>wrap-jwt-auth / require-auth / require-perms<br/>解析 Bearer JWT · 黑名单校验 · 在线心跳"]:::comp
-    ctrl["controllers.*<br/>[Clojure fn]<br/>auth · register · captcha · common · health<br/>monitor · job · gen · system/*"]:::comp
+    mwauth["middleware.auth<br/>[Ring]<br/>wrap-jwt-auth / require-auth / require-perms<br/>解析 Bearer JWT · 会话校验即心跳(sys_online)"]:::comp
+    ctrl["controllers.*<br/>[Clojure fn]<br/>auth(登录 / 续期 / 登出 / 登录页配置)· register · captcha ·<br/>common · health(含 DB)· monitor · job · gen · system/*"]:::comp
   end
   subgraph DOM["领域层 (com.ruoyi.domain)"]
     direction TB
@@ -158,8 +158,9 @@ flowchart TB
   subgraph INFRA["基础设施 (com.ruoyi.infra / integrant)"]
     direction TB
     idb["infra.db + infra.datasource<br/>[next.jdbc]<br/>detect-db-type · insert-and-get-id! · 分页<br/>SQLite↔MySQL 语法适配 · 连接池热切换"]:::comp
-    isec["infra.security<br/>[buddy]<br/>bcrypt 哈希 · JWT 签发/解析"]:::comp
-    ionl["infra.online<br/>[内存 + sys_online]<br/>在线用户 · token 黑名单 · 过期清理线程"]:::comp
+    isec["infra.security + secrets<br/>[buddy]<br/>bcrypt 哈希 · JWT(jti / iat / exp 秒)签发与解析<br/>prod 启动前校验密钥"]:::comp
+    ionl["infra.online<br/>[sys_online + 内存宽限表]<br/>会话即在线记录:心跳 · 续期改挂 jti ·<br/>登出/强退删除 · 空闲清理线程"]:::comp
+    iguard["infra.login-guard + infra.files<br/>[atom / java.io]<br/>登录失败限流 · 上传文件名清洗与防目录穿越"]:::comp
     idp["infra.data-perm<br/>[SQL 片段生成]<br/>data_scope 1~5 → 过滤条件(未接入 SQL,§13)"]:::comp
     isch["infra.scheduler + task + cron<br/>[Quartz]<br/>sys_job 驱动:调度 / 暂停 / 恢复 / 立即执行"]:::comp
     icache["infra.cache<br/>[atom]<br/>内存缓存"]:::comp
@@ -179,6 +180,7 @@ flowchart TB
   ctrl --> isch
   ctrl --> ionl
   ctrl --> isec
+  ctrl --> iguard
   ctrl --> icache
   ctrl -. "data-perm-filter(仅计算)" .-> idp
   mwauth --> isec
@@ -205,7 +207,7 @@ flowchart TB
 #+begin_src mermaid :file img/backend-pipeline.svg :exports results
 flowchart LR
   U[Undertow] --> H["handler/ring<br/>(reitit ring-handler)"]
-  H --> B["wrap-base(自外向内)<br/>1 wrap-json-body(响应 map→JSON)<br/>2 wrap-query-fn(注入 :components)<br/>3 operlog(计时;响应后写 sys_oper_log)<br/>4 handle-preflight(OPTIONS 直接 200)<br/>5 wrap-cors(响应加 CORS 头)<br/>6 ring-defaults(params/cookies/session/安全头)<br/>7 env middleware(env.clj,dev 下为空)"]
+  H --> B["wrap-base(自外向内)<br/>1 wrap-json-body(响应 map→JSON)<br/>2 wrap-query-fn(注入 :components)<br/>3 operlog(计时;响应后写 sys_oper_log,敏感字段打码)<br/>4 wrap-revalidate-static(非 /api 的 GET 加 no-cache)<br/>5 wrap-cors(白名单 Origin 回显,预检 204;默认不加)<br/>6 ring-defaults(params/cookies/session/安全头)<br/>7 env middleware(env.clj,dev 下为空)"]
   B --> R["router/core<br/>reitit 路由匹配"]
   R --> RM["route-data middleware<br/>parameters → muuntaja 协商/响应格式化<br/>coerce-exceptions → 请求格式化<br/>coerce-response / coerce-request(Malli)<br/>exception/wrap-exception"]
   RM --> AM["路由组 middleware<br/>auth-middleware {:required? true}<br/>(wrap-jwt-auth → require-auth)"]
@@ -222,7 +224,7 @@ flowchart LR
 
 要点:
 - ~operlog~ 在路由器 *外层*,看不到路由级 ~wrap-jwt-auth~ 写入的 ~:identity~,所以它自己从 ~Authorization~ 头解析 JWT 取操作人(缺失/无效记为 ~anonymous~);只记录 ~/api/*~ 下的非 GET 请求,跳过 ~/api/auth/login~ ~/api/health~;写日志失败只打 warn,不影响业务响应。
-- 认证不是全局的: ~/system~ 与 ~/tool~ 两个路由组声明 ~(auth-mw/auth-middleware {:required? true})~; ~/api/health~ 、 ~/api/auth/login~ 、验证码、通用上传下载可匿名访问。 ~auth-middleware~ 还支持 ~:perms~ (~require-perms~),但模板里目前 *没有任何路由使用*,见 §13 设计债。
+- 认证不是全局的: ~/system~ 、 ~/tool~ 、 ~/common~ (文件上传下载)路由组与 ~/auth/refresh~ 、 ~/auth/getInfo~ 声明 ~(auth-mw/auth-middleware {:required? true})~; ~/api/health~ 、 ~/api/auth/config~ 、 ~/api/auth/login~ 、 ~/api/auth/register~ (默认关闭)、验证码可匿名访问, ~/api/auth/logout~ 不强制登录(令牌已失效也返回成功)。 ~auth-middleware~ 还支持 ~:perms~ (~require-perms~),但模板里目前 *没有任何路由使用*,见 §13 设计债。
 - dev 环境下 ~router/core~ 返回一个每次请求都重新构建路由表的函数,配合 ~(user/rroutes)~ 实现路由热重载;prod 下路由表只构建一次。
 - ~ring-defaults~ 的 cookie session 已配置但业务代码不使用 session(API 全靠 Bearer);CSRF 关闭。
 
@@ -264,13 +266,14 @@ flowchart TB
   backend["后端 /api<br/>[Container: Reitit]"]:::container
   subgraph SPA["com.ruoyi.frontend"]
     direction TB
-    app["app<br/>[Reagent root]<br/>init:initialize-db → 主题加载 → 路由初始化<br/>→ 有 token 则 fetch-info → 渲染<br/>ConfigProvider(主题 / 中文) + antd App"]:::comp
+    app["app<br/>[Reagent root]<br/>init:initialize-db → 语言与主题加载 → 路由初始化<br/>→ 有 token 则 fetch-info → 渲染<br/>ConfigProvider(主题 / 语言)+ antd App(登录页与布局共用)"]:::comp
     cfg["config<br/>[常量]<br/>app-name / app-subtitle / welcome-text / repo-url"]:::comp
     router["router<br/>[bidi + popstate]<br/>routes 路由表 · page-names · navigate!(pushState)"]:::comp
     db["db<br/>[re-frame app-db 初始值]<br/>page / tabs / auth / theme / layout-settings<br/>+ 各领域列表状态"]:::comp
     events["events + events/*<br/>[re-frame reg-event-* / reg-fx]<br/>core(导航 / 多 Tab) · auth · theme · common<br/>users / roles / depts / posts / dicts / configs /<br/>notices / menus / logs / jobs / monitor / gen / profile / formbuilder"]:::comp
     subs["subs + subs/*<br/>[re-frame reg-sub]<br/>core · system · monitor · config · gen"]:::comp
-    api["api + api/*<br/>[cljs-ajax]<br/>transport(api-base · token 注入 · request)<br/>+ 各领域 api;api.cljs 重导出"]:::comp
+    api["api/*<br/>[cljs-ajax]<br/>transport(带令牌 · 过半续期 · 401 回登录页)<br/>token(纯函数)· 各领域 api"]:::comp
+    infra["i18n · storage<br/>[纯 cljs]<br/>tr(中文原文为键,en-US 词典)<br/>localStorage 唯一入口(ruoyi_ 前缀)"]:::comp
     antd["antd<br/>[r/adapt-react-class]<br/>组件适配 · message 实例 · Form.useForm"]:::comp
     layout["pages.layout + layout/*<br/>[Reagent]<br/>Sider 菜单(menu-build 按后端菜单树生成)<br/>Header · 多 Tab(tabs) · 面包屑(menu-data) · 页面分发(page-view)"]:::comp
     pages["pages/*<br/>[Reagent 函数组件]<br/>login · dashboard · user/* · role · menu · dept · post · dict ·<br/>config · notice · oper_log · login_log · online · job · server ·<br/>cache · datasource · integrant · gen · swagger · form_builder · file_manager · profile"]:::comp
@@ -280,7 +283,9 @@ flowchart TB
   app --> router
   app --> layout
   app --> theme
+  app --> infra
   layout --> cfg
+  layout --> infra
   layout -- "render-page(page)" --> pages
   pages --> comps
   pages --> antd
@@ -303,7 +308,10 @@ flowchart TB
 - *菜单不写死*:侧边栏由 ~/api/auth/getInfo~ 返回的菜单树(按角色过滤)经 ~layout/menu-build~ 转成 antd items;前端只维护 ~page->menu-key~ 、面包屑、图标这类"路由关键词 → 展示"映射(~layout/menu_data.cljs~)。 ~getInfo~ 同时返回 ~permissions~,目前前端只存不用(按钮显隐未接入,§13)。
 - *多 Tab*: ~:navigate~ 事件同时更新 ~:page~ 、激活/新增 Tab(~events/common~ 的 ~activate-page-tab~)、按页面预取数据(~events/core~ 里的 ~fetch~ 表,系统模块用;脚手架生成的业务页面改在组件挂载时 ~use-effect~ 自行加载,不需要登记预取)。
 - *局部状态用 Hooks,全局状态用 re-frame*,禁止 ~reagent/atom~ (AGENTS.md 有完整的 antd 6 适配清单)。
-- *主题与布局设置* 持久化在 localStorage(键前缀 ~rouyi-~ / ~ruoyi_~,改名脚本会一并替换)。
+- *主题、布局设置、语言、令牌* 都经 ~storage~ 存在 localStorage(键名 ~ruoyi_<名称>~,改名脚本会一并替换)。
+- *暗色主题*:组件内联样式的颜色统一用 ~css/app.css~ 里的 ~--app-*~ 变量, ~app.cljs~ 把当前主题写到 ~<html data-theme>~,变量随之切换;antd 覆盖样式只在浅色主题生效。
+- *多语言*: ~(i18n/tr "中文原文")~ ,英文界面查 ~en-US~ 词典,没有译文退回中文;菜单名(数据库)、面包屑、Tab 标题在渲染时经 ~tr~ 翻译。切换语言时根组件以语言为 key 整体重新挂载。外壳已国际化,业务页面按需迁移。
+- *登录态*: ~api.transport~ 在令牌过了有效期一半时顺带触发 ~:auth/refresh~ (活跃用户不会掉线),任何带令牌的请求收到 401 就触发 ~:auth/session-expired~ 清理状态并回到登录页。
 
 ** 5.2 可执行:前端规模速览
 
@@ -498,34 +506,44 @@ curl -s  localhost:3000/api/system/user            # 期望 {"code":401,"msg":"�
 
 * 7. Dynamic Views(动态视图)
 
-** 7.1 登录与 JWT
+** 7.1 登录、续期与会话失效
 
 #+begin_src mermaid :file img/dyn-login.svg :exports results
 sequenceDiagram
   autonumber
   participant B as 浏览器(login 页)
-  participant E as events/auth
+  participant E as events/auth + api.transport
   participant API as /api/auth
   participant C as controllers/auth
+  participant G as infra.login-guard
   participant S as infra.security
   participant O as infra.online
   participant DB as DB
-  B->>API: GET /captchaImage
-  API-->>B: {uuid, img}(验证码存内存 atom,含过期时间)
-  B->>E: dispatch [:auth/login {username password captcha uuid}]
+  B->>API: GET /auth/config
+  API-->>B: {captchaEnabled, registerEnabled, demoAccount?(仅 dev/test)}
+  opt 开启验证码
+    B->>API: GET /captcha/image?r=uuid(验证码存内存,5 分钟有效)
+  end
+  B->>E: dispatch [:auth/login {username password captcha? uuid?}]
   E->>API: POST /auth/login
   API->>C: login
-  C->>C: 校验验证码(命中后即删除)
+  C->>C: 验证码(开启时必填,提交即作废)
+  C->>G: locked-until?(按用户名)
   C->>DB: find-user-by-name
-  C->>S: verify-password(bcrypt)
-  C->>S: generate-token(user-id, user-name, role-ids)
-  C->>O: register!(token, user, ip) → sys_online
-  C->>DB: create-login-log!(成功/失败都记)
-  C-->>E: {code 200, data {token}}
-  E->>E: :auth/login-success → localStorage ruoyi_token
-  E->>API: GET /auth/getInfo (Authorization: Bearer)
+  C->>S: verify-password(bcrypt,用户不存在也校验一次假哈希)
+  alt 失败
+    C->>G: record-failure!(达到上限锁定)
+    C-->>E: {code 400/429,"用户名或密码错误" / 已锁定}
+  else 成功
+    C->>O: register!(jti, user, ip) → sys_online
+    C->>S: generate-token(user-id, user-name, role-ids, jti)
+    C-->>E: {code 200, data {token expiresIn}}
+  end
+  E->>E: :auth/login-success → storage :token
+  E->>API: GET /auth/getInfo(每个请求:wrap-jwt-auth 校验签名与 exp,再用 jti 心跳 sys_online)
   API-->>E: {user, roles, permissions, menus}
-  E->>B: app-db :auth/user + 菜单树 → 渲染主布局
+  Note over E,API: 令牌过了有效期一半时,下一个请求顺带 POST /auth/refresh:<br/>会话改挂到新 jti,旧令牌 30 秒宽限后失效
+  Note over E,API: 登出 / 强退 / 空闲 30 分钟 → 会话行被删 → 下一个请求 401<br/>→ :auth/session-expired → 回到登录页
 #+end_src
 
 #+RESULTS:
@@ -619,7 +637,7 @@ flowchart LR
     subgraph NODE["Node.js:bb dev → shadow-cljs watch app"]
       fe1["shadow-cljs 编译器<br/>增量编译 → resources/public/js"]:::container
     end
-    sqlite[("rouyi.db<br/>SQLite 文件")]:::container
+    sqlite[("ruoyi.db<br/>SQLite 文件")]:::container
     be1 -- JDBC --> sqlite
     fe1 -. 写入 js/ .-> be1
   end
@@ -628,7 +646,7 @@ flowchart LR
     subgraph NGINX["Nginx(可选)"]
       rp["reverse proxy<br/>TLS 终止 443 → 3000"]:::container
     end
-    subgraph JVM2["JVM:java -jar rouyi-standalone.jar"]
+    subgraph JVM2["JVM:java -jar ruoyi-standalone.jar"]
       be2["uberjar(含前端 release 产物)<br/>PORT / JDBC_URL / MIGRATION_DIR 由环境变量注入<br/>JWT_SECRET / COOKIE_SECRET 必填(启动校验)"]:::container
     end
     rp -- HTTP --> be2
@@ -649,12 +667,17 @@ flowchart LR
 |------+------+------|
 | ~PORT~ / ~HTTP_HOST~ | 3000 / 0.0.0.0 | HTTP 监听 |
 | ~NREPL_PORT~ / ~NREPL_HOST~ | 7000 / 127.0.0.1 | nREPL |
-| ~JDBC_URL~ | ~jdbc:sqlite:rouyi.db~ | 换 MySQL 时填 ~jdbc:mysql://…~ |
-| ~MIGRATION_DIR~ | ~migrations-sqlite~ | MySQL 填 ~migrations~ |
+| ~JDBC_URL~ | ~jdbc:sqlite:ruoyi.db~ | 换 MySQL 时填 ~jdbc:mysql://…~ |
+| ~MIGRATION_DIR~ | 按 ~JDBC_URL~ 推导 | MySQL → ~migrations~ ,其它 → ~migrations-sqlite~ ( ~config/with-default-migration-dir~ );一般不用设 |
 | ~JWT_SECRET~ | 内置开发值 | prod 必填:≥32 字符且不等于内置值,否则拒绝启动(~infra/secrets.clj~);生成: ~openssl rand -hex 32~ |
 | ~COOKIE_SECRET~ | 内置开发值 | prod 必填:恰好 16 字节(AES-128 cookie store)且不等于内置值;生成: ~openssl rand -hex 8~ |
+| ~CAPTCHA_ENABLED~ | prod ~true~ ,dev/test ~false~ | 登录验证码;开启后空验证码判失败 |
+| ~TOKEN_TTL_MINUTES~ | 720 | 令牌有效期;活跃用户在过半时自动续期 |
+| ~LOGIN_MAX_FAILURES~ / ~LOGIN_LOCK_MINUTES~ | 5 / 10 | 登录失败限流 |
+| ~REGISTER_ENABLED~ | ~false~ | 自助注册开关 |
+| ~CORS_ORIGINS~ | 空 | 允许跨域的来源,逗号分隔;空 = 只允许同源 |
 
-test profile 使用独立端口 3100 / 7100 与独立的 ~test.db~ ,所以 ~bb test~ 可以和正在运行的 ~bb dev~ 并存; ~bb test:mysql~ / ~bb db:roundtrip~ 读取同样的 ~JDBC_URL~ / ~MIGRATION_DIR~ (MySQL URL 时自动选 ~migrations~ 目录)。本地 MySQL 用仓库根目录的 ~docker-compose.yml~ (mysql:8.4,端口 3308)。
+test profile 使用独立端口 3100 / 7100 与独立的 ~test.db~ ,所以 ~bb test~ 可以和正在运行的 ~bb dev~ 并存; ~bb test:mysql~ / ~bb db:roundtrip~ 读取同样的 ~JDBC_URL~ / ~MIGRATION_DIR~ 。认证相关的值汇总在 ~system.edn~ 的 ~:reitit.routes/api :auth-config~ 。健康检查 ~/api/health~ 会执行 ~SELECT 1~ ,数据库不可用时返回 503,可直接用作负载均衡 / 容器编排的探针。本地 MySQL 用仓库根目录的 ~docker-compose.yml~ (mysql:8.4,端口 3308)。
 
 可执行:prod 密钥校验的规则(不启动系统,直接调用校验函数)
 
@@ -667,7 +690,7 @@ clojure -M:dev -e "(require '[com.ruoyi.infra.secrets :as secrets]) (run! printl
 #+begin_src sh :exports code :eval never
 bb uberjar                          # = bb release(前端压缩,warning 即失败)+ clojure -T:build all(clean → pom → 复制 → 编译 → uberjar)
 ls -la target/*-standalone.jar
-JWT_SECRET=$(openssl rand -hex 32) COOKIE_SECRET=$(openssl rand -hex 8) java -jar target/rouyi-standalone.jar
+JWT_SECRET=$(openssl rand -hex 32) COOKIE_SECRET=$(openssl rand -hex 8) java -jar target/ruoyi-standalone.jar
 docker build -t clojure-template .  # 先 bb release;多阶段:clojure:temurin-21-tools-deps 构建 → eclipse-temurin:21-jre-alpine 运行
 docker run -e JWT_SECRET=… -e COOKIE_SECRET=… -p 3000:3000 clojure-template
 #+end_src
@@ -675,8 +698,9 @@ docker run -e JWT_SECRET=… -e COOKIE_SECRET=… -p 3000:3000 clojure-template
 * 9. 横切关注点
 
 ** 9.1 认证与授权
-- *身份*:登录成功签发 JWT(~infra.security/generate-token~,claims 含 user-id / user-name / roles(角色 id)),前端放 localStorage 并以 ~Authorization: Bearer~ 发送;服务端无会话状态。
-- *登出/强退*:JWT 本身不可撤销,因此 ~infra.online~ 维护 token 黑名单 + ~sys_online~ 表; ~wrap-jwt-auth~ 每次请求检查黑名单并更新心跳,过期会话由后台线程清理。
+- *身份*:登录成功签发 JWT(~infra.security/generate-token~,claims 含 user-id / user-name / roles(角色 id)/ jti(会话 ID)/ iat / exp(Unix 秒,默认 720 分钟,~TOKEN_TTL_MINUTES~)),前端经 ~storage~ 存在 localStorage 并以 ~Authorization: Bearer~ 发送。
+- *会话*:令牌可验签不等于会话有效—— ~wrap-jwt-auth~ 用 ~jti~ 更新 ~sys_online~ 心跳,更新 0 行即视为未登录。登出与强退删除会话行,令牌立即失效(存在数据库里,多实例同样生效);后台线程每 5 分钟删除空闲超过 30 分钟的会话。续期( ~/api/auth/refresh~ )把会话改挂到新 ~jti~,旧令牌在进程内存里记 30 秒宽限,避免与续期并发的请求被误判。
+- *登录保护*:验证码开关( ~CAPTCHA_ENABLED~ ,prod 默认开,开启后空验证码判失败);同一用户名 10 分钟内失败 5 次锁定 10 分钟( ~infra.login-guard~ ,不存在的用户名同样计数);失败提示统一为「用户名或密码错误」,用户不存在时也做一次 bcrypt 校验,响应时间一致;自助注册默认关闭,开启后只接受用户名与密码,新用户不带任何角色。
 - *功能权限(现状)*:后端只区分「匿名可访问」与「必须登录」两档(~/system~ 、 ~/tool~ 路由组 ~:required? true~)。 ~getInfo~ 会按角色 → 菜单 ~perms~ 算出权限集合返回给前端,前端据此 *动态生成菜单*;但按钮级 ~perms~ 校验在前后端都还没有落地: ~require-perms~ 已实现却无路由使用,且 JWT claims 里没有 perms(需要在 ~wrap-jwt-auth~ 里按角色查询或把 perms 放进 claims),前端也没有按 ~permissions~ 控制按钮显隐。这是模板刻意留出的扩展点,见 §13。
 - *数据权限(现状)*:角色 ~data_scope~ (1 全部 / 2 自定义 / 3 本部门 / 4 本部门及以下 / 5 仅本人)→ ~infra.data-perm/data-perm-filter~ 生成 SQL 片段与参数,单测覆盖全部分支;用户/参数/字典列表的 controller 已调用它,但生成的 ~:sql~ 片段尚未拼进 HugSQL 查询,且它按 ~role-key~ 匹配 ~identity~ 里的角色 map,而 JWT 里只有角色 id——所以当前对所有用户都等价于「不过滤」。接入方式见 §13。
 
@@ -715,8 +739,11 @@ diff <(ls resources/migrations-sqlite | sed 's/\.\(up\|down\)\.sql$//' | sort -u
 ** 9.6 错误处理与安全头
 - ~middleware.exception~ 把未捕获异常统一转成 ~{:code 500 :msg …}~,coercion 错误由 reitit 的 ~coerce-exceptions-middleware~ 返回 400。
 - ring-defaults:XSS 保护、 ~X-Frame-Options: sameorigin~ 、 ~nosniff~;CSRF 关闭(纯 Bearer API)。
-- CORS: ~wrap-cors~ 返回 ~Access-Control-Allow-Origin: *~ 同时 ~Allow-Credentials: true~ ——浏览器不接受这个组合携带凭据,模板同源部署时无影响;真要跨域请改成回显具体 Origin。
-- 前端错误处理:各 ~reg-fx :api/*~ 的失败回调大多是空函数 ~(fn [_])~,401 也不会自动跳登录;需要统一处理时在 ~api.transport/request~ 的 ~on-error~ 里做(§13)。
+- CORS:默认不加任何 CORS 头(前后端同源部署不需要); ~CORS_ORIGINS~ 列出的来源才回显 ~Access-Control-Allow-Origin~ 并直接应答预检, ~*~ 表示任意来源(只建议开发时用)。
+- 静态资源:非 ~/api~ 的 GET 响应加 ~Cache-Control: no-cache~,浏览器每次用 ~If-Modified-Since~ 确认(未变化返回 304),发版后不会用到旧的 ~app.js~ 。
+- 文件:上传文件名只保留最后一段并替换不安全字符、同名不覆盖;下载与删除按名字解析后必须仍在上传目录内( ~infra.files~ ),上传下载都要求登录。
+- 操作日志:参数里的 password / token / secret 类字段打码后再入库。
+- 前端错误处理:带令牌的请求收到 401(HTTP 状态或业务码)统一触发 ~:auth/session-expired~ 回登录页;其它失败仍由各 ~reg-fx :api/*~ 自己提示(不少还是空函数,见 §13 #3)。
 
 * 10. 扩展指南
 
@@ -809,7 +836,8 @@ bb ci                            # lint + fmt:check + test,确认改名后一切
 
 | 层 | 工具 | 命令 | 说明 |
 |----+------+------+------|
-| 单元 / 集成 | clojure.test + peridot + ~test_utils~ | ~bb test~ | 起一套 :test profile 的 Integrant 系统(独立 ~test.db~ 、端口 3100/7100),控制器测试走真实路由与中间件 |
+| 单元 / 集成 | clojure.test + peridot + ~test_utils~ | ~bb test~ | 起一套 :test profile 的 Integrant 系统(独立 ~test.db~ 、端口 3100/7100),控制器测试走真实路由与中间件;测试进程里 bcrypt 用最低强度,整套约 30 秒 |
+| 前端单元 | cljs.test + shadow-cljs ~:node-test~ | ~bb test:cljs~ | ~test/cljs~ 下的纯函数:路由表、令牌续期时机、storage、i18n、Tab 与菜单派生 |
 | 双库 | MySQL 8.4 | ~bb test:mysql~ | docker compose(3308)或 ~JDBC_URL~ ;每次先清空库 |
 | 迁移 | Migratus | ~bb db:roundtrip~ 、 ~bb lint:migrations~ | up → down → up 后表数一致、无待执行迁移;两目录成对、有 down、 ~--;;~ 分隔、无对方方言 |
 | 端到端 | Playwright | ~bb e2e~ | 需后端已在 3000 运行;串行(共享 SQLite) |
@@ -828,7 +856,7 @@ flowchart LR
   setup --> lint["lint<br/>bb lint · bb fmt:check"]:::container
   setup --> sq["test-sqlite<br/>bb test · bb db:roundtrip"]:::container
   setup --> my["test-mysql<br/>service mysql:8.4<br/>bb test:mysql · bb db:roundtrip"]:::container
-  setup --> e2e["e2e<br/>bb release → bb backend → bb e2e<br/>失败时上传报告与后端日志"]:::container
+  setup --> e2e["e2e<br/>bb test:cljs → bb release → bb backend → bb e2e<br/>失败时上传报告与后端日志"]:::container
   setup --> sc["scaffold<br/>bb new-module ci-demo(6 种字段类型)<br/>→ lint · fmt · 生成的测试 · roundtrip<br/>→ bb cljs:check → 生成的 E2E"]:::container
   classDef person fill:#08427b,stroke:#052e56,color:#fff
   classDef system fill:#1168bd,stroke:#0b4884,color:#fff
@@ -838,7 +866,7 @@ flowchart LR
 #+RESULTS:
 [[file:img/ci-pipeline.svg]]
 
-5 个任务并行,互不依赖; ~concurrency~ 让同一分支的新提交取消旧的运行。 ~bb ci~ 在本地跑其中最快的部分(lint + fmt:check + test)。 ~scaffold~ 任务保证脚手架模板与主干代码同步演进:任何让生成代码失效的改动(改了登记点、组件接口、antd 封装等)都会在这里失败。
+5 个任务并行,互不依赖; ~concurrency~ 让同一分支的新提交取消旧的运行。 ~bb ci~ 在本地跑其中最快的部分(lint + fmt:check + test + test:cljs)。 ~scaffold~ 任务保证脚手架模板与主干代码同步演进:任何让生成代码失效的改动(改了登记点、组件接口、antd 封装等)都会在这里失败。
 
 可执行:跑后端测试并只看汇总行
 
@@ -876,7 +904,7 @@ bb lint:migrations 2>&1 | tail -1
 - *后果*:AGENTS.md 维护一份 antd 6 适配清单;所有页面必须走 ~re-frame~ 事件而不是直接调 api。
 
 ** ADR-005 保留 ~com.ruoyi~ 命名空间,用 ~bb rename~ 改名
-- *决策*:模板源码保持 ~com.ruoyi~ / ~rouyi~ 命名,派生项目执行 ~bb rename <ns> <name>~ 一次性改名(最初是 ~scripts/rename-project.sh~ ,ADR-008 起改为 bb 任务)。
+- *决策*:模板源码保持 ~com.ruoyi~ / ~ruoyi~ 命名,派生项目执行 ~bb rename <ns> <name>~ 一次性改名(最初是 ~scripts/rename-project.sh~ ,ADR-008 起改为 bb 任务)。
 - *理由*:模板自身可持续演进并被上游同步;改名是确定性文本替换 + 目录移动,脚本比手工可靠。
 - *后果*:培训教材 ~docs/training~ 与 RuoYi-Vue 对照文档保持原名;旧值从 ~kit.edn~ 读取,所以可重复执行;所有 bb 任务同样从 ~kit.edn~ 取命名空间与路径,改名后无需调整。
 
@@ -898,17 +926,21 @@ bb lint:migrations 2>&1 | tail -1
 |---+------+------+----------+----------|
 | 1 | 按钮级权限校验 | ~require-perms~ 无人使用;JWT 无 perms;前端不按 ~permissions~ 控制按钮 | ~wrap-jwt-auth~ 里按 ~:roles~ 查 ~role-service/get-role-perms~ 写入 ~(:identity :perms)~ (或签发时放进 claims);路由声明 ~(auth-middleware {:required? true :perms "system:user:add"})~;前端加 ~:auth/has-perm?~ 订阅包住工具栏按钮 | ~middleware/auth.clj~ ~infra/security.clj~ ~routes/system.clj~ ~subs/core.cljs~ |
 | 2 | 数据权限接入 SQL | ~data-perm-filter~ 只算不用;按 ~role-key~ 匹配但 identity 只有角色 id | ~getInfo~ /登录时把角色 map(~role-key data-scope dept-id~)放进 identity;HugSQL 用 =--~= 片段(snip)或 ~:sql:data-perm-sql~ 把 ~:sql~ 片段拼进 ~list-users~ 等查询 | ~infra/data_perm.clj~ ~resources/sql/system.sql~ ~controllers/system/{user,config,dict}.clj~ |
-| 3 | 前端统一错误处理 | ~:api/*~ 失败回调为空;401 不跳登录 | ~api.transport/request~ 的 ~on-error~ 统一 dispatch ~[:common/api-error resp]~:401 → ~:auth/logout~,其余 → ~antd/error!~ | ~api/transport.cljs~ ~events/common.cljs~ |
-| 4 | 生产安全默认值 | *密钥部分已解决*(ADR-008):prod 下 ~JWT_SECRET~ / ~COOKIE_SECRET~ 缺失、为默认值或长度不合格时拒绝启动。*仍待处理*:CORS ~*~ + credentials | CORS 改为回显白名单 Origin(如 ~CORS_ORIGINS~ 环境变量) | ~middleware/core.clj~ ~system.edn~ |
-| 5 | 多实例部署 | token 黑名单、在线心跳、验证码、缓存监控都在进程内存 | 引入 Redis(或改短 token + refresh)时把 ~infra.online~ / ~captcha-store~ / ~infra.cache~ 抽成协议 + 两个实现 | ~infra/online.clj~ ~controllers/captcha.clj~ ~infra/cache.clj~ |
+| 3 | 前端统一错误处理 | *部分解决*(ADR-009):401 统一回登录页。其余失败回调不少仍是空函数,用户看不到错误 | 在 ~api.transport/request~ 对非 2xx / 业务码非 200 默认 ~antd/error!~ ,调用方可传 ~:silent? true~ 关闭 | ~api/transport.cljs~ ~events/*.cljs~ |
+| 4 | 生产安全默认值 | *已解决*:prod 密钥强制(ADR-008);CORS 改为白名单(ADR-009) | — | — |
+| 5 | 多实例部署 | 会话已在数据库(登出 / 强退 / 空闲超时跨实例生效);仍在进程内存:验证码、登录失败计数、续期宽限表、缓存监控 | 多实例时把 ~captcha-store~ 、 ~infra.login-guard~ 、 ~infra.online~ 的宽限表、 ~infra.cache~ 换成 Redis 等共享存储(先抽协议) | ~controllers/captcha.clj~ ~infra/login_guard.clj~ ~infra/online.clj~ ~infra/cache.clj~ |
 | 6 | 未使用的 edge | ~:templating/selmer~ 已装配但无模板; ~:cronut/scheduler~ 的 ~:schedule []~ 由 ~infra.scheduler~ 动态填充 | 不做服务端渲染可删 selmer 依赖与组件 | ~core.clj~ ~system.edn~ ~deps.edn~ |
-| 7 | 代码生成器落盘路径 | ~controllers/gen.clj~ 硬编码 ~src/clj/com/ruoyi/...~ (改名脚本会一起替换) | 从 ~kit.edn~ 的 ~:sanitized~ 读取路径前缀 | ~controllers/gen.clj~ |
-| 8 | 静态检查遗留 | *已解决*(ADR-008):212 个 warning 已清零(顺带修复 2 处真实 bug),CI 以 ~--fail-level warning~ 强制 | 保持零 warning;新增例外写进 ~.clj-kondo/config.edn~ 并注明原因 | ~.clj-kondo/config.edn~ |
-| 9 | 文档站 | ~docs/index.html~ 标题与目录仍是源项目文案 | 与 README 同步或生成 | ~docs/index.html~ |
-| 10 | 验证码可绕过 | ~controllers/auth.clj~ 在 ~captcha~ 为空时直接放行(E2E 依赖这一点) | 加 ~CAPTCHA_ENABLED~ 开关(prod 默认开、test profile 关),空验证码在开启时判失败 | ~controllers/auth.clj~ ~system.edn~ ~tests/e2e/auth-helper.js~ |
-| 12 | 脚手架生成的路由只校验登录 | ~bb new-module~ 生成的菜单带 ~perms~ ( ~biz:<m>:list~ ),但路由只要求登录 | 完成 #1 后在 ~scaffold/backend.clj~ 的路由模板里为各方法声明 ~:perms~ ,并生成对应的按钮权限菜单(F 类型) | ~bb/tasks/scaffold/{backend,sql}.clj~ |
-| 13 | MySQL 需要手动设 ~MIGRATION_DIR~ | 应用启动时 ~JDBC_URL~ 为 MySQL 但 ~MIGRATION_DIR~ 未设置,会用 SQLite 迁移而失败(bb 的 ~test:mysql~ / ~db:roundtrip~ 已自动处理) | 在 ~config.clj~ 按 ~JDBC_URL~ 前缀推导默认迁移目录 | ~config.clj~ ~system.edn~ |
+| 7 | 两套代码生成 | 页面内生成器已修正(路径随命名空间、deploy 仅 dev、两库迁移、文件名下划线,ADR-009),但模板与 ~bb new-module~ 是两套,风格不一致 | 长期把页面生成器改为调用 ~bb/tasks/scaffold~ 的模板(按已有表结构生成字段规格) | ~domain/gen.clj~ ~controllers/gen.clj~ |
+| 8 | 静态检查遗留 | *已解决*(ADR-008) | 保持零 warning | ~.clj-kondo/config.edn~ |
+| 9 | 文档站 | *已解决*:标题、快速开始与目录已更新为模板与 bb 命令 | — | ~docs/index.html~ |
+| 10 | 验证码可绕过 | *已解决*(ADR-009):开启时空验证码判失败;E2E 在 dev profile(默认关闭)下运行 | — | — |
 | 11 | 时间戳时区 | SQLite ~CURRENT_TIMESTAMP~ 写的是 UTC,前端按本地时间解析 → 仪表盘"最近操作"显示"8 小时前" | 统一用 Clojure 层生成 ~yyyy-MM-dd HH:mm:ss~ 本地时间传参(两库一致),或前端按 UTC 解析 | ~resources/sql/*.sql~ ~middleware/operlog.clj~ ~pages/dashboard.cljs~ |
+| 12 | 脚手架生成的路由只校验登录 | ~bb new-module~ 生成的菜单带 ~perms~ ( ~biz:<m>:list~ ),但路由只要求登录 | 完成 #1 后在 ~scaffold/backend.clj~ 的路由模板里为各方法声明 ~:perms~ ,并生成对应的按钮权限菜单(F 类型) | ~bb/tasks/scaffold/{backend,sql}.clj~ |
+| 13 | MySQL 需要手动设 ~MIGRATION_DIR~ | *已解决*(ADR-009):按 ~JDBC_URL~ 推导 | — | ~config.clj~ |
+| 14 | 业务页面文案 | 外壳已国际化( ~i18n/tr~ ),业务页面与后端返回的 ~msg~ 仍是中文 | 页面逐个把字面量包进 ~tr~ 并补 ~en-US~ 词条;后端 ~msg~ 改为错误码 + 前端翻译 | ~pages/*.cljs~ ~i18n.cljs~ ~controllers/*.clj~ |
+| 15 | 暗色主题细节 | 页面颜色已改用 ~--app-*~ 变量;少数写在条件表达式里的颜色、工具栏按钮的浅色底、登录页固定配色仍按浅色设计 | 继续把残留的十六进制颜色换成变量;按钮配色改用 antd token | ~components/page_toolbar.cljs~ ~pages/*.cljs~ |
+| 16 | 头部占位按钮 | 头部的搜索、文档按钮没有功能,通知角标写死为 3 | 接入菜单搜索、文档链接与通知公告未读数,或删除 | ~pages/layout/header.cljs~ |
+| 17 | 上传限制 | 上传没有大小与扩展名限制(文件只以附件形式下载,不会被当作页面执行) | 在 ~infra.files/store!~ 加扩展名白名单,在 ring multipart 配置里加大小上限 | ~infra/files.clj~ ~system.edn~ |
 
 可执行:设计债 1/2/3 的现状指标(全 0 表示尚未接入;接入后应变为非 0)
 
@@ -939,6 +971,23 @@ printf "统一错误事件      %s\n" "$(grep -rn 'api-error' src/cljs | wc -l)"
   - 测试 profile 改用独立端口与 ~test.db~ ,可与 ~bb dev~ 同时运行;
   - ~form_builder.cljs~ 生成必填规则时的字符串拼接错误、 ~menu_test.clj~ 嵌套 ~is~ 等 kondo 发现的真实问题。
 
+** ADR-009 会话以数据库为准、认证加固、前端基础设施(存储 / 多语言 / 主题变量 / 单元测试)
+- *决策*:
+  - *会话*:令牌加 ~:jti~ ,会话以 ~sys_online~ 为准(心跳命中即有效),登出、强退、空闲超时删除会话行即令牌失效;取消进程内存黑名单。 ~/api/auth/refresh~ 滑动续期(会话改挂到新 ~jti~ ,旧令牌 30 秒宽限),前端在令牌过半时自动续期、收到 401 统一回登录页。 ~:exp~ 改为 JWT 标准的 Unix 秒。
+  - *登录*:验证码开关(prod 默认开)、按用户名失败限流、统一失败提示与等时校验;自助注册默认关闭并只接受用户名与密码; ~/api/auth/config~ 把验证码开关与(仅开发环境的)演示账号告诉登录页。
+  - *其它后端*:CORS 白名单(默认同源)、健康检查含数据库(不可用返回 503)、页面代码生成器的 deploy 仅限 dev 且路径随命名空间、 ~MIGRATION_DIR~ 按 ~JDBC_URL~ 推导、静态资源 ~no-cache~ 协商缓存、操作日志敏感字段打码、上传下载要求登录并防目录穿越、代码生成器的表名先按标识符校验再拼进 ~PRAGMA~ 。
+  - *前端*:删除 116 个函数的 ~api.cljs~ 门面,调用方直接引用领域命名空间; ~storage~ 作为 localStorage 唯一入口; ~i18n/tr~ 以中文原文为键,外壳(登录、头部、菜单、Tab、面包屑、通用工具栏、分页)与脚手架页面已接入,英文界面可切换; ~index.html~ 的内联样式移到 ~css/app.css~ ,删除未使用的 bpmn-js 外部脚本,页面颜色改用 ~--app-*~ 变量,暗色主题整体可用;登录页与主布局共用 antd ~App~ ,切换时提示不丢失。
+  - *测试*: ~test/cljs~ + shadow-cljs ~:node-test~ ( ~bb test:cljs~ ,纳入 ~bb ci~ 与 CI);后端测试进程里 bcrypt 用最低强度、集成测试复用登录令牌,整套从约 38 秒降到约 30 秒。
+  - *命名*:项目名 ~rouyi~ 统一为 ~ruoyi~ (用 ~bb rename com.ruoyi ruoyi~ 自举完成);localStorage 键统一为 ~ruoyi_<名称>~ 。
+  - *CRUD 宏*:评估后不做。re-frame 注册写成显式代码,kondo 与 grep 都能看懂;各领域差异(树形数据、状态切换、导入导出)会让统一宏越来越多参数;需要一致性的新模块由 ~bb new-module~ 生成同构代码。
+- *附带发现并修复的安全问题*:
+  - 公开的 ~/api/auth/register~ 把请求体原样交给 ~create-user!~ ,可以带 ~roles~ 注册出管理员;
+  - 匿名的 ~/api/common/upload~ / ~download~ / ~download/resource~ 直接用请求里的文件名拼路径,可以跨目录写文件、读服务器任意文件;系统文件管理的下载与删除同样可以跨目录;
+  - JWT 的 ~:exp~ 写的是毫秒,buddy 按秒校验,令牌实际上永不过期;
+  - 登出时前端先清掉令牌再发请求,服务端会话从来没有被删除,旧令牌登出后仍然可用;
+  - 登录失败时按钮一直停在「登录中…」,提示也不显示(写进了没人订阅的 ~:notification~ )。
+- *验证*: ~bb test~ 376 tests / 966 assertions 在 SQLite 与 MySQL 8.0 上全过;两库迁移往返通过;应用在 MySQL 上不设 ~MIGRATION_DIR~ 启动正常; ~bb test:cljs~ 17 tests / 49 assertions;release 0 warning;Playwright 24 个用例对 release 产物连续 3 轮零失败(新增登录失败提示、登出后旧令牌失效、会话失效自动回登录页);脚手架冒烟(生成模块后 lint / 格式 / 测试 / 往返 / 编译 / E2E)通过;用 1 分钟有效期实测:过半后自动续期,原令牌过期后被拒绝而页面保持登录;开启验证码时登录页显示验证码且空验证码被拒绝;中英文切换与暗色主题截图检查。
+
 * 附录 A:模板与源项目的差异清单
 
 | 类别 | 已删除 | 已新增 / 修改 |
@@ -950,7 +999,7 @@ printf "统一错误事件      %s\n" "$(grep -rn 'api-error' src/cljs | wc -l)"
 | 文档 | ~GAP_ANALYSIS.md~ ~REMAINING.md~ ~ROADMAP.md~ ~test/coverage-report.md~ ~docs/pic-field-checklist.md~;README 合成流量章节 | README 重写为模板说明; ~CLAUDE.md~ 指向本文;本文 |
 | 工具 | ~.beads/~ ~.agents/~ ~.claude/settings.json~ (issue 跟踪钩子)、 ~test-frontend.mjs~ 、 ~Makefile~ 、 ~start_dev.sh~ 、 ~scripts/*.sh~ / ~*.py~ (由 bb 任务取代) | ~bb.edn~ + ~bb/tasks/~ ( ~dev~ / ~lint~ / ~rename~ / ~new-module~ )、 ~.github/workflows/ci.yml~ 、 ~docker-compose.yml~ 、 ~scripts/db.clj~ 、 ~LICENSE~ 、 ~.editorconfig~ 、 ~.cljfmt.edn~ 、 ~.clj-kondo/config.edn~ |
 | 测试 | ~synthetic_profile_test.clj~ 、 ~synthetic-profile.spec.js~ 、 ~formal-pages.spec.js~ | ~navigation.spec.js~ / ~post-crud.spec.js~ 修正 |
-| 修复 | | ~middleware/operlog.clj~ 操作人解析;MySQL notice_content 迁移; ~routes/system.clj~ 拆分 |
+| 修复 | | ~middleware/operlog.clj~ 操作人解析;MySQL notice_content 迁移; ~routes/system.clj~ 拆分;注册提权、文件上传下载目录穿越、令牌永不过期、登出不失效等安全问题(ADR-009) |
 
 * 附录 B:术语
 

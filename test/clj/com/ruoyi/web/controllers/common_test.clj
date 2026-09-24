@@ -113,3 +113,18 @@
       (is (= 404 (get-in response [:body :code])))
       (is (= "资源不存在" (get-in response [:body :msg]))))))
 
+(deftest test-path-traversal-rejected
+  (testing "下载、资源下载都不能跳出根目录"
+    (spit (io/file (.getParentFile (io/file common/upload-dir)) "outside.txt") "secret")
+    (is (= 404 (get-in (common/download {} {:query-params {:fileName "../outside.txt"}}) [:body :code])))
+    (is (= 404 (get-in (common/download {} {:query-params {:fileName "/etc/passwd"}}) [:body :code])))
+    (is (= 404 (get-in (common/download-resource {} {:query-params {:resource "../outside.txt"}}) [:body :code])))
+    (is (= 404 (get-in (common/download-resource {} {:query-params {:resource "/etc/passwd"}}) [:body :code]))))
+  (testing "上传时文件名里的目录部分被丢弃,文件只会落在上传目录"
+    (let [source (File/createTempFile "source" ".txt")]
+      (try
+        (spit source "x")
+        (let [resp (common/upload {} {:params {:file {:tempfile source :filename "../../evil.clj"}}})]
+          (is (= "evil.clj" (get-in resp [:body :data :fileName])))
+          (is (.exists (io/file common/upload-dir "evil.clj"))))
+        (finally (.delete source))))))

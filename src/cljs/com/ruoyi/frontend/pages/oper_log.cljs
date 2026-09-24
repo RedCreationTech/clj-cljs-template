@@ -69,10 +69,10 @@
         [antd/descriptions-item {:label "消耗时间"} (str (or (:cost_time data) 0) "毫秒")]
         [antd/descriptions-item {:label "部门名称"} (or (:dept_name data) "-")]
         [antd/descriptions-item {:label "请求参数" :span 2}
-         [:pre {:style {:maxHeight 160 :overflow "auto" :fontSize 12 :background "#f5f7fa" :padding 8 :borderRadius 4}}
+         [:pre {:style {:maxHeight 160 :overflow "auto" :fontSize 12 :background "var(--app-fill)" :padding 8 :borderRadius 4}}
           (or (:oper_param data) "-")]]
         [antd/descriptions-item {:label "返回参数" :span 2}
-         [:pre {:style {:maxHeight 160 :overflow "auto" :fontSize 12 :background "#f5f7fa" :padding 8 :borderRadius 4}}
+         [:pre {:style {:maxHeight 160 :overflow "auto" :fontSize 12 :background "var(--app-fill)" :padding 8 :borderRadius 4}}
           (or (:json_result data) "-")]]
         (when (seq (:error_msg data))
           [antd/descriptions-item {:label "错误消息" :span 2}

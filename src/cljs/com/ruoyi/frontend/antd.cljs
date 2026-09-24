@@ -63,17 +63,17 @@
     (reset! message-api (.-message api))))
 
 (defn success! [text]
-  (if-let [api @message-api]
+  (if-let [^js api @message-api]
     (.success api text)
     (.success message text)))
 
 (defn error! [text]
-  (if-let [api @message-api]
+  (if-let [^js api @message-api]
     (.error api text)
     (.error message text)))
 
 (defn warning! [text]
-  (if-let [api @message-api]
+  (if-let [^js api @message-api]
     (.warning api text)
     (.warning message text)))
 

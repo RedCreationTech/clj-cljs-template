@@ -2,7 +2,7 @@
   "表单构建器与模板事件。"
   (:require
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.form-template :as form-template-api]
    [re-frame.core :as rf]))
 
 (let [counter (atom 0)]
@@ -51,11 +51,11 @@
 
 (rf/reg-fx :api/list-form-templates
            (fn [params]
-             (api/list-form-templates params
-                                      (fn [result]
-                                        (when (= 200 (:code result))
-                                          (rf/dispatch [:form-template/set-list (:data result)])))
-                                      (fn [_] (antd/error! "获取模板列表失败")))))
+             (form-template-api/list-form-templates params
+                                                    (fn [result]
+                                                      (when (= 200 (:code result))
+                                                        (rf/dispatch [:form-template/set-list (:data result)])))
+                                                    (fn [_] (antd/error! "获取模板列表失败")))))
 
 (rf/reg-event-db :form-template/open-save-modal
                  (fn [db _]
@@ -94,17 +94,17 @@
 
 (rf/reg-fx :api/save-form-template
            (fn [params]
-             (api/save-form-template params
-                                     (fn [result]
-                                       (rf/dispatch [:form-template/saved])
-                                       (when (= 200 (:code result))
-                                         (antd/success! "保存成功")
-                                         (rf/dispatch [:form-template/close-save-modal]))
-                                       (when (not= 200 (:code result))
-                                         (antd/error! (:msg result))))
-                                     (fn [_]
-                                       (rf/dispatch [:form-template/saved])
-                                       (antd/error! "保存失败")))))
+             (form-template-api/save-form-template params
+                                                   (fn [result]
+                                                     (rf/dispatch [:form-template/saved])
+                                                     (when (= 200 (:code result))
+                                                       (antd/success! "保存成功")
+                                                       (rf/dispatch [:form-template/close-save-modal]))
+                                                     (when (not= 200 (:code result))
+                                                       (antd/error! (:msg result))))
+                                                   (fn [_]
+                                                     (rf/dispatch [:form-template/saved])
+                                                     (antd/error! "保存失败")))))
 
 (rf/reg-event-db :form-template/saved
                  (fn [db _]
@@ -124,11 +124,11 @@
 
 (rf/reg-fx :api/delete-form-template
            (fn [id]
-             (api/delete-form-template id
-                                       (fn [result]
-                                         (when (= 200 (:code result))
-                                           (antd/success! "删除成功")
-                                           (rf/dispatch [:form-template/fetch {}]))
-                                         (when (not= 200 (:code result))
-                                           (antd/error! (:msg result))))
-                                       (fn [_] (antd/error! "删除失败")))))
+             (form-template-api/delete-form-template id
+                                                     (fn [result]
+                                                       (when (= 200 (:code result))
+                                                         (antd/success! "删除成功")
+                                                         (rf/dispatch [:form-template/fetch {}]))
+                                                       (when (not= 200 (:code result))
+                                                         (antd/error! (:msg result))))
+                                                     (fn [_] (antd/error! "删除失败")))))

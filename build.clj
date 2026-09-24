@@ -2,7 +2,7 @@
   "tools.build:clojure -T:build all(由 bb uberjar 调用;测试与覆盖率见 bb test / bb coverage)。"
   (:require [clojure.tools.build.api :as b]))
 
-(def lib 'com.ruoyi/rouyi)
+(def lib 'com.ruoyi/ruoyi)
 (def main-cls "com.ruoyi.core")
 (def version (format "0.0.1-SNAPSHOT"))
 (def target-dir "target")

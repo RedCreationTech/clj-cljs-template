@@ -3,7 +3,7 @@
   (:require
    [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.notices :as notices-api]
    [re-frame.core :as rf]))
 
 (rf/reg-event-fx :notices/search
@@ -13,18 +13,18 @@
 
 (rf/reg-fx :api/list-notices-search
            (fn [params]
-             (api/list-notices {}
-                               (fn [result]
-                                 (when (= 200 (:code result))
-                                   (let [data (:data result)
-                                         items (if (sequential? data) data (:rows data []))
-                                         filtered (cond->> items
-                                                    (:notice_name params)
-                                                    (filter #(clojure.string/includes?
-                                                              (or (:notice_name %) "")
-                                                              (:notice_name params))))]
-                                     (rf/dispatch [:notices/set-list {:rows filtered :total (count filtered)}]))))
-                               (fn [_]))))
+             (notices-api/list-notices {}
+                                       (fn [result]
+                                         (when (= 200 (:code result))
+                                           (let [data (:data result)
+                                                 items (if (sequential? data) data (:rows data []))
+                                                 filtered (cond->> items
+                                                            (:notice_name params)
+                                                            (filter #(clojure.string/includes?
+                                                                      (or (:notice_name %) "")
+                                                                      (:notice_name params))))]
+                                             (rf/dispatch [:notices/set-list {:rows filtered :total (count filtered)}]))))
+                                       (fn [_]))))
 
 (rf/reg-event-fx :notices/fetch
                  (fn [{:keys [db]} [_ params]]
@@ -33,11 +33,11 @@
 
 (rf/reg-fx :api/list-notices
            (fn [params]
-             (api/list-notices params
-                               (fn [result]
-                                 (when (= 200 (:code result))
-                                   (rf/dispatch [:notices/set-list (:data result)])))
-                               (fn [_] (antd/error! "网络错误")))))
+             (notices-api/list-notices params
+                                       (fn [result]
+                                         (when (= 200 (:code result))
+                                           (rf/dispatch [:notices/set-list (:data result)])))
+                                       (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-event-db :notices/set-list
                  (fn [db [_ data]]
@@ -73,21 +73,21 @@
 
 (rf/reg-fx :api/create-notice
            (fn [params]
-             (api/create-notice params
-                                (fn [result]
-                                  (when (= 200 (:code result))
-                                    (antd/success! "创建成功")
-                                    (rf/dispatch [:notices/fetch {}])))
-                                (fn [_] (antd/error! "网络错误")))))
+             (notices-api/create-notice params
+                                        (fn [result]
+                                          (when (= 200 (:code result))
+                                            (antd/success! "创建成功")
+                                            (rf/dispatch [:notices/fetch {}])))
+                                        (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/update-notice
            (fn [[id params]]
-             (api/update-notice id params
-                                (fn [result]
-                                  (when (= 200 (:code result))
-                                    (antd/success! "更新成功")
-                                    (rf/dispatch [:notices/fetch {}])))
-                                (fn [_] (antd/error! "网络错误")))))
+             (notices-api/update-notice id params
+                                        (fn [result]
+                                          (when (= 200 (:code result))
+                                            (antd/success! "更新成功")
+                                            (rf/dispatch [:notices/fetch {}])))
+                                        (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-event-fx :notices/delete
                  (fn [_ [_ id]]
@@ -95,9 +95,9 @@
 
 (rf/reg-fx :api/delete-notice
            (fn [id]
-             (api/delete-notice id
-                                (fn [result]
-                                  (when (= 200 (:code result))
-                                    (antd/success! "删除成功")
-                                    (rf/dispatch [:notices/fetch {}])))
-                                (fn [_] (antd/error! "网络错误")))))
+             (notices-api/delete-notice id
+                                        (fn [result]
+                                          (when (= 200 (:code result))
+                                            (antd/success! "删除成功")
+                                            (rf/dispatch [:notices/fetch {}])))
+                                        (fn [_] (antd/error! "网络错误")))))

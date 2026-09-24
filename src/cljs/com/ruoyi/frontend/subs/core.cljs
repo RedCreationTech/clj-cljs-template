@@ -1,6 +1,7 @@
 (ns com.ruoyi.frontend.subs.core
-  "re-frame 订阅：页面/鉴权/通知/主题/布局/标签页等基础订阅。"
+  "re-frame 订阅：页面/鉴权/主题/布局/标签页等基础订阅。"
   (:require
+   [com.ruoyi.frontend.i18n :as i18n]
    [re-frame.core :as rf]))
 
 (rf/reg-sub :page
@@ -19,13 +20,21 @@
             (fn [db _]
               (get-in db [:auth :loading?])))
 
+(rf/reg-sub :auth/login-config
+            (fn [db _]
+              (get-in db [:auth :login-config])))
+
+(rf/reg-sub :auth/failures
+            (fn [db _]
+              (get-in db [:auth :failures] 0)))
+
 (rf/reg-sub :auth/logged-in?
             (fn [db _]
               (boolean (get-in db [:auth :token]))))
 
-(rf/reg-sub :notification
+(rf/reg-sub :i18n/locale
             (fn [db _]
-              (:notification db)))
+              (:locale db i18n/default-locale)))
 
 (rf/reg-sub :theme/mode
             (fn [db _]

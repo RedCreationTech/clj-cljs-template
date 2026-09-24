@@ -209,17 +209,12 @@ flowchart TD
     <h2>4. 认证中间件</h2>
     <p><code>src/clj/com/ruoyi/web/middleware/auth.clj</code> 负责 JWT 解析与权限控制：</p>
     <pre><code class="language-clojure">(<span class="kw">defn</span> <span class="sym">wrap-jwt-auth</span>
-  <span class="str">"为请求附加当前认证用户，并更新在线心跳。"</span>
+  <span class="str">"签名与有效期通过、且会话仍在线时,把 claims 放进 :identity 并刷新心跳。"</span>
   [handler]
   (<span class="kw">fn</span> [request]
-    (<span class="kw">let</span> [token (<span class="sym">security/extract-token</span> request)
-          claims (<span class="kw">when</span> token (<span class="sym">security/parse-token</span> token))
-          blacklisted? (<span class="kw">and</span> token (<span class="sym">online/blacklisted?</span> token))
-          _ (<span class="kw">when</span> (<span class="kw">and</span> claims (<span class="kw">not</span> blacklisted?)) (<span class="sym">online/heartbeat!</span> token))
-          request (<span class="kw">if</span> (<span class="kw">and</span> claims (<span class="kw">not</span> blacklisted?))
-                    (<span class="sym">assoc</span> request <span class="macro">:identity</span> claims)
-                    request)]
-      (handler request))))
+    (<span class="kw">let</span> [claims (<span class="sym">some-&gt;</span> (<span class="sym">security/extract-token</span> request) <span class="sym">security/parse-token</span>)
+          identity (<span class="kw">when</span> (<span class="kw">and</span> claims (<span class="sym">online/active?</span> (<span class="macro">:jti</span> claims))) claims)]
+      (handler (<span class="sym">cond-&gt;</span> request identity (<span class="sym">assoc</span> <span class="macro">:identity</span> identity))))))
 
 (<span class="kw">defn</span> <span class="sym">require-auth</span>
   <span class="str">"要求请求必须通过认证，否则返回 401。"</span>

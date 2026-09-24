@@ -1,7 +1,7 @@
 ;; 数据库维护脚本(在 JVM 里运行,需要 JDBC 驱动):
 ;;   clojure -M:dev scripts/db.clj reset      清空库:SQLite 删文件,MySQL 删除当前 schema 下所有表
 ;;   clojure -M:dev scripts/db.clj roundtrip  迁移往返检查:全部 up → 全部 down → 全部 up,验证 down 脚本可用
-;; 连接信息与应用一致:JDBC_URL(默认 jdbc:sqlite:rouyi.db)、MIGRATION_DIR(默认 migrations-sqlite)。
+;; 连接信息与应用一致:JDBC_URL(默认 jdbc:sqlite:ruoyi.db)、MIGRATION_DIR(默认 migrations-sqlite)。
 ;; 通常经由 bb 调用:bb test:mysql、bb db:roundtrip。
 (ns db
   (:require
@@ -10,7 +10,7 @@
    [migratus.core :as migratus]
    [next.jdbc :as jdbc]))
 
-(def url (or (System/getenv "JDBC_URL") "jdbc:sqlite:rouyi.db"))
+(def url (or (System/getenv "JDBC_URL") "jdbc:sqlite:ruoyi.db"))
 (def migration-dir (or (System/getenv "MIGRATION_DIR") "migrations-sqlite"))
 (def mysql? (str/starts-with? url "jdbc:mysql"))
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>若依 Clojure 全栈管理系统 - 文档</title>
+  <title>clojure-template 文档</title>
   <style>
     :root {
       --accent: #3eaf7c;
@@ -160,8 +160,8 @@
 <div class="page">
   <aside class="sidebar">
     <div class="sidebar-title">
-      若依 Clojure
-      <span>全栈管理系统文档</span>
+      clojure-template
+      <span>全栈管理系统模板文档</span>
     </div>
     <nav>
       <div class="nav-group">
@@ -204,10 +204,11 @@
   </aside>
 
   <main class="main">
-    <h1 id="intro">若依 Clojure 全栈管理系统</h1>
+    <h1 id="intro">clojure-template:Clojure / ClojureScript 全栈管理系统模板</h1>
     <p>
       基于 <strong>Kit 框架</strong> + <strong>ClojureScript</strong> + <strong>Reagent</strong> + <strong>Ant Design</strong>
-      构建的 Ruoyi 风格全栈管理后台，对齐原版若依框架核心功能。
+      构建的 RuoYi 风格全栈管理后台模板:<code>bb rename</code> 改名、<code>bb new-module</code> 生成业务模块、<code>bb dev</code> 启动。
+      架构说明见 <a href="architecture/c4-model.html">C4 架构文档</a>,入门课程见 <code>training/</code>。
     </p>
     <p>
       项目目标：让开发者专注于业务，降低技术难度，缩短项目周期，并保证软件安全质量。
@@ -225,8 +226,9 @@
     <table>
       <thead><tr><th>环境</th><th>版本要求</th></tr></thead>
       <tbody>
-        <tr><td>JDK</td><td>17+（async-profiler 建议使用 JDK 21）</td></tr>
-        <tr><td>Clojure CLI</td><td>最新版</td></tr>
+        <tr><td>JDK</td><td>21(17 也能跑)</td></tr>
+        <tr><td>babashka</td><td>1.12.200+(所有任务的入口,<code>bb tasks</code> 查看)</td></tr>
+        <tr><td>Clojure CLI</td><td>推荐安装;没有时 bb 自动退回内置的 <code>bb clojure</code></td></tr>
         <tr><td>Node.js</td><td>18+</td></tr>
         <tr><td>数据库</td><td>SQLite（默认）/ MySQL</td></tr>
       </tbody>
@@ -320,6 +322,7 @@
 
     <h2 id="structure">项目结构</h2>
     <pre><code>.
+├── bb.edn / bb/tasks/          # 统一任务入口(bb tasks)与 new-module 脚手架
 ├── deps.edn                    # Clojure 依赖
 ├── shadow-cljs.edn             # ClojureScript 构建配置
 ├── package.json                # NPM 依赖 (React, Ant Design)
@@ -338,43 +341,37 @@
 │   └── web/middleware/         # 中间件 (认证)
 ├── src/cljs/com/ruoyi/frontend/  # 前端源码
 │   ├── app.cljs                # 前端入口
-│   ├── api.cljs                # HTTP 客户端
+│   ├── api/                    # HTTP 客户端(transport + 各领域 api)
+│   ├── i18n.cljs               # 界面多语言(tr)
+│   ├── storage.cljs            # localStorage 统一入口
 │   ├── events.cljs             # re-frame 事件
 │   ├── subs.cljs               # re-frame 订阅
 │   ├── antd.cljs               # Ant Design 组件封装
 │   └── pages/                  # 页面组件
-└── test/                       # 测试代码
+├── test/clj · test/cljs        # 后端 / 前端单元测试
+└── tests/e2e                   # Playwright 端到端测试
 </code></pre>
 
     <h2 id="quickstart">快速开始</h2>
 
-    <h3>1. 启动后端</h3>
-    <p>默认使用 SQLite，自动迁移并初始化数据。</p>
-    <pre><code>clojure -M:dev -m com.ruoyi.core</code></pre>
-    <p>后端运行在 <a href="http://localhost:3000" target="_blank">http://localhost:3000</a>，nREPL 端口 <code>7000</code>。</p>
+    <h3>1. 启动开发环境</h3>
+    <p>默认使用 SQLite,首次启动自动迁移并初始化数据(<code>admin / admin123</code>)。一条命令同时启动后端与前端 watch:</p>
+    <pre><code>npm install      # 首次
+bb dev           # 后端 3000 / nREPL 7000 + 前端增量编译;--reset-db 清空本地库</code></pre>
+    <p>打开 <a href="http://localhost:3000" target="_blank">http://localhost:3000</a>。前端由后端同一端口提供服务,编译产物输出到 <code>resources/public/js/</code>。</p>
 
-    <p>如需使用 MySQL：</p>
-    <pre><code>JDBC_URL="jdbc:mysql://user:pass@host:3306/ruoyi?useSSL=false" \
-MIGRATION_DIR=migrations \
-clojure -M:dev -m com.ruoyi.core</code></pre>
+    <p>如需使用 MySQL(JDBC_URL 为 MySQL 时自动使用 <code>migrations</code> 迁移目录):</p>
+    <pre><code>docker compose up -d mysql
+JDBC_URL="jdbc:mysql://127.0.0.1:3308/ruoyi?user=root&amp;password=password&amp;useSSL=false&amp;allowPublicKeyRetrieval=true" bb dev</code></pre>
 
-    <h3>2. 启动前端</h3>
-    <pre><code># 安装 NPM 依赖（首次）
-npm install
+    <h3>2. 新增业务模块</h3>
+    <pre><code>bb new-module customer --label 客户 --fields "name:string:required:名称,level:int:等级,remark:text:备注"</code></pre>
 
-# 开发模式（自动增量编译）
-npx shadow-cljs watch app</code></pre>
-    <p>前端由后端同一端口 <code>3000</code> 提供服务，编译产物输出到 <code>resources/public/js/</code>。</p>
-
-    <h3>3. 构建生产包</h3>
-    <pre><code># 前端发布
-npx shadow-cljs release app
-
-# 后端 Uberjar（包含前端静态文件）
-clj -T:build all
-
-# 运行
-java -jar target/rouyi-standalone.jar</code></pre>
+    <h3>3. 测试与构建</h3>
+    <pre><code>bb ci            # lint + 格式 + 前后端单元测试(与 CI 相同)
+bb e2e           # Playwright(需后端已运行)
+bb uberjar       # 前端 release + 后端 uberjar
+JWT_SECRET=$(openssl rand -hex 32) COOKIE_SECRET=$(openssl rand -hex 8) java -jar target/ruoyi-standalone.jar</code></pre>
 
     <h2 id="hot-reload">热重载</h2>
 
@@ -502,7 +499,7 @@ clj-nrepl-eval -p 7000 '(user/rr)'      ; 完全重启系统</code></pre>
 
     <h3>连接与迁移配置</h3>
     <pre><code>:db.sql/connection
- #profile {:dev  {:jdbc-url "jdbc:sqlite:rouyi.db"}
+ #profile {:dev  {:jdbc-url "jdbc:sqlite:ruoyi.db"}
            :test {}
            :prod {:jdbc-url #env JDBC_URL}}
 
@@ -614,7 +611,7 @@ VALUES (:user_name, :password)</code></pre>
     </table>
 
     <div class="footer">
-      文档生成于 2026-06-14 · 若依 Clojure 全栈管理系统
+      clojure-template · 更新于 2026-09-24
     </div>
   </main>
 </div>

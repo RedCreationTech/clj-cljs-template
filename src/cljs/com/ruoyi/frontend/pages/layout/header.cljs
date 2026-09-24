@@ -2,10 +2,11 @@
   "主布局 Header 的组成部分:顶部/侧边导航区、右侧操作区、显示设置面板。"
   (:require
    ["@ant-design/icons" :refer [BellOutlined ExpandOutlined FontSizeOutlined GithubOutlined
-                                MenuFoldOutlined MenuUnfoldOutlined QuestionCircleOutlined
+                                GlobalOutlined MenuFoldOutlined MenuUnfoldOutlined QuestionCircleOutlined
                                 SearchOutlined]]
    ["antd" :refer [Avatar Badge Button Dropdown Menu Popover Segmented]]
    [com.ruoyi.frontend.config :as config]
+   [com.ruoyi.frontend.i18n :as i18n]
    [re-frame.core :as rf]
    [reagent.core :as r]))
 
@@ -36,7 +37,7 @@
   [:<>
    [:div {:style {:cursor "pointer" :padding "0 6px" :fontSize 21
                   :display "flex" :alignItems "center"
-                  :color "#303133"
+                  :color "var(--app-text-primary)"
                   :transition "color 0.3s"}
           :on-click #(set-collapsed! (not collapsed))}
     (if collapsed
@@ -47,10 +48,10 @@
       ^{:key (str "crumb-" idx)}
       [:<>
        (when (pos? idx)
-         [:span {:style {:color "#c0c4cc"}} "/"])
-       [:span {:style {:color (if (= idx (dec (count breadcrumbs))) "#97a8be" "#303133")
+         [:span {:style {:color "var(--app-text-placeholder)"}} "/"])
+       [:span {:style {:color (if (= idx (dec (count breadcrumbs))) "#97a8be" "var(--app-text-primary)")
                        :fontWeight (if (= idx (dec (count breadcrumbs))) 400 500)}}
-        crumb]])]])
+        (i18n/tr crumb)]])]])
 
 (defn- display-settings-panel
   "字号按钮弹出的显示设置面板。"
@@ -58,24 +59,39 @@
   (let [component-size @(rf/subscribe [:theme/component-size])
         font-size @(rf/subscribe [:theme/font-size])]
     [:div {:style {:width 220 :padding 4}}
-     [:div {:style {:fontSize 14 :fontWeight 600 :color "#303133" :margin "0 0 12px"}}
-      "显示设置"]
+     [:div {:style {:fontSize 14 :fontWeight 600 :color "var(--app-text-primary)" :margin "0 0 12px"}}
+      (i18n/tr "显示设置")]
      [:div {:style {:marginBottom 14}}
-      [:div {:style {:fontSize 13 :color "#606266" :marginBottom 8}} "布局密度"]
+      [:div {:style {:fontSize 13 :color "var(--app-text-regular)" :marginBottom 8}} (i18n/tr "布局密度")]
       [:> Segmented {:block true
                      :value component-size
                      :onChange #(rf/dispatch [:theme/set-density %])
-                     :options #js [#js {:label "紧凑" :value "small"}
-                                   #js {:label "默认" :value "middle"}
-                                   #js {:label "宽松" :value "large"}]}]]
+                     :options #js [#js {:label (i18n/tr "紧凑") :value "small"}
+                                   #js {:label (i18n/tr "默认") :value "middle"}
+                                   #js {:label (i18n/tr "宽松") :value "large"}]}]]
      [:div
-      [:div {:style {:fontSize 13 :color "#606266" :marginBottom 8}} "字体大小"]
+      [:div {:style {:fontSize 13 :color "var(--app-text-regular)" :marginBottom 8}} (i18n/tr "字体大小")]
       [:> Segmented {:block true
                      :value font-size
                      :onChange #(rf/dispatch [:theme/set-font-size %])
-                     :options #js [#js {:label "小" :value "small"}
-                                   #js {:label "中" :value "middle"}
-                                   #js {:label "大" :value "large"}]}]]]))
+                     :options #js [#js {:label (i18n/tr "小") :value "small"}
+                                   #js {:label (i18n/tr "中") :value "middle"}
+                                   #js {:label (i18n/tr "大") :value "large"}]}]]]))
+
+(defn- language-switcher
+  "界面语言切换。"
+  []
+  (let [current @(rf/subscribe [:i18n/locale])]
+    [:> Dropdown {:menu {:items (clj->js (for [{:keys [key label]} i18n/locales]
+                                           {:key (name key) :label label}))
+                         :selectable true
+                         :selectedKeys (clj->js [(name current)])
+                         :onClick #(rf/dispatch [:i18n/set-locale (keyword (.-key %))])}
+                  :trigger (clj->js ["click"])}
+     [:> Button {:type "text"
+                 :title (i18n/tr "语言")
+                 :style {:fontSize 18 :color "var(--app-text-regular)"}
+                 :icon (r/as-element [:> GlobalOutlined])}]]))
 
 (defn- display-settings-button
   "右上角显示设置按钮。"
@@ -84,13 +100,13 @@
                :trigger "click"
                :placement "bottomRight"}
    [:> Button {:type "text"
-               :style {:fontSize 18 :color "#606266"}
+               :style {:fontSize 18 :color "var(--app-text-regular)"}
                :icon (r/as-element [:> FontSizeOutlined])}]])
 
 ;; Header 右侧操作区:搜索/GitHub/文档/全屏/显示设置/通知/头像菜单。
 (defn header-actions
   [{:keys [user set-settings-open!]}]
-  (let [icon-btn {:type "text" :style {:fontSize 18 :color "#606266"}}]
+  (let [icon-btn {:type "text" :style {:fontSize 18 :color "var(--app-text-regular)"}}]
     [:div {:style {:display "flex" :alignItems "center" :gap 6}}
      ;; 搜索
      [:> Button (assoc icon-btn :icon (r/as-element [:> SearchOutlined]))]
@@ -106,14 +122,15 @@
                                      (.exitFullscreen js/document)
                                      (.requestFullscreen doc))))]
      [display-settings-button]
+     [language-switcher]
      ;; 通知
      [:> Badge {:count 3 :size "small"}
       [:> Button (assoc icon-btn :icon (r/as-element [:> BellOutlined]))]]
      ;; 头像 + 下拉菜单
-     [:> Dropdown {:menu {:items (clj->js [{:key "profile" :label "个人中心"}
-                                           {:key "layout-settings" :label "布局设置"}
+     [:> Dropdown {:menu {:items (clj->js [{:key "profile" :label (i18n/tr "个人中心")}
+                                           {:key "layout-settings" :label (i18n/tr "布局设置")}
                                            {:type "divider"}
-                                           {:key "logout" :label "退出登录" :danger true}])
+                                           {:key "logout" :label (i18n/tr "退出登录") :danger true}])
                           :onClick (fn [e]
                                      (case (.-key e)
                                        "profile" (rf/dispatch [:navigate :profile])
@@ -127,4 +144,4 @@
                            :color "#fff"
                            :fontWeight 700}}
         (str (first (or (:nick_name user) (:user_name user) "管理员")))]
-       [:span {:style {:fontSize 14 :fontWeight 600 :color "#303133"}} (or (:nick_name user) (:user_name user) "管理员")]]]]))
+       [:span {:style {:fontSize 14 :fontWeight 600 :color "var(--app-text-primary)"}} (or (:nick_name user) (:user_name user) "管理员")]]]]))

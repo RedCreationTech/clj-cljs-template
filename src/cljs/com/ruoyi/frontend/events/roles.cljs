@@ -3,7 +3,8 @@
   (:require
    [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.menus :as menus-api]
+   [com.ruoyi.frontend.api.roles :as roles-api]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :roles/update-query
@@ -30,11 +31,11 @@
 
 (rf/reg-fx :api/list-roles
            (fn [params]
-             (api/list-roles params
-                             (fn [result]
-                               (when (= 200 (:code result))
-                                 (rf/dispatch [:roles/set-list (:data result)])))
-                             (fn [_]))))
+             (roles-api/list-roles params
+                                   (fn [result]
+                                     (when (= 200 (:code result))
+                                       (rf/dispatch [:roles/set-list (:data result)])))
+                                   (fn [_]))))
 
 (rf/reg-event-db :roles/open-modal
                  (fn [db _]
@@ -67,32 +68,32 @@
 
 (rf/reg-fx :api/create-role
            (fn [params]
-             (api/create-role params
-                              (fn [result]
-                                (when (= 200 (:code result))
-                                  (antd/success! "创建成功")
-                                  (rf/dispatch [:roles/fetch {}])))
-                              (fn [_] (antd/error! "网络错误")))))
+             (roles-api/create-role params
+                                    (fn [result]
+                                      (when (= 200 (:code result))
+                                        (antd/success! "创建成功")
+                                        (rf/dispatch [:roles/fetch {}])))
+                                    (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/update-role
            (fn [[id params]]
-             (api/update-role id params
-                              (fn [result]
-                                (when (= 200 (:code result))
-                                  (antd/success! "更新成功")
-                                  (rf/dispatch [:roles/fetch {}])))
-                              (fn [_] (antd/error! "网络错误")))))
+             (roles-api/update-role id params
+                                    (fn [result]
+                                      (when (= 200 (:code result))
+                                        (antd/success! "更新成功")
+                                        (rf/dispatch [:roles/fetch {}])))
+                                    (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/update-role-and-refresh
            (fn [[id params]]
-             (api/update-role id params
-                              (fn [result]
-                                (when (= 200 (:code result))
-                                  (antd/success! "权限更新成功，正在刷新...")
-                                  (rf/dispatch [:roles/fetch {}])
+             (roles-api/update-role id params
+                                    (fn [result]
+                                      (when (= 200 (:code result))
+                                        (antd/success! "权限更新成功，正在刷新...")
+                                        (rf/dispatch [:roles/fetch {}])
                                   ;; 刷新页面以更新菜单
-                                  (js/setTimeout #(.reload js/location) 500)))
-                              (fn [_] (antd/error! "网络错误")))))
+                                        (js/setTimeout #(.reload js/location) 500)))
+                                    (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-event-fx :roles/delete
                  (fn [_ [_ id]]
@@ -104,21 +105,21 @@
 
 (rf/reg-fx :api/delete-role
            (fn [id]
-             (api/delete-role id
-                              (fn [result]
-                                (when (= 200 (:code result))
-                                  (antd/success! "删除成功")
-                                  (rf/dispatch [:roles/fetch {}])))
-                              (fn [_] (antd/error! "网络错误")))))
+             (roles-api/delete-role id
+                                    (fn [result]
+                                      (when (= 200 (:code result))
+                                        (antd/success! "删除成功")
+                                        (rf/dispatch [:roles/fetch {}])))
+                                    (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/change-role-status
            (fn [[id status]]
-             (api/change-role-status id status
-                                     (fn [result]
-                                       (when (= 200 (:code result))
-                                         (antd/success! "状态修改成功")
-                                         (rf/dispatch [:roles/fetch {}])))
-                                     (fn [_] (antd/error! "网络错误")))))
+             (roles-api/change-role-status id status
+                                           (fn [result]
+                                             (when (= 200 (:code result))
+                                               (antd/success! "状态修改成功")
+                                               (rf/dispatch [:roles/fetch {}])))
+                                           (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-event-fx :roles/open-permission
                  (fn [{:keys [db]} [_ role]]
@@ -129,13 +130,13 @@
 
 (rf/reg-fx :api/fetch-role-for-permission
            (fn [role-id]
-             (api/get-role role-id
-                           (fn [result]
-                             (when (= 200 (:code result))
-                               (let [role (:data result)]
-                                 (rf/dispatch [:roles/set-permission-role role])
-                                 (rf/dispatch [:roles/set-checked-keys (mapv str (:menu-ids role []))]))))
-                           (fn [_] (antd/error! "获取角色详情失败")))))
+             (roles-api/get-role role-id
+                                 (fn [result]
+                                   (when (= 200 (:code result))
+                                     (let [role (:data result)]
+                                       (rf/dispatch [:roles/set-permission-role role])
+                                       (rf/dispatch [:roles/set-checked-keys (mapv str (:menu-ids role []))]))))
+                                 (fn [_] (antd/error! "获取角色详情失败")))))
 
 (rf/reg-event-db :roles/set-permission-role
                  (fn [db [_ role]]
@@ -152,7 +153,7 @@
 
 (rf/reg-fx :api/menu-tree
            (fn [_]
-             (api/menu-tree
+             (menus-api/menu-tree
               (fn [result]
                 (when (= 200 (:code result))
                   (rf/dispatch [:roles/set-menu-tree (:data result)])))
@@ -203,11 +204,11 @@
 
 (rf/reg-fx :api/fetch-role-dept-tree
            (fn [role-id]
-             (api/get-role-dept-tree role-id
-                                     (fn [result]
-                                       (when (= 200 (:code result))
-                                         (rf/dispatch [:roles/set-dept-tree-and-keys (:data result)])))
-                                     (fn [_] (antd/error! "获取部门树失败")))))
+             (roles-api/get-role-dept-tree role-id
+                                           (fn [result]
+                                             (when (= 200 (:code result))
+                                               (rf/dispatch [:roles/set-dept-tree-and-keys (:data result)])))
+                                           (fn [_] (antd/error! "获取部门树失败")))))
 
 (rf/reg-event-fx :roles/save-data-scope
                  (fn [{:keys [db]} _]
@@ -221,12 +222,12 @@
 
 (rf/reg-fx :api/save-data-scope
            (fn [params]
-             (api/set-role-data-scope params
-                                      (fn [result]
-                                        (when (= 200 (:code result))
-                                          (antd/success! "数据权限设置成功")
-                                          (rf/dispatch [:roles/fetch {}])))
-                                      (fn [_] (antd/error! "设置失败")))))
+             (roles-api/set-role-data-scope params
+                                            (fn [result]
+                                              (when (= 200 (:code result))
+                                                (antd/success! "数据权限设置成功")
+                                                (rf/dispatch [:roles/fetch {}])))
+                                            (fn [_] (antd/error! "设置失败")))))
 
 (rf/reg-event-fx :roles/open-user-alloc
                  (fn [{:keys [db]} [_ role]]
@@ -310,7 +311,7 @@
 
 (rf/reg-fx :api/list-role-allocated-users
            (fn [params]
-             (api/list-role-allocated-users
+             (roles-api/list-role-allocated-users
               params
               (fn [result]
                 (when (= 200 (:code result))
@@ -319,7 +320,7 @@
 
 (rf/reg-fx :api/list-role-unallocated-users
            (fn [params]
-             (api/list-role-unallocated-users
+             (roles-api/list-role-unallocated-users
               params
               (fn [result]
                 (when (= 200 (:code result))
@@ -333,7 +334,7 @@
 
 (rf/reg-fx :api/cancel-role-auth-user
            (fn [params]
-             (api/cancel-role-auth-user
+             (roles-api/cancel-role-auth-user
               params
               (fn [result]
                 (when (= 200 (:code result))
@@ -353,7 +354,7 @@
 
 (rf/reg-fx :api/cancel-role-auth-user-all
            (fn [params]
-             (api/cancel-role-auth-user-all
+             (roles-api/cancel-role-auth-user-all
               params
               (fn [result]
                 (when (= 200 (:code result))
@@ -374,7 +375,7 @@
 
 (rf/reg-fx :api/select-role-auth-user-all
            (fn [params]
-             (api/select-role-auth-user-all
+             (roles-api/select-role-auth-user-all
               params
               (fn [result]
                 (when (= 200 (:code result))

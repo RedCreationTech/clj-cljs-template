@@ -6,12 +6,12 @@
 (defn- fallback-ui [error _info]
   [:div {:style {:padding 48
                  :textAlign "center"
-                 :background "#fff"
+                 :background "var(--app-bg)"
                  :borderRadius 8
                  :boxShadow "0 2px 8px rgba(0,0,0,0.06)"}}
    [:div {:style {:fontSize 48 :marginBottom 16}} "⚠️"]
-   [:h2 {:style {:margin "0 0 16px" :color "#262626"}} "页面加载失败"]
-   [:p {:style {:color "#595959" :marginBottom 24 :lineHeight "1.6"}}
+   [:h2 {:style {:margin "0 0 16px" :color "var(--app-text-primary)"}} "页面加载失败"]
+   [:p {:style {:color "var(--app-text-regular)" :marginBottom 24 :lineHeight "1.6"}}
     "系统遇到意外错误，请刷新页面或切换菜单重试。"]
    [:button {:onClick #(.reload js/location)
              :style {:padding "8px 16px"

@@ -86,7 +86,7 @@
                :backgroundColor primary-color
                :borderRadius "4px"
                :cursor "pointer"
-               :border "1px solid #d9d9d9"
+               :border "1px solid var(--app-border)"
                :display "flex"
                :alignItems "center"
                :justifyContent "center"}}

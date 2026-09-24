@@ -2,15 +2,18 @@
   "前端应用入口。"
   (:require
    ["antd" :refer [ConfigProvider]]
+   ["antd/locale/en_US" :default en-US]
    ["antd/locale/zh_CN" :default zh-CN]
    ["dayjs" :as dayjs]
    ["dayjs/locale/zh-cn"]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.error-boundary :as error-boundary]
    [com.ruoyi.frontend.events]
+   [com.ruoyi.frontend.i18n :as i18n]
    [com.ruoyi.frontend.pages.layout :as layout]
    [com.ruoyi.frontend.pages.login :as login]
    [com.ruoyi.frontend.router :as router]
+   [com.ruoyi.frontend.storage :as storage]
    [com.ruoyi.frontend.subs]
    [com.ruoyi.frontend.theme :as theme]
    [re-frame.core :as rf]
@@ -31,46 +34,54 @@
         primary-color @(rf/subscribe [:theme/primary-color])
         algorithm @(rf/subscribe [:theme/algorithm])
         component-size @(rf/subscribe [:theme/component-size])
-        font-size @(rf/subscribe [:theme/font-size])]
-    ;; 设置 body 背景色以匹配主题
+        font-size @(rf/subscribe [:theme/font-size])
+        locale @(rf/subscribe [:i18n/locale])]
+    ;; 同步主题到页面:body 背景色 + <html data-theme>(css/app.css 的浅色覆盖样式据此只在浅色主题生效)
     (hooks/use-effect
      (fn []
        (let [body (.-body js/document)
              is-dark? (= theme-mode :dark)]
          (set! (.-backgroundColor (.-style body))
                (if is-dark? "#000" "#f5f5f5"))
+         (.setAttribute (.-documentElement js/document) "data-theme" (name theme-mode))
          js/undefined))
      [theme-mode])
-    ;; 确保日期、时间等组件使用中文
+    ;; 日期、时间等组件跟随界面语言
     (hooks/use-effect
      (fn []
-       (.locale dayjs "zh-cn")
+       (.locale dayjs (if (= locale :en-US) "en" "zh-cn"))
        js/undefined)
-     [])
-    (if logged-in?
-      [:> ConfigProvider {:theme (theme/theme-config
-                                  {:mode theme-mode
-                                   :primary-color primary-color
-                                   :algorithm algorithm
-                                   :font-size font-size})
-                          :componentSize component-size
-                          :locale zh-CN}
-       [antd/app
-        [message-init]
-        [layout/main-layout]]]
-      [login/login-page])))
+     [locale])
+    ;; 登录页与主布局共用同一个 ConfigProvider / App:登出、会话过期跳回登录页时,
+    ;; message 实例不随布局卸载,提示仍能显示
+    [:> ConfigProvider {:theme (theme/theme-config
+                                {:mode theme-mode
+                                 :primary-color primary-color
+                                 :algorithm algorithm
+                                 :font-size font-size})
+                        :componentSize component-size
+                        :locale (if (= locale :en-US) en-US zh-CN)}
+     [antd/app
+      [message-init]
+      ;; 以语言为 key:切换语言时整棵树重新挂载,所有 i18n/tr 文案随之刷新
+      ^{:key (name locale)}
+      [:div {:style {:height "100%"}}
+       (if logged-in?
+         [layout/main-layout]
+         [login/login-page])]]]))
 
 (defn app []
   [error-boundary/boundary [current-page]])
 
 (defn init []
   (rf/dispatch-sync [:initialize-db])
+  (rf/dispatch-sync [:i18n/set-locale (i18n/load-locale!)])
   ;; 从 localStorage 加载主题设置
   (rf/dispatch [:theme/load-from-storage])
   ;; 先在渲染前初始化路由（只 configure，不 dispatch）
   (router/init-routes!)
   ;; 如果 localStorage 中有 token，获取用户信息
-  (when-let [_token (try (.getItem js/localStorage "ruoyi_token") (catch js/Error _ nil))]
+  (when (storage/get-item :token)
     (rf/dispatch [:auth/fetch-info]))
   (r/set-default-compiler! (r/create-compiler {:function-components true}))
   (let [container (.getElementById js/document "app")]

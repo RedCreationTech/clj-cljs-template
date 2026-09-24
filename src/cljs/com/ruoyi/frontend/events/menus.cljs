@@ -3,7 +3,7 @@
   (:require
    [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.menus :as menus-api]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :menus/set-list
@@ -28,7 +28,7 @@
 
 (rf/reg-fx :api/list-menus-search
            (fn [params]
-             (api/list-menus
+             (menus-api/list-menus
               {}
               (fn [result]
                 (when (= 200 (:code result))
@@ -52,7 +52,7 @@
 
 (rf/reg-fx :api/menu-tree-for-menus
            (fn [_]
-             (api/menu-tree
+             (menus-api/menu-tree
               (fn [result]
                 (when (= 200 (:code result))
                   (rf/dispatch [:menus/set-tree (:data result)])))
@@ -60,11 +60,11 @@
 
 (rf/reg-fx :api/list-menus
            (fn [params]
-             (api/list-menus params
-                             (fn [result]
-                               (when (= 200 (:code result))
-                                 (rf/dispatch [:menus/set-list (:data result)])))
-                             (fn [_]))))
+             (menus-api/list-menus params
+                                   (fn [result]
+                                     (when (= 200 (:code result))
+                                       (rf/dispatch [:menus/set-list (:data result)])))
+                                   (fn [_]))))
 
 (rf/reg-event-db :menus/open-modal
                  (fn [db [_ initial-data]]
@@ -99,21 +99,21 @@
 
 (rf/reg-fx :api/create-menu
            (fn [params]
-             (api/create-menu params
-                              (fn [result]
-                                (when (= 200 (:code result))
-                                  (antd/success! "创建成功")
-                                  (rf/dispatch [:menus/fetch])))
-                              (fn [_] (antd/error! "网络错误")))))
+             (menus-api/create-menu params
+                                    (fn [result]
+                                      (when (= 200 (:code result))
+                                        (antd/success! "创建成功")
+                                        (rf/dispatch [:menus/fetch])))
+                                    (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/update-menu
            (fn [[id params]]
-             (api/update-menu id params
-                              (fn [result]
-                                (when (= 200 (:code result))
-                                  (antd/success! "更新成功")
-                                  (rf/dispatch [:menus/fetch])))
-                              (fn [_] (antd/error! "网络错误")))))
+             (menus-api/update-menu id params
+                                    (fn [result]
+                                      (when (= 200 (:code result))
+                                        (antd/success! "更新成功")
+                                        (rf/dispatch [:menus/fetch])))
+                                    (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-event-fx :menus/delete
                  (fn [_ [_ id]]
@@ -125,18 +125,18 @@
 
 (rf/reg-fx :api/delete-menu
            (fn [id]
-             (api/delete-menu id
-                              (fn [result]
-                                (when (= 200 (:code result))
-                                  (antd/success! "删除成功")
-                                  (rf/dispatch [:menus/fetch])))
-                              (fn [_] (antd/error! "网络错误")))))
+             (menus-api/delete-menu id
+                                    (fn [result]
+                                      (when (= 200 (:code result))
+                                        (antd/success! "删除成功")
+                                        (rf/dispatch [:menus/fetch])))
+                                    (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/change-menu-status
            (fn [[id status]]
-             (api/change-menu-status id status
-                                     (fn [result]
-                                       (when (= 200 (:code result))
-                                         (antd/success! "状态修改成功")
-                                         (rf/dispatch [:menus/fetch])))
-                                     (fn [_] (antd/error! "网络错误")))))
+             (menus-api/change-menu-status id status
+                                           (fn [result]
+                                             (when (= 200 (:code result))
+                                               (antd/success! "状态修改成功")
+                                               (rf/dispatch [:menus/fetch])))
+                                           (fn [_] (antd/error! "网络错误")))))

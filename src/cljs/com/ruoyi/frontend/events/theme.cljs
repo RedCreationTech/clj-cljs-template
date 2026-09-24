@@ -1,8 +1,10 @@
 (ns com.ruoyi.frontend.events.theme
-  "主题与布局设置事件。"
+  "主题、布局设置与界面语言事件。"
   (:require
    [com.ruoyi.frontend.db :as db]
    [com.ruoyi.frontend.events.common :as ec]
+   [com.ruoyi.frontend.i18n :as i18n]
+   [com.ruoyi.frontend.storage :as storage]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :theme/toggle-mode
@@ -11,45 +13,44 @@
 
 (rf/reg-event-db :theme/set-mode
                  (fn [db [_ mode]]
-                   (js/localStorage.setItem "rouyi-theme-mode" (name mode))
+                   (storage/set-item! :theme-mode mode)
                    (assoc-in db [:theme :mode] mode)))
 
 (rf/reg-event-db :theme/set-algorithm
                  (fn [db [_ algorithm]]
-                   (js/localStorage.setItem "rouyi-theme-algorithm" algorithm)
+                   (storage/set-item! :theme-algorithm algorithm)
                    (assoc-in db [:theme :algorithm] algorithm)))
 
 (rf/reg-event-db :theme/set-primary-color
                  (fn [db [_ color]]
-                   (js/localStorage.setItem "rouyi-primary-color" color)
+                   (storage/set-item! :primary-color color)
                    (assoc-in db [:theme :primary-color] color)))
 
 (rf/reg-event-db :theme/set-component-size
                  (fn [db [_ size]]
-                   (js/localStorage.setItem "rouyi-component-size" size)
+                   (storage/set-item! :component-size size)
                    (assoc-in db [:theme :component-size] size)))
 
 (rf/reg-event-db :theme/set-density
                  (fn [db [_ size]]
-                   (js/localStorage.setItem "rouyi-component-size" size)
-                   (js/localStorage.setItem "rouyi-theme-algorithm"
-                                            (if (= size "small") "compact" "default"))
+                   (storage/set-item! :component-size size)
+                   (storage/set-item! :theme-algorithm (if (= size "small") "compact" "default"))
                    (-> db
                        (assoc-in [:theme :component-size] size)
                        (assoc-in [:theme :algorithm] (if (= size "small") "compact" "default")))))
 
 (rf/reg-event-db :theme/set-font-size
                  (fn [db [_ size]]
-                   (js/localStorage.setItem "rouyi-font-size" size)
+                   (storage/set-item! :font-size size)
                    (assoc-in db [:theme :font-size] size)))
 
 (rf/reg-event-db :theme/load-from-storage
                  (fn [db _]
-                   (let [mode (js/localStorage.getItem "rouyi-theme-mode")
-                         algorithm (js/localStorage.getItem "rouyi-theme-algorithm")
-                         color (js/localStorage.getItem "rouyi-primary-color")
-                         size (js/localStorage.getItem "rouyi-component-size")
-                         font-size (js/localStorage.getItem "rouyi-font-size")
+                   (let [mode (storage/get-item :theme-mode)
+                         algorithm (storage/get-item :theme-algorithm)
+                         color (storage/get-item :primary-color)
+                         size (storage/get-item :component-size)
+                         font-size (storage/get-item :font-size)
                          layout-settings (ec/stored-layout-settings)]
                      (cond-> db
                        mode (assoc-in [:theme :mode] (keyword mode))
@@ -72,8 +73,12 @@
                  (fn [db _]
                    (let [settings db/default-layout-settings]
                      (ec/persist-layout-settings! settings)
-                     (js/localStorage.setItem "rouyi-primary-color" "#409eff")
+                     (storage/set-item! :primary-color "#409eff")
                      (-> db
                          (assoc :layout-settings settings)
                          (assoc-in [:theme :primary-color] "#409eff")
                          (ec/apply-theme-style settings)))))
+
+(rf/reg-event-db :i18n/set-locale
+                 (fn [db [_ k]]
+                   (assoc db :locale (i18n/set-locale! k))))

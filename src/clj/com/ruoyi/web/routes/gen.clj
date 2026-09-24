@@ -4,7 +4,7 @@
    [com.ruoyi.web.controllers.gen :as gen]
    [com.ruoyi.web.middleware.auth :as auth-mw]))
 
-(defn gen-routes [{:keys [gen-service]}]
+(defn gen-routes [{:keys [gen-service env]}]
   ["/tool"
    {:middleware [(auth-mw/auth-middleware {:required? true})]
     :swagger {:tags ["代码生成"]}}
@@ -22,9 +22,9 @@
     ["/generate" {:post {:summary    "批量生成代码"
                          :description "选择表并生成完整 CRUD 代码文件"
                          :handler    (partial gen/batch-generate {:gen-service gen-service})}}]
-    ["/deploy" {:post {:summary    "部署代码"
-                       :description "将生成的代码部署到项目目录"
-                       :handler    (partial gen/deploy-code {:gen-service gen-service})}}]
+    ["/deploy" {:post {:summary    "部署代码(仅开发环境)"
+                       :description "将生成的代码写入项目源码目录;非 dev profile 返回 403"
+                       :handler    (partial gen/deploy-code {:gen-service gen-service :env env})}}]
     ["/download" {:post {:summary    "下载代码"
                          :description "批量生成代码并打包成 ZIP 下载"
                          :handler    (partial gen/download-code {:gen-service gen-service})}}]]])

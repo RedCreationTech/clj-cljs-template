@@ -1,4 +1,4 @@
-{:source-paths ["src/cljs"]
+{:source-paths ["src/cljs" "test/cljs"]
 
  :dependencies [[reagent "2.0.1"]
                 [re-frame "1.4.7"]
@@ -18,4 +18,10 @@
    :js-options {:ignore-asset-requires true
                 :resolve {"@rc-component/qrcode" false
                           "@ant-design/qrcode" false
-                          "qrcode.react" false}}}}}
+                          "qrcode.react" false}}}
+
+  ;; 前端单元测试(bb test:cljs):test/cljs 下 *-test 命名空间,在 Node 里跑
+  :test
+  {:target    :node-test
+   :output-to "target/cljs-test/node-tests.js"
+   :ns-regexp "-test$"}}}

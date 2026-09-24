@@ -95,7 +95,8 @@
                                 cloverage/cloverage                 {:mvn/version "1.2.4"}}
                   :exec-fn      cognitect.test-runner.api/test
                   :extra-paths ["env/dev/clj" "env/dev/resources" "env/test/resources" "test/clj"]
-                  :main-opts   ["-e" "(require 'pjstadig.humane-test-output) (pjstadig.humane-test-output/activate!)"
+                  ;; 测试里新建的密码哈希用最低 bcrypt 强度(只影响测试进程)
+                  :main-opts   ["-e" "(require 'pjstadig.humane-test-output) (pjstadig.humane-test-output/activate!) (require 'com.ruoyi.infra.security) (alter-var-root #'com.ruoyi.infra.security/*hash-options* assoc :iterations 4)"
                                 "-m" "cognitect.test-runner"]}
 
            :coverage {:extra-deps  {criterium/criterium                  {:mvn/version "0.4.6"}

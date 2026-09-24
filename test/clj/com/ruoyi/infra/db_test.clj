@@ -93,6 +93,12 @@
           (is (str/starts-with? (first (:sql (first @calls))) "SELECT * FROM sys_user LIMIT 20 OFFSET 0"))
           (is (= "MySQL" (-> (first @calls) :db (.getMetaData) (.getDatabaseProductName)))))))))
 
+(deftest test-get-table-columns-rejects-injection
+  (testing "表名要拼进 PRAGMA,非标识符直接拒绝"
+    (with-redefs [jdbc/execute! (fn [& _] (throw (Exception. "不应执行 SQL")))]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"非法表名"
+                            (db/get-table-columns (fake-db "SQLite") "sys_user); DROP TABLE sys_user; --"))))))
+
 (deftest test-get-table-columns
   (testing "获取表列信息"
     (let [calls (atom [])]

@@ -34,7 +34,8 @@
            :swagger {:info {:title "Admin API"}}
            :handler (swagger/create-swagger-handler)}}]
    ["/health"
-    {:get #'health/healthcheck!}]
+    {:get {:summary "健康检查(含数据库),数据库不可用时 503"
+           :handler (partial #'health/healthcheck! {:datasource (:datasource opts)})}}]
    (auth/auth-routes opts)
    (system/system-routes opts)
    (common/common-routes opts)

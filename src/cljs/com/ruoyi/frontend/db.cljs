@@ -1,20 +1,17 @@
 (ns com.ruoyi.frontend.db
-  "前端应用初始状态。")
+  "前端应用初始状态。"
+  (:require
+   [com.ruoyi.frontend.storage :as storage]))
 
 (defn- get-stored-token
   "从 localStorage 读取保存的 token。"
   []
-  (try
-    (.getItem js/localStorage "ruoyi_token")
-    (catch js/Error _ nil)))
+  (storage/get-item :token))
 
 (defn- get-stored-user
   "从 localStorage 读取保存的用户信息。"
   []
-  (try
-    (when-let [s (.getItem js/localStorage "ruoyi_user")]
-      (js->clj (.parse js/JSON s) :keywordize-keys true))
-    (catch js/Error _ nil)))
+  (storage/get-json :user))
 
 (def default-layout-settings
   {:nav-mode "side"
@@ -70,5 +67,4 @@
      :file {:items [] :loading? false}
      :fb {:items [] :selected-id nil :code-visible? false}
      :form-templates {:items [] :loading? false :modal-visible? false :drawer-visible? false :saving? false}
-     :gen {:tables-loading? false :tables [] :selected-tables [] :preview-loading? false :preview-visible? false}
-     :notification nil}))
+     :gen {:tables-loading? false :tables [] :selected-tables [] :preview-loading? false :preview-visible? false}}))

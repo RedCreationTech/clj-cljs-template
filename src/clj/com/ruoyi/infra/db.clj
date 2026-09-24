@@ -137,6 +137,9 @@
    :column_name :data_type :is_nullable :column_default :column_comment
    :character_maximum_length :numeric_precision :numeric_scale :is_pk"
   [db table-name]
+  ;; SQLite 的 PRAGMA 不能用参数占位,表名只能拼进 SQL,所以先按标识符校验(表名来自请求参数)
+  (when-not (re-matches #"[A-Za-z_][A-Za-z0-9_]*" (str table-name))
+    (throw (ex-info (str "非法表名: " table-name) {:type :system.exception/business})))
   (let [db-type (detect-db-type db)]
     (case db-type
       :sqlite

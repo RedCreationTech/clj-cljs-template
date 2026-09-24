@@ -33,3 +33,6 @@ CLAUDE.local.md
 
 # Emacs 导出产物(build-html.py 生成的 c4-model.html 才是提交版本)
 docs/architecture/c4-model-emacs.html
+
+# 运行时上传的文件
+/uploads/

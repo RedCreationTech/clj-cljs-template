@@ -11,7 +11,7 @@
 ## 任务入口与质量门禁
 
 - **所有任务走 babashka**：`bb tasks` 列出全部任务；不要再写 Makefile / shell 脚本，新任务加到 `bb.edn`，实现放 `bb/tasks/*.clj`（跨平台，Windows 也能跑）。
-- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`）、`bb lint:migrations`、`bb check`；格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
+- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`）、`bb lint:migrations`、`bb check`；格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
 - **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟。改了任务名或参数，要同步改 CI。
 - **新增业务模块用 `bb new-module`**（见 README「新增业务模块」）。源码里的 `;; [new-module] <tag>` 注释是脚手架的登记点（`system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs`），**不要删除或改写这些标记行**；重构这些文件时把标记保留在对应集合的末尾。改动脚手架模板（`bb/tasks/scaffold/*.clj`）后，至少生成一个模块跑一遍 lint / fmt:check / 生成的测试 / `bb cljs:check`（CI 的 scaffold 任务会做完整检查）。
 - **生产密钥**：prod profile 下 `JWT_SECRET`（≥32 字符）与 `COOKIE_SECRET`（16 字节）缺失或为内置默认值时拒绝启动（`com.ruoyi.infra.secrets`）；dev/test 用默认值即可，不要把真实密钥写进仓库。
@@ -94,6 +94,22 @@ clj-nrepl-eval -p 7000 '(user/migrate)'     # 运行迁移
 | `hooks/use-memo` | 缓存计算结果 |
 
 **原则**：能用 re-frame subscription 的全局状态用 re-frame，组件内部局部状态用 hooks，不要用 r/atom。
+
+### 接口、存储、文案、颜色
+
+- **接口**：直接 require 领域命名空间，例如 `[com.ruoyi.frontend.api.users :as users-api]`（已没有 `api.cljs` 门面）。所有请求走 `api.transport/request`：它负责带令牌、令牌过半时触发 `:auth/refresh`、收到 401 时触发 `:auth/session-expired`，页面不需要自己处理登录失效。
+- **localStorage**：只通过 `com.ruoyi.frontend.storage`（`get-item` / `set-item!` / `get-json` / `set-json!` / `remove-item!`），键名自动加 `ruoyi_` 前缀、隐私模式下不会抛异常。
+- **界面文案**：用 `(i18n/tr "中文原文")`，英文译文加到 `i18n.cljs` 的 `en-US` 词典；没有译文时显示中文，不会出现键名。带参数：`(i18n/tr "共 {0} 条" total)`。外壳（登录、头部、菜单、Tab、面包屑、通用工具栏、分页）已完成，业务页面按需逐步迁移。
+- **颜色**：内联样式里的背景、文字、边框颜色用 `resources/public/css/app.css` 定义的变量（`var(--app-bg)`、`var(--app-text-regular)`、`var(--app-border-light)` 等），不要写死 `#fff` / `#606266`，否则暗色主题会出现白块或看不清的文字。
+- **纯函数放可测试的命名空间**：不依赖浏览器 / HTTP 库的逻辑（如 `api.token`）单独成命名空间，才能在 `test/cljs` 里用 Node 跑单元测试（`bb test:cljs`）。
+
+## 认证与会话（改动认证相关代码前先读）
+
+- 令牌 claims：`:user-id :user-name :roles :jti :iat :exp`，`:exp` 是 Unix 秒。`:jti` 是会话 ID，对应 `sys_online.session_id`。
+- **会话是否有效以 `sys_online` 为准**：`wrap-jwt-auth` 每次请求更新心跳，更新 0 行即视为未登录；登出、强退、空闲超过 30 分钟（后台清理）都会删掉会话行，令牌立即失效。续期（`/api/auth/refresh`）把会话改挂到新 `jti`，旧令牌 30 秒宽限。
+- 登录：验证码开关（`:auth-config :captcha-enabled?`，prod 默认开）→ 失败限流（`infra.login-guard`，按用户名）→ 校验密码与状态。失败提示统一为“用户名或密码错误”，不要区分“用户不存在”。
+- 需要登录的路由用 `(auth-mw/auth-middleware {:required? true})`；文件上传下载同样要求登录，路径必须经 `infra.files/resolve-in` / `resolve-under` / `store!`，不能直接用请求里的文件名拼路径。
+- 认证相关配置都在 `system.edn` 的 `:reitit.routes/api :auth-config`，环境变量覆盖见 README。
 
 ## Frontend Ant Design 常见错误
 
@@ -347,7 +363,7 @@ UI 样式权威参考：https://gitee.com/y_project/RuoYi-Vue/tree/master/ruoyi-
 ```
 Backend  (Clojure, port 3000)    — API + serves static frontend
 Frontend (ClojureScript)          — SPA via shadow-cljs, compiled to resources/public/js/
-Database (SQLite)                 — rouyi.db, auto-migrated on startup
+Database (SQLite)                 — ruoyi.db, auto-migrated on startup
 ```
 
 Both frontend and backend share port **3000**. The backend serves both API and static files.
@@ -358,8 +374,8 @@ Both frontend and backend share port **3000**. The backend serves both API and s
 
 | 环境变量 | 默认值 | MySQL 用法 |
 |----------|--------|------------|
-| `JDBC_URL` | `jdbc:sqlite:rouyi.db` | `jdbc:mysql://user:pass@host:port/db?useSSL=false&allowPublicKeyRetrieval=true` |
-| `MIGRATION_DIR` | `migrations-sqlite` | `migrations` |
+| `JDBC_URL` | `jdbc:sqlite:ruoyi.db` | `jdbc:mysql://user:pass@host:port/db?useSSL=false&allowPublicKeyRetrieval=true` |
+| `MIGRATION_DIR` | 按 `JDBC_URL` 推导(MySQL → `migrations`,其它 → `migrations-sqlite`) | 一般不用设 |
 
 #### Migration 必须完全分开
 
@@ -437,7 +453,7 @@ bb db:roundtrip        # 迁移往返;设 JDBC_URL=jdbc:mysql://… 则检查 My
 
 ```bash
 bb dev                 # 后端(3000 / nREPL 7000)+ 前端 watch,输出带 [backend]/[frontend] 前缀
-bb dev --reset-db      # 先删除 rouyi.db 再启动
+bb dev --reset-db      # 先删除 ruoyi.db 再启动
 bb dev --backend-only  # 只起后端(或分别 bb backend / bb frontend)
 # 首次前端编译约 1~3 分钟,之后增量编译几秒;打开 http://localhost:3000
 ```
@@ -492,7 +508,7 @@ Available helpers (defined in `env/dev/clj/user.clj`):
 ```bash
 bb uberjar             # 前端 release(编译 warning 即失败)+ 后端 standalone jar
 JWT_SECRET=$(openssl rand -hex 32) COOKIE_SECRET=$(openssl rand -hex 8) \
-  java -jar target/rouyi-standalone.jar   # prod profile:缺少合格密钥会拒绝启动
+  java -jar target/ruoyi-standalone.jar   # prod profile:缺少合格密钥会拒绝启动
 ```
 
 ### E2E 测试 (Playwright)
@@ -508,7 +524,7 @@ npm run test:e2e:report                  # 查看 HTML 报告
 
 测试目录：`tests/e2e/`
 
-- `auth.spec.js` — 管理员登录/登出
+- `auth.spec.js` — 登录/登出、密码错误提示、登出后旧令牌失效、会话失效后自动回登录页
 - `navigation.spec.js` — 系统管理、系统监控、系统工具等核心菜单可访问性
 - `post-crud.spec.js` — 岗位管理新增/修改/删除示例
 - `auth-helper.js` — 登录/登出公共辅助

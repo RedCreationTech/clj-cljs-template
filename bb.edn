@@ -21,13 +21,16 @@
   new-module       {:doc  "生成一个完整 CRUD 模块并自动登记:bb new-module <名称> --label 中文名 --fields \"title:string:required,amount:int\""
                     :task (do (require 'tasks.new-module)
                               ((resolve 'tasks.new-module/generate!) *command-line-args*))}
-  rename           {:doc  "把 com.ruoyi / rouyi 改成你的命名空间与项目名:bb rename com.acme.myapp myapp"
+  rename           {:doc  "把 com.ruoyi / ruoyi 改成你的命名空间与项目名:bb rename com.acme.myapp myapp"
                     :task (do (require 'tasks.rename)
                               ((resolve 'tasks.rename/rename!) *command-line-args*))}
 
   ;; ── 测试 ──────────────────────────────────────────────
   test             {:doc  "后端测试(独立的 test.db;额外参数传给 test-runner,如 -n com.ruoyi.web.handler-test)"
                     :task (dev/test! *command-line-args*)}
+  test:cljs        {:doc  "前端单元测试(test/cljs,shadow-cljs :test 构建,Node 运行)"
+                    :task (do (u/exec! [(u/npx-cmd) "shadow-cljs" "compile" "test" "--config-merge" u/strict-cljs])
+                              (u/exec! ["node" "target/cljs-test/node-tests.js"]))}
   test:mysql       {:doc  "在 MySQL 上跑后端测试(docker compose 起 3308 端口;或设置 JDBC_URL 用已有实例)"
                     :task (dev/test-mysql! *command-line-args*)}
   e2e              {:doc  "Playwright 端到端测试(需后端已在 3000 运行)"
@@ -70,4 +73,4 @@
 
   ;; ── CI ────────────────────────────────────────────────
   ci               {:doc  "本地跑一遍与 CI 相同的快速检查(不含 MySQL 与 E2E)"
-                    :depends [lint fmt:check test]}}}
+                    :depends [lint fmt:check test test:cljs]}}}

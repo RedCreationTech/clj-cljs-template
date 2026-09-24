@@ -1,6 +1,7 @@
 (ns com.ruoyi.frontend.pages.layout.page-view
   "路由关键词 -> 页面组件的分发表。"
   (:require
+   [com.ruoyi.frontend.i18n :as i18n]
    [com.ruoyi.frontend.pages.cache :as cache]
    [com.ruoyi.frontend.pages.config :as config]
    [com.ruoyi.frontend.pages.dashboard :as dashboard]
@@ -51,5 +52,5 @@
     :build [form-builder/form-builder-page]
     :file [file-manager/file-manager-page]
     ;; [new-module] pages
-    [:div {:style {:padding 48 :textAlign "center" :color "#999" :fontSize 16}}
-     "页面建设中"]))
+    [:div {:style {:padding 48 :textAlign "center" :color "var(--app-text-secondary)" :fontSize 16}}
+     (i18n/tr "页面建设中")]))

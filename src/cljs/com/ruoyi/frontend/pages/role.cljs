@@ -4,7 +4,7 @@
    ["@ant-design/icons" :refer [DeleteOutlined DownloadOutlined EditOutlined PlusOutlined
                                 ReloadOutlined SearchOutlined]]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.impexp :as impexp-api]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
    [re-frame.core :as rf]
@@ -103,7 +103,7 @@
                                          :label "删除"}]
            [page-toolbar/toolbar-button {:kind :export
                                          :icon (r/as-element [:> DownloadOutlined])
-                                         :on-click #(api/export-roles {})
+                                         :on-click #(impexp-api/export-roles {})
                                          :label "导出"}]]
     :right [page-toolbar/toolbar-right
             [page-toolbar/round-tool-button {:title "搜索"
@@ -219,7 +219,7 @@
                    :treeData (clj->js (mapv menu->tree-node menu-tree))
                    :onCheck (fn [keys _]
                               (rf/dispatch [:roles/set-checked-keys (js->clj keys)]))}]
-       [:div {:style {:textAlign "center" :padding 24 :color "#999"}}
+       [:div {:style {:textAlign "center" :padding 24 :color "var(--app-text-secondary)"}}
         "加载菜单树中..."])]))
 
 ;; ─── 数据权限弹窗 ──────────────────────────────────────────────────────
@@ -252,7 +252,7 @@
                      :treeData (clj->js (mapv dept->tree-node dept-tree))
                      :onCheck (fn [keys _]
                                 (rf/dispatch [:roles/set-data-scope-checked-keys (js->clj keys)]))}]
-         [:div {:style {:textAlign "center" :padding 24 :color "#999"}}
+         [:div {:style {:textAlign "center" :padding 24 :color "var(--app-text-secondary)"}}
           "加载部门树中..."]))]))
 
 ;; ─── 用户分配弹窗 ──────────────────────────────────────────────────────

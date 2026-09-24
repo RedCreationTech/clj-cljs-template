@@ -178,9 +178,9 @@ flowchart TD
 
     <h3>1.1 env.clj</h3>
     <pre><code class="language-clojure">(<span class="kw">def</span> <span class="sym">defaults</span>
-  {<span class="macro">:init</span>  (<span class="kw">fn</span> [] (<span class="sym">log/info</span> <span class="str">"\n-=[rouyi starting using the development or test profile]=-"</span>))
-   <span class="macro">:start</span> (<span class="kw">fn</span> [] (<span class="sym">log/info</span> <span class="str">"\n-=[rouyi started successfully using the development or test profile]=-"</span>))
-   <span class="macro">:stop</span>  (<span class="kw">fn</span> [] (<span class="sym">log/info</span> <span class="str">"\n-=[rouyi has shut down successfully]=-"</span>))
+  {<span class="macro">:init</span>  (<span class="kw">fn</span> [] (<span class="sym">log/info</span> <span class="str">"\n-=[ruoyi starting using the development or test profile]=-"</span>))
+   <span class="macro">:start</span> (<span class="kw">fn</span> [] (<span class="sym">log/info</span> <span class="str">"\n-=[ruoyi started successfully using the development or test profile]=-"</span>))
+   <span class="macro">:stop</span>  (<span class="kw">fn</span> [] (<span class="sym">log/info</span> <span class="str">"\n-=[ruoyi has shut down successfully]=-"</span>))
    <span class="macro">:middleware</span> wrap-dev
    <span class="macro">:opts</span>  {<span class="macro">:profile</span> <span class="macro">:dev</span>}})</code></pre>
 
@@ -217,13 +217,13 @@ flowchart TD
   <span class="edn-key">:cookie-secret</span> <span class="edn-tag">#or</span> [<span class="edn-tag">#env</span> <span class="edn-str">"COOKIE_SECRET"</span> <span class="edn-str">"KWGRWFTDVZAHISQO"</span>]}
 
  <span class="edn-key">:db.sql/connection</span>
- <span class="edn-tag">#profile</span> {<span class="edn-key">:dev</span>  {<span class="edn-key">:jdbc-url</span>   <span class="edn-tag">#or</span> [<span class="edn-tag">#env</span> <span class="edn-str">"JDBC_URL"</span> <span class="edn-str">"jdbc:sqlite:rouyi.db"</span>]
+ <span class="edn-tag">#profile</span> {<span class="edn-key">:dev</span>  {<span class="edn-key">:jdbc-url</span>   <span class="edn-tag">#or</span> [<span class="edn-tag">#env</span> <span class="edn-str">"JDBC_URL"</span> <span class="edn-str">"jdbc:sqlite:ruoyi.db"</span>]
                   <span class="edn-key">:init-size</span>  <span class="num">1</span>
                   <span class="edn-key">:min-idle</span>   <span class="num">1</span>
                   <span class="edn-key">:max-active</span> <span class="num">1</span>
                   <span class="edn-key">:connection-test-query</span> <span class="edn-str">"SELECT 1"</span>}
-           <span class="edn-key">:test</span> {<span class="edn-key">:jdbc-url</span> <span class="edn-tag">#or</span> [<span class="edn-tag">#env</span> <span class="edn-str">"JDBC_URL"</span> <span class="edn-str">"jdbc:sqlite:rouyi.db"</span>] ...}
-           <span class="edn-key">:prod</span> {<span class="edn-key">:jdbc-url</span> <span class="edn-tag">#or</span> [<span class="edn-tag">#env</span> <span class="edn-str">"JDBC_URL"</span> <span class="edn-str">"jdbc:sqlite:rouyi.db"</span>] ...}}
+           <span class="edn-key">:test</span> {<span class="edn-key">:jdbc-url</span> <span class="edn-tag">#or</span> [<span class="edn-tag">#env</span> <span class="edn-str">"JDBC_URL"</span> <span class="edn-str">"jdbc:sqlite:test.db"</span>] ...}
+           <span class="edn-key">:prod</span> {<span class="edn-key">:jdbc-url</span> <span class="edn-tag">#or</span> [<span class="edn-tag">#env</span> <span class="edn-str">"JDBC_URL"</span> <span class="edn-str">"jdbc:sqlite:ruoyi.db"</span>] ...}}
 
  <span class="edn-key">:db.sql/query-fn</span>
  {<span class="edn-key">:conn</span>      <span class="edn-tag">#ig/ref</span> <span class="edn-key">:db.sql/connection</span>
@@ -298,8 +298,7 @@ flowchart TD
     </ul>
     <p>通过环境变量切换：</p>
     <pre><code class="language-bash">JDBC_URL="jdbc:mysql://root:password@127.0.0.1:3308/ruoyi?useSSL=false&amp;serverTimezone=Asia/Shanghai&amp;allowPublicKeyRetrieval=true" \
-MIGRATION_DIR=migrations \
-clojure -M:dev -m com.ruoyi.core</code></pre>
+bb dev                 <span class="comment"># JDBC_URL 是 MySQL 时自动使用 migrations 目录</span></code></pre>
     <p><code>src/clj/com/ruoyi/infra/db.clj</code> 封装了数据库类型检测与自增 ID 获取：</p>
     <pre><code class="language-clojure">(<span class="kw">defn</span> <span class="sym">detect-db-type</span> [db]
   (<span class="kw">let</span> [product-name (<span class="sym">.getDatabaseProductName</span> (.getMetaData connable))]
@@ -319,35 +318,41 @@ clojure -M:dev -m com.ruoyi.core</code></pre>
       (<span class="sym">get</span> (<span class="sym">query-fn</span> tx id-q {}) id-key))))</code></pre>
 
     <h2>5. 安全</h2>
-    <p><code>src/clj/com/ruoyi/infra/security.clj</code> 提供密码哈希与 JWT：</p>
+    <p><code>src/clj/com/ruoyi/infra/security.clj</code> 提供密码哈希与 JWT(生产环境的密钥由 <code>infra/secrets.clj</code> 在启动时校验)：</p>
     <pre><code class="language-clojure">(<span class="kw">def</span> <span class="sym">secret-key</span>
-  (<span class="kw">or</span> (<span class="sym">System/getenv</span> <span class="str">"JWT_SECRET"</span>)
-      <span class="str">"rouyi-default-jwt-secret-key-change-in-production"</span>))
+  (<span class="kw">or</span> (<span class="sym">not-empty</span> (<span class="sym">System/getenv</span> <span class="str">"JWT_SECRET"</span>))
+      <span class="sym">secrets/default-jwt-secret</span>))
 
 (<span class="kw">defn</span> <span class="sym">hash-password</span> [plain-text]
-  (<span class="sym">hashers/derive</span> plain-text {<span class="macro">:alg</span> <span class="macro">:bcrypt+blake2b-512</span>}))
+  (<span class="sym">hashers/derive</span> plain-text *hash-options*))   <span class="comment">; {:alg :bcrypt+sha512}</span>
 
-(<span class="kw">defn</span> <span class="sym">generate-token</span> [user-id user-name roles &amp; {<span class="macro">:keys</span> [exp-hours] <span class="macro">:or</span> {exp-hours <span class="num">24</span>}}]
-  (<span class="kw">let</span> [claims {<span class="macro">:user-id</span> user-id <span class="macro">:user-name</span> user-name <span class="macro">:roles</span> roles
-                <span class="macro">:exp</span> (<span class="macro">+</span> (<span class="sym">System/currentTimeMillis</span>) (<span class="sym">*</span> exp-hours <span class="num">60</span> <span class="num">60</span> <span class="num">1000</span>))}]
+(<span class="kw">defn</span> <span class="sym">generate-token</span> [user-id user-name roles &amp; {<span class="macro">:keys</span> [ttl-minutes jti]}]
+  (<span class="kw">let</span> [now (<span class="sym">now-seconds</span>)
+        claims {<span class="macro">:user-id</span> user-id <span class="macro">:user-name</span> user-name <span class="macro">:roles</span> roles
+                <span class="macro">:jti</span> (<span class="kw">or</span> jti (<span class="sym">str</span> (<span class="sym">random-uuid</span>)))   <span class="comment">; 会话 ID</span>
+                <span class="macro">:iat</span> now
+                <span class="macro">:exp</span> (<span class="macro">+</span> now (<span class="sym">*</span> <span class="num">60</span> ttl-minutes))}]       <span class="comment">; JWT 标准:Unix 秒</span>
     (<span class="sym">jwt/sign</span> claims secret-key {<span class="macro">:alg</span> <span class="macro">:hs256</span>})))</code></pre>
+    <p>登录失败按用户名限流(<code>infra/login-guard.clj</code>,默认 10 分钟内失败 5 次锁定 10 分钟);生产环境默认开启验证码;
+       前端在令牌过了有效期一半时调用 <code>/api/auth/refresh</code> 续期,任何接口返回 401 都会回到登录页。</p>
 
     <h2>6. 在线用户</h2>
-    <p><code>src/clj/com/ruoyi/infra/online.clj</code> 把会话持久化到 <code>sys_online</code>，并提供强退黑名单：</p>
-    <pre><code class="language-clojure">(<span class="kw">defonce</span> <span class="sym">token-blacklist</span>
-  (<span class="sym">atom</span> {} <span class="macro">:validator</span> map?))
+    <p><code>src/clj/com/ruoyi/infra/online.clj</code> 把会话(以令牌的 <code>:jti</code> 为 ID)存进 <code>sys_online</code>,<em>会话是否有效以这张表为准</em>：
+       登出、强退、空闲 30 分钟被清理后,会话行被删除,令牌立即失效(多实例部署同样生效)。</p>
+    <pre><code class="language-clojure">(<span class="kw">defn</span> <span class="sym">heartbeat!</span>
+  <span class="str">"更新最后访问时间;更新 0 行说明会话已不存在。"</span>
+  [session-id]
+  (<span class="sym">not=</span> <span class="num">0</span> ((query-fn) <span class="macro">:update-online-user!</span>
+                   {<span class="macro">:session_id</span> session-id <span class="macro">:last_access_time</span> (now) ...})))
 
-(<span class="kw">defn</span> <span class="sym">blacklist!</span> [token exp-ms]
-  (<span class="sym">swap!</span> token-blacklist <span class="sym">assoc</span> token exp-ms))
+(<span class="kw">defn</span> <span class="sym">active?</span>
+  <span class="str">"鉴权中间件用:续期宽限期内的旧会话直接放行,否则以心跳是否命中为准。"</span>
+  [session-id]
+  (<span class="sym">boolean</span> (<span class="kw">or</span> (<span class="sym">in-grace?</span> session-id) (<span class="sym">heartbeat!</span> session-id))))
 
-(<span class="kw">defn</span> <span class="sym">blacklisted?</span> [token]
-  (<span class="sym">contains?</span> @token-blacklist token))
-
-(<span class="kw">defn</span> <span class="sym">register!</span> [token user-name login-ip]
-  ((query-fn) <span class="macro">:create-online-user!</span>
-              {<span class="macro">:session_id</span> token <span class="macro">:login_name</span> user-name
-               <span class="macro">:ipaddr</span> login-ip <span class="macro">:status</span> <span class="str">"on_line"</span>
-               <span class="macro">:start_timestamp</span> now <span class="macro">:last_access_time</span> now}))</code></pre>
+(<span class="kw">defn</span> <span class="sym">rotate!</span>
+  <span class="str">"令牌续期:会话改挂到新 jti,旧令牌 30 秒宽限后失效。"</span>
+  [old-session-id new-session-id] ...)</code></pre>
 
     <h2>7. 定时任务</h2>
     <p><code>src/clj/com/ruoyi/infra/scheduler.clj</code> 用 Quartz 调度 sys_job 表中的任务：</p>
@@ -373,7 +378,7 @@ clojure -M:dev -m com.ruoyi.core</code></pre>
          <span class="macro">:miss</span> <span class="num">0</span>}))</code></pre>
 
     <h2>9. 测试</h2>
-    <p>测试通过 <code>clojure -M:test</code> 运行。项目使用 <code>clojure.test</code> 并对 <code>query-fn</code> 进行 mock：</p>
+    <p>测试通过 <code>bb test</code> 运行。项目使用 <code>clojure.test</code> 并对 <code>query-fn</code> 进行 mock：</p>
     <pre><code class="language-clojure">(<span class="kw">defn-</span> <span class="sym">mock-query-fn</span> [q p &amp; rest]
   (<span class="kw">case</span> q
     <span class="macro">:list-users</span> {<span class="macro">:rows</span> mock-users <span class="macro">:total</span> <span class="num">2</span>}
@@ -394,10 +399,10 @@ clojure -M:dev -m com.ruoyi.core</code></pre>
 
     <h2>10. 构建与部署</h2>
     <p>生产构建分两步：先编译 ClojureScript，再构建 uberjar：</p>
-    <pre><code class="language-bash">npx shadow-cljs release app
-clojure -T:build all
-java -jar target/rouyi-standalone.jar</code></pre>
-    <p>Docker 部署可直接基于 uberjar 镜像，或把 jar 与 <code>rouyi.db</code> 挂载到容器内运行。</p>
+    <pre><code class="language-bash">bb uberjar
+JWT_SECRET=$(openssl rand -hex 32) COOKIE_SECRET=$(openssl rand -hex 8) \
+  java -jar target/ruoyi-standalone.jar</code></pre>
+    <p>Docker 部署可直接基于 uberjar 镜像(先 <code>bb release</code>),或把 jar 与 <code>ruoyi.db</code> 挂载到容器内运行;密钥用 <code>-e</code> 注入。</p>
 
     <section class="exercise">
       <h2>练习 / 讨论</h2>

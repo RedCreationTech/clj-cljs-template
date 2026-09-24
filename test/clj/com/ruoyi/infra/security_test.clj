@@ -22,3 +22,12 @@
     (let [request {:headers {"authorization" "Bearer test-token-123"}}
           token (security/extract-token request)]
       (is (= "test-token-123" token)))))
+
+(deftest test-token-expiry
+  (testing "exp 按 JWT 标准使用 Unix 秒"
+    (let [{:keys [iat exp jti]} (security/parse-token (security/generate-token 1 "u" [] :ttl-minutes 2))]
+      (is (= 120 (- exp iat)))
+      (is (< exp 1e11) "是秒而不是毫秒")
+      (is (string? jti))))
+  (testing "过期令牌解析失败"
+    (is (nil? (security/parse-token (security/generate-token 1 "u" [] :ttl-minutes -1))))))

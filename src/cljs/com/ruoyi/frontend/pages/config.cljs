@@ -3,7 +3,7 @@
   (:require
    ["@ant-design/icons" :refer [DownloadOutlined PlusOutlined ReloadOutlined SearchOutlined]]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.impexp :as impexp-api]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
    [re-frame.core :as rf]
@@ -99,7 +99,7 @@
                                             :label "新增"}]
               [page-toolbar/toolbar-button {:kind :export
                                             :icon (r/as-element [:> DownloadOutlined])
-                                            :on-click #(api/export-configs {})
+                                            :on-click #(impexp-api/export-configs {})
                                             :label "导出"}]]
        :right [page-toolbar/toolbar-right
                [page-toolbar/round-tool-button {:title "搜索"

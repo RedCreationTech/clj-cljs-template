@@ -75,7 +75,8 @@
     (let [build (slurp "build.clj")]
       (spit "build.clj" (str/replace build #"\(def main-cls \"[^\"]+\"\)"
                                      (str "(def main-cls \"" (munge-seg new-ns) ".core\")"))))
-    (doseq [root src-roots] (move-tree! root old-path (:new-path ctx)))
+    (when (not= old-path (:new-path ctx))
+      (doseq [root src-roots] (move-tree! root old-path (:new-path ctx))))
     (println (str "\n完成。接着执行:\n"
                   "  bb clean && bb test && npx shadow-cljs compile app\n"
                   "  再改 src/cljs/" (:new-path ctx) "/frontend/config.cljs 里的 app-name / repo-url"))))

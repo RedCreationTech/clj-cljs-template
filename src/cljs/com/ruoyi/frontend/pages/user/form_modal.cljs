@@ -56,9 +56,9 @@
 (defn- modal-header [editing on-close]
   [:div {:style {:display "flex" :justifyContent "space-between" :alignItems "center"
                  :marginBottom 22}}
-   [:h3 {:style {:margin 0 :fontSize 22 :fontWeight 500 :color "#303133"}} (if editing "修改用户" "添加用户")]
+   [:h3 {:style {:margin 0 :fontSize 22 :fontWeight 500 :color "var(--app-text-primary)"}} (if editing "修改用户" "添加用户")]
    [antd/button {:type "text"
-                 :style {:fontSize 24 :color "#909399" :width 32 :height 32}
+                 :style {:fontSize 24 :color "var(--app-text-secondary)" :width 32 :height 32}
                  :on-click on-close} "×"]])
 
 (defn- modal-footer [on-close]

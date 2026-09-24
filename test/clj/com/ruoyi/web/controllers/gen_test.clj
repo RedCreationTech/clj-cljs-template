@@ -55,43 +55,42 @@
       (is (= 200 (:status response)))
       (is (= [] (get-in response [:body :data]))))))
 
+(defn- temp-root []
+  (doto (java.io.File/createTempFile "gen-deploy" "") (.delete) (.mkdirs)))
+
+(deftest test-deploy-code-dev-only
+  (testing "非开发环境拒绝部署,不写任何文件"
+    (let [root (temp-root)
+          response (gen/deploy-code {:gen-service mock-gen-service :env :prod :root (.getPath root)}
+                                    {:body-params {:tableName "sys_gen_test"}})]
+      (is (= 403 (get-in response [:body :code])))
+      (is (empty? (rest (file-seq root)))))))
+
 (deftest test-deploy-code-failure
   (testing "无法生成 kebab 名时返回 500"
     (let [empty-service {:query-fn (fn [_ _] [])}
           request {:body-params {:tableName "sys_"}}
-          response (gen/deploy-code {:gen-service empty-service} request)]
+          response (gen/deploy-code {:gen-service empty-service :env :dev :root (.getPath (temp-root))} request)]
       (is (= 200 (:status response)))
       (is (= 500 (get-in response [:body :code])))
       (is (= "生成失败" (get-in response [:body :msg])))
       (is (= "无法生成代码" (get-in response [:body :data :error]))))))
 
 (deftest test-deploy-code-success
-  (testing "部署代码成功"
-    (let [request {:body-params {:tableName "sys_gen_test"}}
-          kebab "gen-test"
-          generated-sql-file (io/file "resources/sql/generated.sql")
-          original-generated (when (.exists generated-sql-file) (slurp generated-sql-file))
-          response (gen/deploy-code {:gen-service mock-gen-service} request)]
-      (try
-        (is (= 200 (:status response)))
-        (is (= "操作成功" (get-in response [:body :msg])))
-        (is (string? (get-in response [:body :data :routes])))
-        (is (some #(= "resources/sql/generated.sql" %) (get-in response [:body :data :written])))
-        (finally
-          (if original-generated
-            (spit generated-sql-file original-generated)
-            (.delete generated-sql-file))
-          (doseq [path [(str "resources/sql/" kebab ".sql")
-                        (str "src/clj/com/ruoyi/domain/system/" kebab ".clj")
-                        (str "src/clj/com/ruoyi/web/controllers/system/" kebab ".clj")
-                        (str "src/cljs/com/ruoyi/frontend/api/" kebab ".cljs")
-                        (str "src/cljs/com/ruoyi/frontend/pages/" kebab ".cljs")
-                        (str "src/cljs/com/ruoyi/frontend/events/" kebab ".cljs")
-                        (str "src/cljs/com/ruoyi/frontend/subs/" kebab ".cljs")]]
-            (.delete (io/file path)))
-          (doseq [f (file-seq (io/file "resources/migrations-sqlite"))]
-            (when (and (.isFile f) (.contains (.getName f) (str "_" kebab)))
-              (.delete f))))))))
+  (testing "部署到项目目录:源码按命名空间路径,两套迁移成对,HugSQL 进 generated.sql"
+    (let [root (temp-root)
+          response (gen/deploy-code {:gen-service mock-gen-service :env :dev :root (.getPath root)}
+                                    {:body-params {:tableName "sys_gen_test"}})
+          written (set (get-in response [:body :data :written]))
+          file-names (->> (file-seq root) (filter #(.isFile %)) (map #(.getName %)) set)]
+      (is (= "操作成功" (get-in response [:body :msg])))
+      (is (string? (get-in response [:body :data :routes])))
+      (is (contains? written "resources/sql/generated.sql"))
+      (is (contains? written "src/clj/com/ruoyi/domain/system/gen_test.clj") "文件名用下划线,与命名空间对应")
+      (is (= 2 (count (filter #(re-find #"create-gen-test\.up\.sql$" %) written))) "SQLite 与 MySQL 各一份")
+      (is (some #(re-find #"AUTO_INCREMENT" (slurp (io/file root %)))
+                (filter #(re-find #"^resources/migrations/" %) written)))
+      (is (contains? file-names "generated.sql")))))
 
 (deftest test-download-code-empty
   (testing "空表列表返回 400"

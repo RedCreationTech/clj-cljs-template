@@ -3,7 +3,7 @@
   (:require
    [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.depts :as depts-api]
    [com.ruoyi.frontend.events.common :as ec]
    [re-frame.core :as rf]))
 
@@ -24,19 +24,19 @@
 
 (rf/reg-fx :api/list-depts-search
            (fn [params]
-             (api/list-depts {}
-                             (fn [result]
-                               (when (= 200 (:code result))
-                                 (let [items (:data result [])
-                                       filtered (cond->> items
-                                                  (:dept_name params)
-                                                  (filter #(clojure.string/includes?
-                                                            (or (:dept_name %) "")
-                                                            (:dept_name params)))
-                                                  (some? (:status params))
-                                                  (filter #(= (:status params) (:status %))))]
-                                   (rf/dispatch [:depts/set-list filtered]))))
-                             (fn [_]))))
+             (depts-api/list-depts {}
+                                   (fn [result]
+                                     (when (= 200 (:code result))
+                                       (let [items (:data result [])
+                                             filtered (cond->> items
+                                                        (:dept_name params)
+                                                        (filter #(clojure.string/includes?
+                                                                  (or (:dept_name %) "")
+                                                                  (:dept_name params)))
+                                                        (some? (:status params))
+                                                        (filter #(= (:status params) (:status %))))]
+                                         (rf/dispatch [:depts/set-list filtered]))))
+                                   (fn [_]))))
 
 (rf/reg-event-fx :depts/fetch
                  (fn [{:keys [db]} [_ params]]
@@ -45,11 +45,11 @@
 
 (rf/reg-fx :api/list-depts
            (fn [params]
-             (api/list-depts params
-                             (fn [result]
-                               (when (= 200 (:code result))
-                                 (rf/dispatch [:depts/set-list (:data result)])))
-                             (fn [_]))))
+             (depts-api/list-depts params
+                                   (fn [result]
+                                     (when (= 200 (:code result))
+                                       (rf/dispatch [:depts/set-list (:data result)])))
+                                   (fn [_]))))
 
 (rf/reg-event-db :depts/open-modal
                  (fn [db [_ initial-data]]
@@ -74,11 +74,11 @@
 
 (rf/reg-fx :api/create-dept
            (fn [params]
-             (api/create-dept params (fn [r] (when (= 200 (:code r)) (antd/success! "创建成功") (rf/dispatch [:depts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+             (depts-api/create-dept params (fn [r] (when (= 200 (:code r)) (antd/success! "创建成功") (rf/dispatch [:depts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/update-dept
            (fn [[id params]]
-             (api/update-dept id params (fn [r] (when (= 200 (:code r)) (antd/success! "更新成功") (rf/dispatch [:depts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+             (depts-api/update-dept id params (fn [r] (when (= 200 (:code r)) (antd/success! "更新成功") (rf/dispatch [:depts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-event-fx :depts/delete
                  (fn [_ [_ id]] {:api/delete-dept id}))
@@ -89,13 +89,13 @@
 
 (rf/reg-fx :api/delete-dept
            (fn [id]
-             (api/delete-dept id (fn [r] (when (= 200 (:code r)) (antd/success! "删除成功") (rf/dispatch [:depts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+             (depts-api/delete-dept id (fn [r] (when (= 200 (:code r)) (antd/success! "删除成功") (rf/dispatch [:depts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/change-dept-status
            (fn [[id status]]
-             (api/change-dept-status id status
-                                     (fn [result]
-                                       (when (= 200 (:code result))
-                                         (antd/success! "状态修改成功")
-                                         (rf/dispatch [:depts/fetch {}])))
-                                     (fn [_] (antd/error! "网络错误")))))
+             (depts-api/change-dept-status id status
+                                           (fn [result]
+                                             (when (= 200 (:code result))
+                                               (antd/success! "状态修改成功")
+                                               (rf/dispatch [:depts/fetch {}])))
+                                           (fn [_] (antd/error! "网络错误")))))

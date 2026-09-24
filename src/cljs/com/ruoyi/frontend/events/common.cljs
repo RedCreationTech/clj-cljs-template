@@ -2,7 +2,8 @@
   "common"
   (:require
    [com.ruoyi.frontend.db :as db]
-   [com.ruoyi.frontend.router :as router]))
+   [com.ruoyi.frontend.router :as router]
+   [com.ruoyi.frontend.storage :as storage]))
 
 (def page-tab-meta
   {:dashboard {:label "首页" :icon "dashboard" :closable false}
@@ -43,25 +44,19 @@
 (defn stored-layout-settings
   "从 localStorage 读取布局设置。"
   []
-  (try
-    (when-let [raw (js/localStorage.getItem "rouyi-layout-settings")]
-      (merge db/default-layout-settings
-             (js->clj (.parse js/JSON raw) :keywordize-keys true)))
-    (catch js/Error _ nil)))
+  (when-let [stored (storage/get-json :layout-settings)]
+    (merge db/default-layout-settings stored)))
 
 (defn persist-layout-settings!
   "把布局设置持久化到 localStorage。"
   [settings]
-  (try
-    (js/localStorage.setItem "rouyi-layout-settings"
-                             (.stringify js/JSON (clj->js settings)))
-    (catch js/Error _)))
+  (storage/set-json! :layout-settings settings))
 
 (defn apply-theme-style
   "根据布局面板的主题风格同步 antd 主题模式。"
   [db settings]
   (let [mode (if (= "dark" (:theme-style settings)) :dark :light)]
-    (js/localStorage.setItem "rouyi-theme-mode" (name mode))
+    (storage/set-item! :theme-mode mode)
     (assoc-in db [:theme :mode] mode)))
 
 (defn build-dept-tree

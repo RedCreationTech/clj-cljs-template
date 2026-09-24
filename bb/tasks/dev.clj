@@ -19,7 +19,7 @@
     (u/exec! [(or (u/exe "npm") (u/fail! "找不到 npm")) "install"])))
 
 (defn- reset-sqlite! []
-  (doseq [f ["rouyi.db" "rouyi.db-journal"]]
+  (doseq [f ["ruoyi.db" "ruoyi.db-journal"]]
     (fs/delete-if-exists f))
   (u/info "已删除本地 SQLite 数据库,启动时会重新迁移并写入种子数据"))
 
@@ -75,7 +75,7 @@
   (u/exec! (frontend-cmd)))
 
 (defn test!
-  "后端测试。默认用独立的 test.db(不碰开发库 rouyi.db),每次从空库迁移;
+  "后端测试。默认用独立的 test.db(不碰开发库 ruoyi.db),每次从空库迁移;
    额外参数原样传给 cognitect test-runner,例如 bb test -n com.ruoyi.web.handler-test。"
   [args]
   (when-not (System/getenv "JDBC_URL")

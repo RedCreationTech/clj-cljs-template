@@ -6,7 +6,7 @@
 
 (def default-jwt-secret
   "仅供开发/测试使用的 JWT 签名密钥;prod 下出现即视为未配置。"
-  "rouyi-default-jwt-secret-key-change-in-production")
+  "ruoyi-default-jwt-secret-key-change-in-production")
 
 (def default-cookie-secret
   "仅供开发/测试使用的会话 cookie 加密密钥(ring cookie-store 要求恰好 16 字节)。"

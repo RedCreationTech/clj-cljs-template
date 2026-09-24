@@ -3,7 +3,7 @@
   (:require
    ["@ant-design/icons" :refer [DownloadOutlined PlusOutlined ReloadOutlined SearchOutlined]]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.impexp :as impexp-api]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
    [re-frame.core :as rf]
@@ -134,7 +134,7 @@
                         :dict-type dict-type :set-dict-type! set-dict-type!
                         :on-search search! :on-reset reset!}]
      [type-toolbar-row {:on-add #(do (set-editing! nil) (set-modal-visible! true))
-                        :on-export #(api/export-dicts {})
+                        :on-export #(impexp-api/export-dicts {})
                         :on-search search!
                         :on-refresh #(rf/dispatch [:dicts/fetch-types {}])}]
      [type-table {:types types :loading? loading?

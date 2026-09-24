@@ -3,7 +3,8 @@
   (:require
    [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.jobs :as jobs-api]
+   [com.ruoyi.frontend.api.monitor :as monitor-api]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :online-users/set-list
@@ -22,18 +23,18 @@
 
 (rf/reg-fx :api/list-online-users-search
            (fn [params]
-             (api/list-online-users {}
-                                    (fn [result]
-                                      (when (= 200 (:code result))
-                                        (let [data (:data result)
-                                              items (if (sequential? data) data (:rows data []))
-                                              filtered (cond->> items
-                                                         (:user_name params)
-                                                         (filter #(clojure.string/includes?
-                                                                   (or (get % "user-name" (:user_name %)) "")
-                                                                   (:user_name params))))]
-                                          (rf/dispatch [:online-users/set-list {:rows filtered :total (count filtered)}]))))
-                                    (fn [_]))))
+             (monitor-api/list-online-users {}
+                                            (fn [result]
+                                              (when (= 200 (:code result))
+                                                (let [data (:data result)
+                                                      items (if (sequential? data) data (:rows data []))
+                                                      filtered (cond->> items
+                                                                 (:user_name params)
+                                                                 (filter #(clojure.string/includes?
+                                                                           (or (get % "user-name" (:user_name %)) "")
+                                                                           (:user_name params))))]
+                                                  (rf/dispatch [:online-users/set-list {:rows filtered :total (count filtered)}]))))
+                                            (fn [_]))))
 
 (rf/reg-event-fx :online-users/fetch
                  (fn [{:keys [db]} [_ params]]
@@ -42,11 +43,11 @@
 
 (rf/reg-fx :api/list-online-users
            (fn [params]
-             (api/list-online-users params
-                                    (fn [result]
-                                      (when (= 200 (:code result))
-                                        (rf/dispatch [:online-users/set-list (:data result)])))
-                                    (fn [_]))))
+             (monitor-api/list-online-users params
+                                            (fn [result]
+                                              (when (= 200 (:code result))
+                                                (rf/dispatch [:online-users/set-list (:data result)])))
+                                            (fn [_]))))
 
 (rf/reg-event-fx :online-users/force-logout
                  (fn [_ [_ token-id]]
@@ -54,11 +55,11 @@
 
 (rf/reg-fx :api/force-logout
            (fn [token-id]
-             (api/force-logout token-id
-                               (fn [result]
-                                 (when (= 200 (:code result))
-                                   (rf/dispatch [:online-users/fetch {}])))
-                               (fn [_]))))
+             (monitor-api/force-logout token-id
+                                       (fn [result]
+                                         (when (= 200 (:code result))
+                                           (rf/dispatch [:online-users/fetch {}])))
+                                       (fn [_]))))
 
 (rf/reg-event-db :jobs/set-list
                  (fn [db [_ data]]
@@ -76,22 +77,22 @@
 
 (rf/reg-fx :api/list-jobs-search
            (fn [params]
-             (api/list-jobs {}
-                            (fn [result]
-                              (when (= 200 (:code result))
-                                (let [data (:data result)
-                                      items (if (sequential? data) data (:rows data []))
-                                      filtered (cond->> items
-                                                 (:job_name params)
-                                                 (filter #(clojure.string/includes?
-                                                           (or (:job_name %) "")
-                                                           (:job_name params)))
-                                                 (:job_group params)
-                                                 (filter #(clojure.string/includes?
-                                                           (or (:job_group %) "")
-                                                           (:job_group params))))]
-                                  (rf/dispatch [:jobs/set-list {:rows filtered :total (count filtered)}]))))
-                            (fn [_]))))
+             (jobs-api/list-jobs {}
+                                 (fn [result]
+                                   (when (= 200 (:code result))
+                                     (let [data (:data result)
+                                           items (if (sequential? data) data (:rows data []))
+                                           filtered (cond->> items
+                                                      (:job_name params)
+                                                      (filter #(clojure.string/includes?
+                                                                (or (:job_name %) "")
+                                                                (:job_name params)))
+                                                      (:job_group params)
+                                                      (filter #(clojure.string/includes?
+                                                                (or (:job_group %) "")
+                                                                (:job_group params))))]
+                                       (rf/dispatch [:jobs/set-list {:rows filtered :total (count filtered)}]))))
+                                 (fn [_]))))
 
 (rf/reg-event-fx :jobs/fetch
                  (fn [{:keys [db]} [_ params]]
@@ -100,11 +101,11 @@
 
 (rf/reg-fx :api/list-jobs
            (fn [params]
-             (api/list-jobs params
-                            (fn [result]
-                              (when (= 200 (:code result))
-                                (rf/dispatch [:jobs/set-list (:data result)])))
-                            (fn [_]))))
+             (jobs-api/list-jobs params
+                                 (fn [result]
+                                   (when (= 200 (:code result))
+                                     (rf/dispatch [:jobs/set-list (:data result)])))
+                                 (fn [_]))))
 
 (rf/reg-event-fx :jobs/create
                  (fn [_ [_ params]]
@@ -112,11 +113,11 @@
 
 (rf/reg-fx :api/create-job
            (fn [params]
-             (api/create-job params
-                             (fn [result]
-                               (when (= 200 (:code result))
-                                 (rf/dispatch [:jobs/fetch {}])))
-                             (fn [_]))))
+             (jobs-api/create-job params
+                                  (fn [result]
+                                    (when (= 200 (:code result))
+                                      (rf/dispatch [:jobs/fetch {}])))
+                                  (fn [_]))))
 
 (rf/reg-event-fx :jobs/update
                  (fn [_ [_ id params]]
@@ -124,11 +125,11 @@
 
 (rf/reg-fx :api/update-job
            (fn [[id params]]
-             (api/update-job id params
-                             (fn [result]
-                               (when (= 200 (:code result))
-                                 (rf/dispatch [:jobs/fetch {}])))
-                             (fn [_]))))
+             (jobs-api/update-job id params
+                                  (fn [result]
+                                    (when (= 200 (:code result))
+                                      (rf/dispatch [:jobs/fetch {}])))
+                                  (fn [_]))))
 
 (rf/reg-event-fx :jobs/delete
                  (fn [_ [_ id]]
@@ -136,11 +137,11 @@
 
 (rf/reg-fx :api/delete-job
            (fn [id]
-             (api/delete-job id
-                             (fn [result]
-                               (when (= 200 (:code result))
-                                 (rf/dispatch [:jobs/fetch {}])))
-                             (fn [_]))))
+             (jobs-api/delete-job id
+                                  (fn [result]
+                                    (when (= 200 (:code result))
+                                      (rf/dispatch [:jobs/fetch {}])))
+                                  (fn [_]))))
 
 (rf/reg-event-fx :jobs/run-once
                  (fn [_ [_ job-id]]
@@ -148,11 +149,11 @@
 
 (rf/reg-fx :api/run-job-once
            (fn [job-id]
-             (api/run-job-once job-id
-                               (fn [result]
-                                 (when (= 200 (:code result))
-                                   (antd/success! "执行成功")))
-                               (fn [_] (antd/error! "执行失败")))))
+             (jobs-api/run-job-once job-id
+                                    (fn [result]
+                                      (when (= 200 (:code result))
+                                        (antd/success! "执行成功")))
+                                    (fn [_] (antd/error! "执行失败")))))
 
 (rf/reg-event-db :job-logs/set-list
                  (fn [db [_ data]]
@@ -168,8 +169,8 @@
 
 (rf/reg-fx :api/list-job-logs
            (fn [params]
-             (api/list-job-logs params
-                                (fn [result]
-                                  (when (= 200 (:code result))
-                                    (rf/dispatch [:job-logs/set-list (:data result)])))
-                                (fn [_]))))
+             (jobs-api/list-job-logs params
+                                     (fn [result]
+                                       (when (= 200 (:code result))
+                                         (rf/dispatch [:job-logs/set-list (:data result)])))
+                                     (fn [_]))))

@@ -13,13 +13,39 @@
                  :last-insert-rowid {:last_insert_rowid 1}
                  nil))})
 
+(def enabled {:register-enabled? true})
+
+(defn- register! [service body & [config]]
+  (register/register {:user-service service :auth-config (or config enabled)} {:body-params body}))
+
 (deftest test-register-success
   (testing "新用户注册成功"
-    (let [request {:body-params {:username "newuser" :password "123456"}}
-          response (register/register {:user-service mock-user-service} request)]
+    (let [response (register! mock-user-service {:username "newuser" :password "123456"})]
       (is (= 200 (:status response)))
       (is (= 200 (get-in response [:body :code])))
       (is (= "注册成功" (get-in response [:body :msg]))))))
+
+(deftest test-register-disabled-by-default
+  (testing "默认关闭注册"
+    (let [response (register/register {:user-service mock-user-service}
+                                      {:body-params {:username "newuser" :password "123456"}})]
+      (is (= 403 (get-in response [:body :code]))))))
+
+(deftest test-register-ignores-privileged-fields
+  (testing "请求里带角色、状态等字段也不会生效"
+    (let [calls (atom [])
+          service {:query-fn (fn [q p] (swap! calls conj [q p])
+                               (case q :last-insert-rowid {:last_insert_rowid 9} nil))}
+          response (register! service {:username "evil" :password "123456"
+                                       :roles [1] :posts [1] :status "0" :dept_id 100})]
+      (is (= 200 (get-in response [:body :code])))
+      (is (empty? (filter #(#{:insert-user-role! :insert-user-post!} (first %)) @calls)))
+      (is (nil? (:dept_id (second (first (filter #(= :create-user! (first %)) @calls)))))))))
+
+(deftest test-register-validation
+  (testing "用户名与密码格式"
+    (is (= 400 (get-in (register! mock-user-service {:username "a" :password "123456"}) [:body :code])))
+    (is (= 400 (get-in (register! mock-user-service {:username "good_name" :password "123"}) [:body :code])))))
 
 (deftest test-register-existing-user
   (testing "注册账号已存在"
@@ -28,8 +54,7 @@
                            (case q
                              :find-user-by-name {:user_id 1 :user_name "existing"}
                              nil)))
-          request {:body-params {:username "existing" :password "123456"}}
-          response (register/register {:user-service service} request)]
+          response (register! service {:username "existing" :password "123456"})]
       (is (= 200 (:status response)))
       (is (= 500 (get-in response [:body :code])))
       (is (= "注册账号已存在" (get-in response [:body :msg]))))))
@@ -43,8 +68,7 @@
                              :create-user! (throw (RuntimeException. "数据库错误"))
                              :last-insert-rowid {:last_insert_rowid 1}
                              nil)))
-          request {:body-params {:username "newuser" :password "123456"}}
-          response (register/register {:user-service service} request)]
+          response (register! service {:username "newuser" :password "123456"})]
       (is (= 200 (:status response)))
       (is (= 500 (get-in response [:body :code])))
-      (is (= "数据库错误" (get-in response [:body :msg]))))))
+      (is (= "注册失败" (get-in response [:body :msg])) "不把内部异常信息返回给客户端"))))

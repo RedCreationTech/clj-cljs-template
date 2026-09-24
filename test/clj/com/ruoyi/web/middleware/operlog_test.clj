@@ -141,3 +141,7 @@
                    :remote-addr "127.0.0.1"
                    :components {:query-fn (fn [_ _] (throw (Exception. "db down")))}}]
       (is (= 200 (:status (handler request)))))))
+
+(deftest mask-sensitive-test
+  (is (= {"username" "admin" "password" "******" :newPassword "******" :nested {:token "******" :x 1}}
+         (operlog/mask-sensitive {"username" "admin" "password" "p" :newPassword "q" :nested {:token "t" :x 1}}))))

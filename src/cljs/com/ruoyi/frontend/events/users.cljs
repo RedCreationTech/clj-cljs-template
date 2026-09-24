@@ -2,7 +2,10 @@
   "用户管理事件。"
   (:require
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.impexp :as impexp-api]
+   [com.ruoyi.frontend.api.posts :as posts-api]
+   [com.ruoyi.frontend.api.roles :as roles-api]
+   [com.ruoyi.frontend.api.users :as users-api]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :users/set-list
@@ -45,16 +48,16 @@
 
 (rf/reg-fx :api/import-users
            (fn [file]
-             (api/import-users-csv file
-                                   (fn [r]
-                                     (rf/dispatch [:users/set-import-loading false])
-                                     (when (= 200 (:code r))
-                                       (antd/success! (str "导入完成：成功 " (:success (:data r)) " 条，失败 " (:failed (:data r)) " 条"))
-                                       (rf/dispatch [:users/close-import])
-                                       (rf/dispatch [:users/fetch {}])))
-                                   (fn [_]
-                                     (rf/dispatch [:users/set-import-loading false])
-                                     (antd/error! "导入失败")))))
+             (impexp-api/import-users-csv file
+                                          (fn [r]
+                                            (rf/dispatch [:users/set-import-loading false])
+                                            (when (= 200 (:code r))
+                                              (antd/success! (str "导入完成：成功 " (:success (:data r)) " 条，失败 " (:failed (:data r)) " 条"))
+                                              (rf/dispatch [:users/close-import])
+                                              (rf/dispatch [:users/fetch {}])))
+                                          (fn [_]
+                                            (rf/dispatch [:users/set-import-loading false])
+                                            (antd/error! "导入失败")))))
 
 (rf/reg-event-fx :users/export
                  (fn [{:keys [db]} _]
@@ -66,7 +69,7 @@
 
 (rf/reg-fx :api/export-users
            (fn [params]
-             (api/export-users-csv
+             (impexp-api/export-users-csv
               params
               (fn [csv-data]
                 (let [blob (js/Blob. #js [csv-data] #js {:type "text/csv;charset=utf-8"})
@@ -236,101 +239,101 @@
 
 (rf/reg-fx :api/list-users
            (fn [params]
-             (api/list-users params
-                             (fn [result]
-                               (when (= 200 (:code result))
-                                 (rf/dispatch [:users/set-list (:data result)])))
-                             (fn [_] (antd/error! "网络错误")))))
+             (users-api/list-users params
+                                   (fn [result]
+                                     (when (= 200 (:code result))
+                                       (rf/dispatch [:users/set-list (:data result)])))
+                                   (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/create-user
            (fn [params]
-             (api/create-user params
-                              (fn [result]
-                                (when (= 200 (:code result))
-                                  (antd/success! "创建成功")
-                                  (rf/dispatch [:users/close-modal])
-                                  (rf/dispatch [:users/fetch {}]))
-                                (when (not= 200 (:code result))
-                                  (antd/error! (:msg result))))
-                              (fn [_] (antd/error! "网络错误")))))
+             (users-api/create-user params
+                                    (fn [result]
+                                      (when (= 200 (:code result))
+                                        (antd/success! "创建成功")
+                                        (rf/dispatch [:users/close-modal])
+                                        (rf/dispatch [:users/fetch {}]))
+                                      (when (not= 200 (:code result))
+                                        (antd/error! (:msg result))))
+                                    (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/update-user
            (fn [[id params]]
-             (api/update-user id params
-                              (fn [result]
-                                (when (= 200 (:code result))
-                                  (antd/success! "更新成功")
-                                  (rf/dispatch [:users/close-modal])
-                                  (rf/dispatch [:users/fetch {}]))
-                                (when (not= 200 (:code result))
-                                  (antd/error! (:msg result))))
-                              (fn [_] (antd/error! "网络错误")))))
+             (users-api/update-user id params
+                                    (fn [result]
+                                      (when (= 200 (:code result))
+                                        (antd/success! "更新成功")
+                                        (rf/dispatch [:users/close-modal])
+                                        (rf/dispatch [:users/fetch {}]))
+                                      (when (not= 200 (:code result))
+                                        (antd/error! (:msg result))))
+                                    (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/delete-user
            (fn [id]
-             (api/delete-user id
-                              (fn [result]
-                                (when (= 200 (:code result))
-                                  (antd/success! "删除成功")
-                                  (rf/dispatch [:users/fetch {}]))
-                                (when (not= 200 (:code result))
-                                  (antd/error! (:msg result))))
-                              (fn [_] (antd/error! "网络错误")))))
+             (users-api/delete-user id
+                                    (fn [result]
+                                      (when (= 200 (:code result))
+                                        (antd/success! "删除成功")
+                                        (rf/dispatch [:users/fetch {}]))
+                                      (when (not= 200 (:code result))
+                                        (antd/error! (:msg result))))
+                                    (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/get-user
            (fn [user-id]
-             (api/get-user user-id
-                           (fn [result]
-                             (when (= 200 (:code result))
-                               (rf/dispatch [:users/edit-user (:data result)])))
-                           (fn [_] (antd/error! "获取用户详情失败")))))
+             (users-api/get-user user-id
+                                 (fn [result]
+                                   (when (= 200 (:code result))
+                                     (rf/dispatch [:users/edit-user (:data result)])))
+                                 (fn [_] (antd/error! "获取用户详情失败")))))
 
 (rf/reg-fx :api/batch-delete-users
            (fn [ids]
              (doseq [id ids]
-               (api/delete-user id
-                                (fn [result]
-                                  (when (= 200 (:code result))
-                                    (antd/success! "删除成功")))
-                                (fn [_] (antd/error! "网络错误"))))
+               (users-api/delete-user id
+                                      (fn [result]
+                                        (when (= 200 (:code result))
+                                          (antd/success! "删除成功")))
+                                      (fn [_] (antd/error! "网络错误"))))
              (rf/dispatch [:users/fetch {}])))
 
 (rf/reg-fx :api/change-user-status
            (fn [[user-id status]]
-             (api/change-user-status user-id status
-                                     (fn [result]
-                                       (when (= 200 (:code result))
-                                         (antd/success! "状态修改成功")
-                                         (rf/dispatch [:users/fetch {}])))
-                                     (fn [_] (antd/error! "网络错误")))))
+             (users-api/change-user-status user-id status
+                                           (fn [result]
+                                             (when (= 200 (:code result))
+                                               (antd/success! "状态修改成功")
+                                               (rf/dispatch [:users/fetch {}])))
+                                           (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/reset-user-password
            (fn [[user-id new-pwd]]
-             (api/reset-user-password user-id new-pwd
-                                      (fn [result]
-                                        (when (= 200 (:code result))
-                                          (antd/success! "密码重置成功")))
-                                      (fn [_] (antd/error! "网络错误")))))
+             (users-api/reset-user-password user-id new-pwd
+                                            (fn [result]
+                                              (when (= 200 (:code result))
+                                                (antd/success! "密码重置成功")))
+                                            (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/get-user-roles
            (fn [user-id]
-             (api/get-user-roles user-id
-                                 (fn [result]
-                                   (when (= 200 (:code result))
-                                     (rf/dispatch [:users/set-auth-role-ids (:data result)])))
-                                 (fn [_] (antd/error! "获取用户角色失败")))))
+             (users-api/get-user-roles user-id
+                                       (fn [result]
+                                         (when (= 200 (:code result))
+                                           (rf/dispatch [:users/set-auth-role-ids (:data result)])))
+                                       (fn [_] (antd/error! "获取用户角色失败")))))
 
 (rf/reg-fx :api/update-user-roles
            (fn [[user-id role-ids]]
-             (api/update-user-roles user-id role-ids
-                                    (fn [result]
-                                      (when (= 200 (:code result))
-                                        (antd/success! "角色分配成功")
-                                        (rf/dispatch [:users/close-auth-role])
-                                        (rf/dispatch [:users/fetch-with-params]))
-                                      (when (not= 200 (:code result))
-                                        (antd/error! (:msg result))))
-                                    (fn [_] (antd/error! "角色分配失败")))))
+             (users-api/update-user-roles user-id role-ids
+                                          (fn [result]
+                                            (when (= 200 (:code result))
+                                              (antd/success! "角色分配成功")
+                                              (rf/dispatch [:users/close-auth-role])
+                                              (rf/dispatch [:users/fetch-with-params]))
+                                            (when (not= 200 (:code result))
+                                              (antd/error! (:msg result))))
+                                          (fn [_] (antd/error! "角色分配失败")))))
 
 (rf/reg-event-fx :users/submit
                  (fn [{:keys [db]} [_ values]]
@@ -393,19 +396,19 @@
 
 (rf/reg-fx :api/list-role-options
            (fn [_]
-             (api/list-roles {:page 1 :size 1000}
-                             (fn [result]
-                               (when (= 200 (:code result))
-                                 (rf/dispatch [:users/set-role-options (:data result)])))
-                             (fn [_]))))
+             (roles-api/list-roles {:page 1 :size 1000}
+                                   (fn [result]
+                                     (when (= 200 (:code result))
+                                       (rf/dispatch [:users/set-role-options (:data result)])))
+                                   (fn [_]))))
 
 (rf/reg-fx :api/list-post-options
            (fn [_]
-             (api/list-posts {:page 1 :size 1000}
-                             (fn [result]
-                               (when (= 200 (:code result))
-                                 (rf/dispatch [:users/set-post-options (:data result)])))
-                             (fn [_]))))
+             (posts-api/list-posts {:page 1 :size 1000}
+                                   (fn [result]
+                                     (when (= 200 (:code result))
+                                       (rf/dispatch [:users/set-post-options (:data result)])))
+                                   (fn [_]))))
 
 (rf/reg-event-db :users/toggle-dept-expand
                  (fn [db [_ dept-id]]

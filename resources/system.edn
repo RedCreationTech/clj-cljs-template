@@ -19,6 +19,8 @@
   :query-fn              #ig/ref :db.sql/query-fn
   ;; 默认值仅供开发/测试;prod profile 下由 com.ruoyi.infra.secrets/verify! 强制要求 COOKIE_SECRET(16 字节)
   :cookie-secret         #or [#env COOKIE_SECRET "KWGRWFTDVZAHISQO"]
+  ;; 允许跨域访问的前端地址,逗号分隔;默认空 = 只允许同源(前后端同端口部署时不需要 CORS)
+  :cors-origins          #or [#env CORS_ORIGINS ""]
   :site-defaults-config  {:params    {:urlencoded true
                                       :multipart  true
                                       :nested     true
@@ -95,6 +97,14 @@
  :reitit.routes/api
  {:base-path      "/api"
   :env            #ig/ref :system/env
+  ;; 认证配置(见 com.ruoyi.web.controllers.auth/default-config);环境变量优先,其次按 profile
+  :auth-config    {:token-ttl-minutes #long #or [#env TOKEN_TTL_MINUTES 720]
+                   :captcha-enabled?  #boolean #or [#env CAPTCHA_ENABLED #profile {:dev "false" :test "false" :prod "true"}]
+                   :register-enabled? #boolean #or [#env REGISTER_ENABLED "false"]
+                   :max-failures      #long #or [#env LOGIN_MAX_FAILURES 5]
+                   :lock-minutes      #long #or [#env LOGIN_LOCK_MINUTES 10]
+                   ;; 登录页预填 admin/admin123,只在开发/测试环境
+                   :demo-account?     #profile {:dev true :test true :prod false}}
   :query-fn       #ig/ref :db.sql/query-fn
   :datasource     #ig/ref :db.sql/connection
   :user-service   #ig/ref :app.system/user-service
@@ -126,7 +136,7 @@
  {}
 
  :db.sql/connection
- #profile {:dev  {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:rouyi.db"]
+ #profile {:dev  {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:ruoyi.db"]
                   :init-size  1
                   :min-idle   1
                   :max-idle   1
@@ -141,7 +151,7 @@
                   :max-active 1
                   :connection-test-query "SELECT 1"
                   :validation-timeout 3000}
-           :prod {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:rouyi.db"]
+           :prod {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:ruoyi.db"]
                   :init-size  1
                   :min-idle   1
                   :max-idle   1

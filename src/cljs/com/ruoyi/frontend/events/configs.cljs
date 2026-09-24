@@ -2,7 +2,7 @@
   "参数配置事件。"
   (:require
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.configs :as configs-api]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :configs/set-list
@@ -21,11 +21,11 @@
 
 (rf/reg-fx :api/list-configs
            (fn [params]
-             (api/list-configs params
-                               (fn [result]
-                                 (when (= 200 (:code result))
-                                   (rf/dispatch [:configs/set-list (:data result)])))
-                               (fn [_]))))
+             (configs-api/list-configs params
+                                       (fn [result]
+                                         (when (= 200 (:code result))
+                                           (rf/dispatch [:configs/set-list (:data result)])))
+                                       (fn [_]))))
 
 (rf/reg-event-fx :configs/create
                  (fn [{:keys [db]} [_ params]]
@@ -34,19 +34,18 @@
 
 (rf/reg-fx :api/create-config
            (fn [params]
-             (api/create-config params
-                                (fn [result]
-                                  (when (= 200 (:code result))
-                                    (rf/dispatch [:configs/created])
-                                    (antd/success! "创建成功"))
-                                  (when (not= 200 (:code result))
-                                    (antd/error! (:msg result))))
-                                (fn [_] (antd/error! "网络错误")))))
+             (configs-api/create-config params
+                                        (fn [result]
+                                          (when (= 200 (:code result))
+                                            (rf/dispatch [:configs/created])
+                                            (antd/success! "创建成功"))
+                                          (when (not= 200 (:code result))
+                                            (antd/error! (:msg result))))
+                                        (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-event-fx :configs/created
-                 (fn [{:keys [db]} _]
-                   {:db (assoc-in db [:notification] nil)
-                    :dispatch [:configs/fetch {}]}))
+                 (fn [_ _]
+                   {:dispatch [:configs/fetch {}]}))
 
 (rf/reg-event-fx :configs/update
                  (fn [{:keys [db]} [_ id params]]
@@ -55,14 +54,14 @@
 
 (rf/reg-fx :api/update-config
            (fn [[id params]]
-             (api/update-config id params
-                                (fn [result]
-                                  (when (= 200 (:code result))
-                                    (rf/dispatch [:configs/updated])
-                                    (antd/success! "更新成功"))
-                                  (when (not= 200 (:code result))
-                                    (antd/error! (:msg result))))
-                                (fn [_] (antd/error! "网络错误")))))
+             (configs-api/update-config id params
+                                        (fn [result]
+                                          (when (= 200 (:code result))
+                                            (rf/dispatch [:configs/updated])
+                                            (antd/success! "更新成功"))
+                                          (when (not= 200 (:code result))
+                                            (antd/error! (:msg result))))
+                                        (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-event-fx :configs/updated
                  (fn [{:keys [db]} _]
@@ -76,14 +75,14 @@
 
 (rf/reg-fx :api/delete-config
            (fn [id]
-             (api/delete-config id
-                                (fn [result]
-                                  (when (= 200 (:code result))
-                                    (rf/dispatch [:configs/deleted])
-                                    (antd/success! "删除成功"))
-                                  (when (not= 200 (:code result))
-                                    (antd/error! (:msg result))))
-                                (fn [_] (antd/error! "网络错误")))))
+             (configs-api/delete-config id
+                                        (fn [result]
+                                          (when (= 200 (:code result))
+                                            (rf/dispatch [:configs/deleted])
+                                            (antd/success! "删除成功"))
+                                          (when (not= 200 (:code result))
+                                            (antd/error! (:msg result))))
+                                        (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-event-fx :configs/deleted
                  (fn [{:keys [db]} _]

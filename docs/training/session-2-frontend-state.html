@@ -193,7 +193,7 @@ flowchart LR
 (<span class="sym">rf/reg-event-fx</span> <span class="macro">:auth/login-success</span>
                  (<span class="kw">fn</span> [{<span class="macro">:keys</span> [db]} [_ data]]
                    (<span class="kw">let</span> [token (<span class="macro">:token</span> data)]
-                     (<span class="sym">try</span> (<span class="sym">.setItem</span> js/localStorage <span class="str">"ruoyi_token"</span> token) (<span class="kw">catch</span> js/Error _))
+                     (<span class="sym">storage/set-item!</span> <span class="macro">:token</span> token)
                      {<span class="macro">:db</span> (<span class="macro">-&gt;</span> db
                               (<span class="sym">assoc-in</span> [<span class="macro">:auth</span> <span class="macro">:token</span>] token)
                               (<span class="sym">assoc-in</span> [<span class="macro">:auth</span> <span class="macro">:loading?</span>] <span class="kw">false</span>))
@@ -273,13 +273,14 @@ flowchart LR
       <li><strong>服务器状态：</strong>用户列表、角色列表、字典数据等，从 API 获取，通过 <code>:xxx/set-list</code> 写入。</li>
       <li><strong>UI 状态：</strong>搜索框内容、当前页码、选中行、弹窗显隐等，直接存在 <code>app-db</code> 对应命名空间下。</li>
     </ul>
+    <p><code>storage</code> 是 localStorage 的唯一入口(<code>frontend/storage.cljs</code>):统一 <code>ruoyi_</code> 键名前缀,并在隐私模式等不可用环境下静默降级。</p>
     <p>不要把 UI 状态放到 <code>reagent/atom</code> 里，这样时间旅行调试、热重载都会失效。</p>
 
     <h2>7. 常见 Effect</h2>
     <p><strong>主题持久化</strong>：写入 localStorage 同时更新 db：</p>
     <pre><code class="language-clojure">(<span class="sym">rf/reg-event-db</span> <span class="macro">:theme/set-mode</span>
                  (<span class="kw">fn</span> [db [_ mode]]
-                   (<span class="sym">js/localStorage.setItem</span> <span class="str">"rouyi-theme-mode"</span> (<span class="sym">name</span> mode))
+                   (<span class="sym">storage/set-item!</span> <span class="macro">:theme-mode</span> mode)
                    (<span class="sym">assoc-in</span> db [<span class="macro">:theme</span> <span class="macro">:mode</span>] mode)))</code></pre>
     <p><strong>导航</strong>：事件触发 URL 变更，并在 <code>:navigate</code> 中加载对应页面数据：</p>
     <pre><code class="language-clojure">(<span class="sym">rf/reg-event-fx</span> <span class="macro">:navigate</span>

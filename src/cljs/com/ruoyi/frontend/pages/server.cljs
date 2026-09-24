@@ -10,8 +10,8 @@
    [reagent.hooks :as hooks]))
 
 (def card-style
-  {:background "#fff"
-   :border "1px solid #e6ebf5"
+  {:background "var(--app-bg)"
+   :border "1px solid var(--app-border-light)"
    :borderRadius 4
    :boxShadow "0 2px 12px 0 rgba(0,0,0,0.06)"})
 
@@ -25,10 +25,10 @@
                    :alignItems "center"
                    :gap 8
                    :padding "0 18px"
-                   :borderBottom "1px solid #ebeef5"
+                   :borderBottom "1px solid var(--app-border-light)"
                    :fontSize 16
                    :fontWeight 600
-                   :color "#303133"}}
+                   :color "var(--app-text-primary)"}}
      icon
      [:span title]]]
    children))
@@ -69,17 +69,17 @@
                    :borderCollapse "collapse"
                    :tableLayout "fixed"
                    :fontSize 14
-                   :color "#606266"}}
+                   :color "var(--app-text-regular)"}}
    [:thead
     [:tr
      (for [[idx h] (map-indexed vector headers)]
        ^{:key idx}
        [:th {:style {:height 44
                      :padding "0 18px"
-                     :borderBottom "1px solid #ebeef5"
+                     :borderBottom "1px solid var(--app-border-light)"
                      :textAlign "left"
                      :fontWeight 600
-                     :color "#909399"}}
+                     :color "var(--app-text-secondary)"}}
         h])]]
    [:tbody
     (for [[idx row] (map-indexed vector rows)]
@@ -89,7 +89,7 @@
          ^{:key cell-idx}
          [:td {:style {:height 45
                        :padding "0 18px"
-                       :borderBottom "1px solid #ebeef5"
+                       :borderBottom "1px solid var(--app-border-light)"
                        :verticalAlign "middle"
                        :wordBreak "break-all"
                        :lineHeight "22px"}}
@@ -136,7 +136,7 @@
      ["启动时间" [value-cell (:startTime jvm)] "运行时长" [value-cell (:runTime jvm)]]
      ["安装路径" [value-cell (:jvmHome jvm)] "" ""]
      ["项目路径" [value-cell (:userDir sys)] "" ""]
-     ["运行参数" [:span {:style {:color "#606266" :lineHeight "22px"}} (or (:inputArgs jvm) "-")] "" ""]]]])
+     ["运行参数" [:span {:style {:color "var(--app-text-regular)" :lineHeight "22px"}} (or (:inputArgs jvm) "-")] "" ""]]]])
 
 (defn- disk-card
   "渲染磁盘状态表格。"
@@ -169,14 +169,14 @@
    [])
   (let [server-data @(rf/subscribe [:server/data])
         loading? @(rf/subscribe [:server/loading?])]
-    [:div {:style {:padding 16 :background "#f5f7fa" :minHeight "calc(100vh - 112px)"}}
+    [:div {:style {:padding 16 :background "var(--app-fill)" :minHeight "calc(100vh - 112px)"}}
      [antd/button {:icon (r/as-element [:> ReloadOutlined])
                    :style {:float "right" :marginBottom 12}
                    :onClick #(rf/dispatch [:server/fetch])}
       "刷新"]
      [:div {:style {:clear "both"}}]
      (if loading?
-       [:div {:style {:textAlign "center" :padding 48 :background "#fff"}}
+       [:div {:style {:textAlign "center" :padding 48 :background "var(--app-bg)"}}
         [:> Spin {:size "large"}]]
        (when server-data
          [:div {:style {:display "flex" :flexDirection "column" :gap 14}}

@@ -121,13 +121,13 @@
                                        :alignItems "center"
                                        :gap 8
                                        :minWidth 0}}
-                        (icon-picker/icon-element (.-icon record) {:style {:fontSize 16 :color "#606266"}})
+                        (icon-picker/icon-element (.-icon record) {:style {:fontSize 16 :color "var(--app-text-regular)"}})
                         [:span {:style {:overflow "hidden" :textOverflow "ellipsis" :whiteSpace "nowrap"}} v]]))}
        #js {:title "图标" :dataIndex "icon" :key "icon" :width 140
             :render (fn [v _]
                       (r/as-element
                        [:span {:style {:display "inline-flex" :alignItems "center" :gap 8}}
-                        (icon-picker/icon-element v {:style {:fontSize 16 :color "#606266"}})
+                        (icon-picker/icon-element v {:style {:fontSize 16 :color "var(--app-text-regular)"}})
                         [:span (or v "")]]))}
        #js {:title "排序" :dataIndex "order_num" :key "order_num" :width 80
             :className "ruoyi-menu-sort-cell"}
@@ -272,7 +272,7 @@
        js/undefined)
      [items])
     [:div {:style {:padding "0 12px 24px 12px"}}
-     [:div {:style {:background "#fff"
+     [:div {:style {:background "var(--app-bg)"
                     :minHeight "calc(100vh - 214px)"
                     :padding "10px 8px 24px 8px"}}
       [search-bar]

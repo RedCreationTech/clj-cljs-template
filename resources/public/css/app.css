@@ -1,0 +1,268 @@
+/* 全局样式(原 index.html 内联样式)。
+ * 下面的 antd 覆盖把控件、表格、分页调成 RuoYi-Vue 的浅色风格,只在浅色主题生效:
+ * app.cljs 会把当前主题写到 <html data-theme>,暗色主题直接使用 antd 的暗色算法。 */
+
+/* 页面组件内联样式使用的颜色变量(浅色值沿用 RuoYi-Vue / Element 的配色),暗色主题下整体切换 */
+:root {
+  --app-bg: #fff;
+  --app-fill: #f5f7fa;
+  --app-fill-light: #fafafa;
+  --app-text-primary: #303133;
+  --app-text-regular: #606266;
+  --app-text-secondary: #909399;
+  --app-text-placeholder: #c0c4cc;
+  --app-border: #dcdfe6;
+  --app-border-light: #ebeef5;
+}
+:root[data-theme="dark"] {
+  --app-bg: #141414;
+  --app-fill: #1f1f1f;
+  --app-fill-light: #1a1a1a;
+  --app-text-primary: rgba(255, 255, 255, 0.88);
+  --app-text-regular: rgba(255, 255, 255, 0.75);
+  --app-text-secondary: rgba(255, 255, 255, 0.55);
+  --app-text-placeholder: rgba(255, 255, 255, 0.35);
+  --app-border: #424242;
+  --app-border-light: #303030;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  height: 100%;
+  width: 100%;
+  color: var(--app-text-regular);
+  font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+  font-size: 14px;
+  background: var(--app-bg);
+}
+#app { height: 100%; }
+
+/* 首屏加载占位:React 挂载后 #app 的内容被替换,占位随之消失 */
+.app-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 100%;
+  color: #909399;
+}
+.app-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e4e7ed;
+  border-top-color: #409eff;
+  border-radius: 50%;
+  animation: app-loading-spin 0.8s linear infinite;
+}
+@keyframes app-loading-spin { to { transform: rotate(360deg); } }
+
+:root:not([data-theme="dark"]) .ant-layout,
+:root:not([data-theme="dark"]) .ant-layout-content {
+  background: #fff !important;
+}
+:root:not([data-theme="dark"]) .ant-input,
+:root:not([data-theme="dark"]) .ant-select-single .ant-select-selector,
+:root:not([data-theme="dark"]) .ant-picker {
+  min-height: 34px;
+  border-color: #dcdfe6 !important;
+  border-radius: 4px !important;
+  color: #606266;
+  box-shadow: none !important;
+}
+:root:not([data-theme="dark"]) .ant-input::placeholder,
+:root:not([data-theme="dark"]) .ant-select-selection-placeholder,
+:root:not([data-theme="dark"]) .ant-picker-input > input::placeholder {
+  color: #c0c4cc !important;
+}
+:root:not([data-theme="dark"]) .ant-input:hover,
+:root:not([data-theme="dark"]) .ant-select-selector:hover,
+:root:not([data-theme="dark"]) .ant-picker:hover {
+  border-color: #c0c4cc !important;
+}
+:root:not([data-theme="dark"]) .ant-input:focus,
+:root:not([data-theme="dark"]) .ant-input-focused,
+:root:not([data-theme="dark"]) .ant-select-focused .ant-select-selector,
+:root:not([data-theme="dark"]) .ant-picker-focused {
+  border-color: #409eff !important;
+}
+:root:not([data-theme="dark"]) .ant-btn {
+  border-radius: 4px;
+  box-shadow: none;
+}
+/* 列表页表格 */
+:root:not([data-theme="dark"]) .ant-layout-content > div > .ant-table-wrapper,
+:root:not([data-theme="dark"]) .ant-layout-content > div > div > .ant-table-wrapper {
+  padding: 0 22px;
+  background: #fff;
+}
+:root:not([data-theme="dark"]) .ant-table-cell { white-space: nowrap;
+}
+:root:not([data-theme="dark"]) .ant-table-wrapper .ant-table {
+  color: #606266;
+  font-size: 14px;
+  background: #fff;
+}
+:root:not([data-theme="dark"]) .ant-table-wrapper .ant-table-thead > tr > th {
+  height: 44px;
+  padding: 10px 8px;
+  background: #f8f8f9 !important;
+  color: #606266;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center !important;
+  border-bottom: 1px solid #ebeef5;
+  white-space: nowrap;
+}
+:root:not([data-theme="dark"]) .ant-table-wrapper .ant-table-tbody > tr > td {
+  height: 54px;
+  padding: 10px 8px;
+  color: #606266;
+  font-size: 14px;
+  font-weight: 400;
+  text-align: center !important;
+  border-bottom: 1px solid #ebeef5;
+}
+:root:not([data-theme="dark"]) .ant-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: #fff;
+}
+:root:not([data-theme="dark"]) .ant-table-wrapper .ant-table-tbody > tr > td.ruoyi-tree-name-cell {
+  text-align: left !important;
+  padding-left: 12px;
+}
+:root:not([data-theme="dark"]) .ruoyi-tree-name-cell .ant-table-row-indent {
+  display: inline-block;
+  width: 24px !important;
+}
+:root:not([data-theme="dark"]) .ruoyi-tree-name-cell .ant-table-row-expand-icon {
+  margin-right: 12px;
+}
+:root:not([data-theme="dark"]) .ant-table-wrapper .ant-table-tbody > tr > td.ruoyi-menu-sort-cell {
+  color: #606266;
+  font-size: 14px;
+  text-align: center !important;
+}
+:root:not([data-theme="dark"]) .ant-table-wrapper .ant-btn-link {
+  height: 24px;
+  padding: 0 6px;
+  color: #409eff;
+  font-size: 14px;
+  font-weight: 400;
+}
+:root:not([data-theme="dark"]) .ant-table-wrapper .ant-btn-link.ant-btn-dangerous {
+  color: #409eff;
+}
+:root:not([data-theme="dark"]) .ant-table-wrapper .ant-pagination {
+  margin: 16px 0 12px 0;
+  padding-right: 22px;
+  color: #606266;
+  font-size: 14px;
+}
+:root:not([data-theme="dark"]) .ant-pagination .ant-pagination-total-text {
+  margin-right: 10px;
+}
+:root:not([data-theme="dark"]) .ant-pagination .ant-pagination-item,
+:root:not([data-theme="dark"]) .ant-pagination .ant-pagination-prev,
+:root:not([data-theme="dark"]) .ant-pagination .ant-pagination-next {
+  min-width: 38px;
+  height: 32px;
+  line-height: 30px;
+  border-radius: 4px;
+}
+:root:not([data-theme="dark"]) .ant-pagination .ant-pagination-item-active {
+  background: #409eff;
+  border-color: #409eff;
+}
+:root:not([data-theme="dark"]) .ant-pagination .ant-pagination-item-active a {
+  color: #fff;
+}
+:root:not([data-theme="dark"]) .ant-pagination .ant-select-single .ant-select-selector {
+  min-height: 32px;
+}
+:root:not([data-theme="dark"]) .ruoyi-menu-action-cell {
+  min-width: 300px;
+}
+:root:not([data-theme="dark"]) .ruoyi-menu-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+:root:not([data-theme="dark"]) .ruoyi-menu-actions .ant-btn-link {
+  padding: 0;
+}
+:root:not([data-theme="dark"]) .ruoyi-row-export-button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background: #fff;
+  color: #303133;
+  font-size: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+:root:not([data-theme="dark"]) .ruoyi-row-export-button:hover {
+  color: #409eff;
+  border-color: #c6e2ff;
+  background: #fff;
+}
+:root:not([data-theme="dark"]) .ruoyi-status-tag {
+  min-width: 54px;
+  height: 28px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid #d9ecff;
+  border-radius: 4px;
+  background: #ecf5ff;
+  color: #409eff;
+  font-size: 14px;
+  line-height: 26px;
+  text-align: center;
+}
+:root:not([data-theme="dark"]) .ant-tag-success,
+:root:not([data-theme="dark"]) .ant-tag-green,
+:root:not([data-theme="dark"]) .ant-tag-blue {
+  border-color: #d9ecff !important;
+  background: #ecf5ff !important;
+  color: #409eff !important;
+}
+:root:not([data-theme="dark"]) .ant-tag-error,
+:root:not([data-theme="dark"]) .ant-tag-red {
+  border-color: #fde2e2 !important;
+  background: #fef0f0 !important;
+  color: #f56c6c !important;
+}
+:root:not([data-theme="dark"]) .ant-tag-warning,
+:root:not([data-theme="dark"]) .ant-tag-orange,
+:root:not([data-theme="dark"]) .ant-tag-gold {
+  border-color: #faecd8 !important;
+  background: #fdf6ec !important;
+  color: #e6a23c !important;
+}
+:root:not([data-theme="dark"]) .ruoyi-menu-type-tag {
+  min-width: 42px;
+  height: 24px;
+  margin: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: #f4f4f5;
+  color: #606266;
+  font-size: 13px;
+  line-height: 24px;
+  text-align: center;
+}
+:root:not([data-theme="dark"]) .ant-table-row-expand-icon {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #dcdfe6;
+  border-radius: 50%;
+  color: #909399;
+  line-height: 16px;
+  vertical-align: -2px;
+}
+:root:not([data-theme="dark"]) .ant-table-row-expand-icon-expanded,
+:root:not([data-theme="dark"]) .ant-table-row-expand-icon-collapsed {
+  background: #fff;
+}

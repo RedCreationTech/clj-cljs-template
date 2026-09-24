@@ -152,14 +152,14 @@
                       :boxShadow "0 2px 12px rgba(0,0,0,0.18)"}}
         [:div {:style {:display "flex" :justifyContent "space-between" :alignItems "center"
                        :marginBottom 18}}
-         [:h3 {:style {:margin 0 :fontSize 18 :fontWeight 500 :color "#303133"}}
+         [:h3 {:style {:margin 0 :fontSize 18 :fontWeight 500 :color "var(--app-text-primary)"}}
           (str "分配角色 - " (or (:user_name user) ""))]
          [antd/button {:type "text"
-                       :style {:fontSize 22 :color "#909399" :width 32 :height 32}
+                       :style {:fontSize 22 :color "var(--app-text-secondary)" :width 32 :height 32}
                        :on-click #(rf/dispatch [:users/close-auth-role])}
           "×"]]
         [:div {:style {:display "flex" :flexDirection "column" :gap 10}}
-         [:span {:style {:fontSize 14 :color "#606266"}} "角色"]
+         [:span {:style {:fontSize 14 :color "var(--app-text-regular)"}} "角色"]
          [antd/select {:mode "multiple"
                        :placeholder "请选择角色"
                        :allowClear true
@@ -178,8 +178,8 @@
 
 (defn- pagination-bar [total page page-size]
   [:div {:style {:display "flex" :justifyContent "flex-end" :alignItems "center"
-                 :gap 16 :height 68 :padding "0 24px" :background "#fff"
-                 :color "#606266" :fontSize 16}}
+                 :gap 16 :height 68 :padding "0 24px" :background "var(--app-bg)"
+                 :color "var(--app-text-regular)" :fontSize 16}}
    [:span (str "共 " total " 条")]
    [antd/select {:value page-size
                  :style {:width 142}
@@ -220,11 +220,11 @@
         selected-ids @(rf/subscribe [:users/selected-ids])
         page @(rf/subscribe [:users/page])
         page-size @(rf/subscribe [:users/page-size])]
-    [:div {:style {:display "flex" :height "100%" :alignItems "stretch" :background "#fff"}}
+    [:div {:style {:display "flex" :height "100%" :alignItems "stretch" :background "var(--app-bg)"}}
      ;; 左侧部门树
      [dept-tree/dept-tree-sidebar (dept-tree-props)]
      ;; 右侧内容区
-     [:div {:style {:flex 1 :minWidth 0 :overflow "auto" :background "#fff"}}
+     [:div {:style {:flex 1 :minWidth 0 :overflow "auto" :background "var(--app-bg)"}}
       [search/search-form (search-props)]
       [search/toolbar (toolbar-props)]
       [:div {:style {:padding "0 24px"}}

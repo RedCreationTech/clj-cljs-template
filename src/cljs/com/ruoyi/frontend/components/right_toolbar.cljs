@@ -3,18 +3,19 @@
   (:require
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-toolbar :as toolbar]
+   [com.ruoyi.frontend.i18n :as i18n]
    [reagent.core :as r]))
 
 (defn right-toolbar [{:keys [show-search? columns on-toggle-search on-refresh on-toggle-column]}]
   [toolbar/toolbar-right
-   [toolbar/round-tool-button {:title (if show-search? "隐藏搜索" "显示搜索")
+   [toolbar/round-tool-button {:title (i18n/tr (if show-search? "隐藏搜索" "显示搜索"))
                                :icon (r/as-element [antd/search-icon])
                                :on-click on-toggle-search}]
-   [toolbar/round-tool-button {:title "刷新"
+   [toolbar/round-tool-button {:title (i18n/tr "刷新")
                                :icon (r/as-element [antd/reload-icon])
                                :on-click on-refresh}]
    (when (seq columns)
-     [antd/tooltip {:title "显隐列"}
+     [antd/tooltip {:title (i18n/tr "显隐列")}
       [antd/dropdown {:menu {:items (clj->js
                                      (map (fn [[key {:keys [label visible?]}]]
                                             {:key (name key)
@@ -38,6 +39,6 @@
                              :display "inline-flex"
                              :alignItems "center"
                              :justifyContent "center"
-                             :color "#606266"
-                             :border "1px solid #dcdfe6"
+                             :color "var(--app-text-regular)"
+                             :border "1px solid var(--app-border)"
                              :boxShadow "0 2px 8px rgba(0,0,0,0.06)"}}]]])])

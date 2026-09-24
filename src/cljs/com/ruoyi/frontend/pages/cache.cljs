@@ -9,8 +9,8 @@
    [reagent.hooks :as hooks]))
 
 (def card-style
-  {:background "#fff"
-   :border "1px solid #e6ebf5"
+  {:background "var(--app-bg)"
+   :border "1px solid var(--app-border-light)"
    :borderRadius 4
    :boxShadow "0 2px 12px 0 rgba(0,0,0,0.06)"})
 
@@ -24,10 +24,10 @@
                    :alignItems "center"
                    :gap 8
                    :padding "0 18px"
-                   :borderBottom "1px solid #ebeef5"
+                   :borderBottom "1px solid var(--app-border-light)"
                    :fontSize 16
                    :fontWeight 600
-                   :color "#303133"}}
+                   :color "var(--app-text-primary)"}}
      icon
      [:span title]]]
    children))
@@ -39,7 +39,7 @@
                    :borderCollapse "collapse"
                    :tableLayout "fixed"
                    :fontSize 14
-                   :color "#606266"}}
+                   :color "var(--app-text-regular)"}}
    [:tbody
     (for [[idx row] (map-indexed vector (partition 4 4 nil items))]
       ^{:key idx}
@@ -48,10 +48,10 @@
          ^{:key cell-idx}
          [:td {:style {:height 56
                        :padding "0 18px"
-                       :borderBottom "1px solid #ebeef5"
+                       :borderBottom "1px solid var(--app-border-light)"
                        :verticalAlign "middle"}}
-          [:div {:style {:fontWeight 500 :color "#606266"}} (:label item)]
-          [:div {:style {:marginTop 4 :color "#909399"}} (or (:value item) "")]])])]])
+          [:div {:style {:fontWeight 500 :color "var(--app-text-regular)"}} (:label item)]
+          [:div {:style {:marginTop 4 :color "var(--app-text-secondary)"}} (or (:value item) "")]])])]])
 
 (defn- command-rows
   "把命令统计转换为柱状图数据。"
@@ -74,18 +74,18 @@
                     :alignItems "flex-end"
                     :justifyContent "center"
                     :gap 44
-                    :borderBottom "1px solid #dcdfe6"
-                    :borderLeft "1px solid #dcdfe6"}}
+                    :borderBottom "1px solid var(--app-border)"
+                    :borderLeft "1px solid var(--app-border)"}}
       (for [{:keys [name value percent]} rows]
         ^{:key name}
         [:div {:style {:width 58 :display "flex" :flexDirection "column" :alignItems "center"}}
-         [:div {:style {:fontSize 12 :color "#606266" :marginBottom 6}} value]
+         [:div {:style {:fontSize 12 :color "var(--app-text-regular)" :marginBottom 6}} value]
          [:div {:style {:width 28
                         :height (max 4 (* 2.35 percent))
                         :background "#409eff"
                         :borderRadius "2px 2px 0 0"}}]
-         [:div {:style {:fontSize 12 :color "#606266" :marginTop 8}} name]])]
-     [:div {:style {:textAlign "center" :fontSize 12 :color "#909399" :marginTop 12}} "命令"]]))
+         [:div {:style {:fontSize 12 :color "var(--app-text-regular)" :marginTop 8}} name]])]
+     [:div {:style {:textAlign "center" :fontSize 12 :color "var(--app-text-secondary)" :marginTop 12}} "命令"]]))
 
 (defn- donut-chart
   "用 SVG 复刻内存占用环形图。"
@@ -109,7 +109,7 @@
        (str (.toFixed (js/Number. percent) 1) "%")]
       [:text {:x 120 :y 140 :textAnchor "middle" :fontSize 13 :fill "#909399"}
        (str used "M / " total "M")]]
-     [:div {:style {:fontSize 12 :color "#909399"}} "内存使用率"]]))
+     [:div {:style {:fontSize 12 :color "var(--app-text-secondary)"}} "内存使用率"]]))
 
 (defn- basic-items
   "生成 RuoYi 缓存基本信息字段。"
@@ -142,7 +142,7 @@
 
 (defn- cache-body [loading? cache-data command-stats]
   (if loading?
-    [:div {:style {:textAlign "center" :padding 48 :background "#fff"}}
+    [:div {:style {:textAlign "center" :padding 48 :background "var(--app-bg)"}}
      [:> Spin {:size "large"}]]
     [:div {:style {:display "flex" :flexDirection "column" :gap 14}}
      [monitor-card {:title "基本信息" :icon (r/as-element [:> DashboardOutlined])}
@@ -186,7 +186,7 @@
         value-visible? @(rf/subscribe [:cache/value-visible?])
         loading? @(rf/subscribe [:cache/loading?])
         command-stats (or (:commandStats cache-data) [])]
-    [:div {:style {:padding 16 :background "#f5f7fa" :minHeight "calc(100vh - 112px)"}}
+    [:div {:style {:padding 16 :background "var(--app-fill)" :minHeight "calc(100vh - 112px)"}}
      (cache-toolbar)
      (cache-body loading? cache-data command-stats)
      (cache-value-modal value value-visible?)]))

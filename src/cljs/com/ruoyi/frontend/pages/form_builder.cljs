@@ -111,13 +111,13 @@
    (for [comp component-palette]
      ^{:key (:type comp)}
      [:div {:draggable true
-            :style {:padding "10px 16px" :margin "0 0 8px 0" :background "#fafafa"
+            :style {:padding "10px 16px" :margin "0 0 8px 0" :background "var(--app-fill-light)"
                     :border "1px solid var(--ant-color-border-secondary, #e8e8e8)" :borderRadius 4 :cursor "grab"
                     :userSelect "none" :fontSize 13}
             :on-drag-start (fn [e]
                              (set! (.-effectAllowed (.-dataTransfer e)) "copyMove")
                              (.setData (.-dataTransfer e) "text/plain" (str (:type comp))))}
-      [:span {:style {:color "#666"}} (:label comp)]])])
+      [:span {:style {:color "var(--app-text-regular)"}} (:label comp)]])])
 
 ;; ─── 设计画布 ──────────────────────────────────────────────────────
 
@@ -134,7 +134,7 @@
                         (when comp
                           (rf/dispatch [:fb/add-item comp]))))}
      (if (empty? items)
-       [:div {:style {:textAlign "center" :padding 64 :color "#ccc" :border "2px dashed #f0f0f0" :borderRadius 8}}
+       [:div {:style {:textAlign "center" :padding 64 :color "var(--app-text-placeholder)" :border "2px dashed var(--app-border-light)" :borderRadius 8}}
         "拖拽左侧组件到此处"]
        (for [item items]
          ^{:key (:id item)}
@@ -143,8 +143,8 @@
                         :borderRadius 4 :cursor "pointer" :display "flex" :alignItems "center"
                         :transition "border 0.2s" :background (if (= selected-id (:id item)) "#e6f4ff" "#fff")}
                 :on-click #(rf/dispatch [:fb/select-item (:id item)])}
-          [:span {:style {:marginRight 8 :color "#999"}} [antd/button {:type "text" :size "small" :icon (r/as-element [:> DragOutlined])}]]
-          [:span {:style {:marginRight 12 :color "#666" :fontSize 12 :fontFamily "monospace"}}
+          [:span {:style {:marginRight 8 :color "var(--app-text-secondary)"}} [antd/button {:type "text" :size "small" :icon (r/as-element [:> DragOutlined])}]]
+          [:span {:style {:marginRight 12 :color "var(--app-text-regular)" :fontSize 12 :fontFamily "monospace"}}
            (str "[" (name (:type item)) "]")]
           [:span {:style {:fontSize 14 :flex 1}} (or (:label (:props item)) "(未命名)")]
           [antd/tag (case (:type item)
@@ -222,9 +222,9 @@
              [:div {:style {:display "flex" :justifyContent "space-between" :alignItems "center"}}
               [:div
                [:div {:style {:fontWeight 600 :fontSize 14}} (:form_name t)]
-               [:div {:style {:color "#888" :fontSize 12 :margin "4px 0"}} (str "key: " (:form_key t))]
+               [:div {:style {:color "var(--app-text-secondary)" :fontSize 12 :margin "4px 0"}} (str "key: " (:form_key t))]
                (when (seq (:remark t))
-                 [:div {:style {:color "#888" :fontSize 12}} (:remark t)])]
+                 [:div {:style {:color "var(--app-text-secondary)" :fontSize 12}} (:remark t)])]
               [antd/space
                [antd/button {:type "primary" :size "small"
                              :onClick #(rf/dispatch [:form-template/load t])}

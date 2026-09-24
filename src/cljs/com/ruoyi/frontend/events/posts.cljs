@@ -2,7 +2,7 @@
   "岗位管理事件。"
   (:require
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.api :as api]
+   [com.ruoyi.frontend.api.posts :as posts-api]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :posts/set-list
@@ -23,9 +23,9 @@
 
 (rf/reg-fx :api/list-posts
            (fn [params]
-             (api/list-posts params
-                             (fn [r] (when (= 200 (:code r)) (rf/dispatch [:posts/set-list (:data r)])))
-                             (fn [_]))))
+             (posts-api/list-posts params
+                                   (fn [r] (when (= 200 (:code r)) (rf/dispatch [:posts/set-list (:data r)])))
+                                   (fn [_]))))
 
 (rf/reg-event-db :posts/open-modal
                  (fn [db _]
@@ -54,10 +54,10 @@
                        {:db (assoc-in db [:posts :modal-visible?] false) :api/create-post values}))))
 
 (rf/reg-fx :api/create-post
-           (fn [params] (api/create-post params (fn [r] (when (= 200 (:code r)) (antd/success! "创建成功") (rf/dispatch [:posts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+           (fn [params] (posts-api/create-post params (fn [r] (when (= 200 (:code r)) (antd/success! "创建成功") (rf/dispatch [:posts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/update-post
-           (fn [[id params]] (api/update-post id params (fn [r] (when (= 200 (:code r)) (antd/success! "更新成功") (rf/dispatch [:posts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+           (fn [[id params]] (posts-api/update-post id params (fn [r] (when (= 200 (:code r)) (antd/success! "更新成功") (rf/dispatch [:posts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-event-fx :posts/delete
                  (fn [_ [_ id]] {:api/delete-post id}))
@@ -67,13 +67,13 @@
                    {:api/change-post-status [id status]}))
 
 (rf/reg-fx :api/delete-post
-           (fn [id] (api/delete-post id (fn [r] (when (= 200 (:code r)) (antd/success! "删除成功") (rf/dispatch [:posts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
+           (fn [id] (posts-api/delete-post id (fn [r] (when (= 200 (:code r)) (antd/success! "删除成功") (rf/dispatch [:posts/fetch {}]))) (fn [_] (antd/error! "网络错误")))))
 
 (rf/reg-fx :api/change-post-status
            (fn [[id status]]
-             (api/change-post-status id status
-                                     (fn [result]
-                                       (when (= 200 (:code result))
-                                         (antd/success! "状态修改成功")
-                                         (rf/dispatch [:posts/fetch {}])))
-                                     (fn [_] (antd/error! "网络错误")))))
+             (posts-api/change-post-status id status
+                                           (fn [result]
+                                             (when (= 200 (:code result))
+                                               (antd/success! "状态修改成功")
+                                               (rf/dispatch [:posts/fetch {}])))
+                                           (fn [_] (antd/error! "网络错误")))))

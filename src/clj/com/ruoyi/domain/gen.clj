@@ -78,6 +78,33 @@
          (str/join ",\n" lines)
          "\n);")))
 
+(defn- sql-type-mysql [db-type]
+  (let [t (str/lower-case (str db-type))]
+    (cond
+      (str/starts-with? t "int") "BIGINT"
+      (str/starts-with? t "datetime") "DATETIME"
+      (str/starts-with? t "date") "DATE"
+      (str/starts-with? t "real") "DOUBLE"
+      (str/starts-with? t "blob") "BLOB"
+      ;; 字符串一律 VARCHAR(255):MySQL 的 TEXT 列不能带普通 DEFAULT
+      :else "VARCHAR(255)")))
+
+(defn- generate-ddl-mysql
+  "由表结构生成 MySQL 版 DDL(近似翻译,部署后请按业务核对类型与长度)。"
+  [table-name columns]
+  (let [lines (mapv (fn [col]
+                      (str "    " (col-name col) " "
+                           (if (col-pk? col)
+                             "BIGINT AUTO_INCREMENT PRIMARY KEY"
+                             (str (sql-type-mysql (col-type col))
+                                  (when (not (col-nullable? col)) " NOT NULL")
+                                  (when-let [d (:dflt_value col)]
+                                    (str " DEFAULT " d))))))
+                    columns)]
+    (str "CREATE TABLE IF NOT EXISTS " table-name " (\n"
+         (str/join ",\n" lines)
+         "\n);")))
+
 (defn- generate-hugsql [table-name kebab columns]
   (let [pk-col (or (first (filter col-pk? columns)) (first columns))
         pk (col-name pk-col)
@@ -262,4 +289,5 @@
         :frontend-page (generate-frontend-page kebab entity)
         :frontend-events (generate-frontend-events kebab)
         :frontend-subs (generate-frontend-subs kebab)
-        :migration-up (generate-ddl table-name columns)}))))
+        :migration-up (generate-ddl table-name columns)
+        :migration-up-mysql (generate-ddl-mysql table-name columns)}))))

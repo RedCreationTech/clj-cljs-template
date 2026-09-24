@@ -9,7 +9,7 @@
    [reagent.hooks :as hooks]))
 
 (def card-style
-  {:border "1px solid #e4e7ed"
+  {:border "1px solid var(--app-border)"
    :borderRadius 4
    :boxShadow "0 2px 12px rgba(0,0,0,0.06)"})
 
@@ -21,13 +21,13 @@
                  :display "flex"
                  :alignItems "center"
                  :justifyContent "space-between"
-                 :borderBottom "1px solid #ebeef5"
+                 :borderBottom "1px solid var(--app-border-light)"
                  :fontSize 14
-                 :color "#303133"}}
+                 :color "var(--app-text-primary)"}}
    [:span {:style {:display "inline-flex" :alignItems "center"}}
     icon
     [:span {:style {:marginLeft 4}} label]]
-   [:span {:style {:color "#303133" :fontWeight 400 :textAlign "right"}}
+   [:span {:style {:color "var(--app-text-primary)" :fontWeight 400 :textAlign "right"}}
     value]])
 
 (defn- avatar-view [data]
@@ -186,7 +186,7 @@
         profile @(rf/subscribe [:profile/data])
         data (or profile user {})]
     [:div {:style {:padding "22px"
-                   :background "#fff"
+                   :background "var(--app-bg)"
                    :minHeight "calc(100vh - 132px)"}}
      [:div {:style {:display "grid"
                     :gridTemplateColumns "320px minmax(0, 1fr)"

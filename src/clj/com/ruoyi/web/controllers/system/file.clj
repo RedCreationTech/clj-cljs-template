@@ -2,6 +2,7 @@
   "文件管理控制器 — 上传、列表、下载、删除。"
   (:require
    [clojure.java.io :as io]
+   [com.ruoyi.infra.files :as files]
    [ring.util.response :as response]))
 
 (def upload-dir "uploads/")
@@ -33,37 +34,32 @@
     (ok files)))
 
 (defn upload-file
-  "上传文件。"
+  "上传文件。文件名只保留安全字符,同名不覆盖。"
   [_ request]
   (try
-    (ensure-dir!)
-    (let [file (get-in request [:params :file])
-          temp-file (:tempfile file)
-          filename (:filename file)]
-      (if (and temp-file filename)
-        (let [target (io/file upload-dir filename)]
-          (io/copy temp-file target)
-          (ok {:name filename :size (.length target)}))
+    (let [{:keys [tempfile filename]} (get-in request [:params :file])]
+      (if-let [target (and tempfile (files/store! upload-dir tempfile filename))]
+        (ok {:name (.getName target) :size (.length target)})
         (ok 500 "上传失败" nil)))
     (catch Exception e
       (ok 500 (.getMessage e) nil))))
 
+(defn- existing-file [request]
+  (let [f (files/resolve-in upload-dir (get-in request [:path-params :filename]))]
+    (when (and f (.isFile f)) f)))
+
 (defn download-file
-  "下载文件。"
+  "下载文件(只能是上传目录里的文件)。"
   [_ request]
-  (let [filename (get-in request [:path-params :filename])
-        file (io/file upload-dir filename)]
-    (if (.exists file)
-      (-> (response/response file)
-          (response/header "Content-Disposition" (str "attachment; filename=\"" filename "\""))
-          (response/content-type "application/octet-stream"))
-      (ok 404 "文件不存在" nil))))
+  (if-let [file (existing-file request)]
+    (-> (response/response file)
+        (response/header "Content-Disposition" (str "attachment; filename=\"" (.getName file) "\""))
+        (response/content-type "application/octet-stream"))
+    (ok 404 "文件不存在" nil)))
 
 (defn delete-file
-  "删除文件。"
+  "删除文件(只能是上传目录里的文件)。"
   [_ request]
-  (let [filename (get-in request [:path-params :filename])
-        file (io/file upload-dir filename)]
-    (if (.exists file)
-      (do (.delete file) (ok "删除成功"))
-      (ok 404 "文件不存在" nil))))
+  (if-let [file (existing-file request)]
+    (do (.delete file) (ok "删除成功"))
+    (ok 404 "文件不存在" nil)))

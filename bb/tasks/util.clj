@@ -9,7 +9,7 @@
    [clojure.string :as str]))
 
 (defn project
-  "读取 kit.edn:{:ns-name \"com.ruoyi\" :sanitized \"com/ruoyi\" :name \"rouyi\"}。
+  "读取 kit.edn:{:ns-name \"com.ruoyi\" :sanitized \"com/ruoyi\" :name \"ruoyi\"}。
    改名脚本会同步修改它,所有任务都从这里取命名空间与路径,不写死。"
   []
   (edn/read-string (slurp "kit.edn")))

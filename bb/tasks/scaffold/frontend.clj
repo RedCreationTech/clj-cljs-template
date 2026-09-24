@@ -99,6 +99,7 @@
        "   [" ns-root ".frontend.antd :as antd]\n"
        "   [" ns-root ".frontend.components.page-search :as page-search]\n"
        "   [" ns-root ".frontend.components.page-toolbar :as page-toolbar]\n"
+       "   [" ns-root ".frontend.i18n :as i18n]\n"
        "   [re-frame.core :as rf]\n"
        "   [reagent.core :as r]\n"
        "   [reagent.hooks :as hooks]))\n\n"
@@ -140,10 +141,10 @@
        "(defn- toolbar []\n"
        "  [page-toolbar/page-toolbar\n"
        "   {:left [page-toolbar/toolbar-left\n"
-       "           [page-toolbar/toolbar-button {:kind :add :label \"新增\" :icon (r/as-element [:> PlusOutlined])\n"
+       "           [page-toolbar/toolbar-button {:kind :add :label (i18n/tr \"新增\") :icon (r/as-element [:> PlusOutlined])\n"
        "                                         :on-click #(rf/dispatch [:" module "/open-modal nil])}]]\n"
        "    :right [page-toolbar/toolbar-right\n"
-       "            [page-toolbar/round-tool-button {:title \"刷新\" :icon (r/as-element [:> ReloadOutlined])\n"
+       "            [page-toolbar/round-tool-button {:title (i18n/tr \"刷新\") :icon (r/as-element [:> ReloadOutlined])\n"
        "                                             :on-click #(rf/dispatch [:" module "/fetch {}])}]]}])\n\n"))
 
 (defn- page-table-part [{:keys [module]}]
@@ -151,9 +152,9 @@
        "  (let [row (js->clj record :keywordize-keys true)]\n"
        "    [antd/space\n"
        "     [antd/button {:type \"link\" :size \"small\" :icon (r/as-element [:> EditOutlined])\n"
-       "                   :on-click #(rf/dispatch [:" module "/open-modal row])} \"编辑\"]\n"
+       "                   :on-click #(rf/dispatch [:" module "/open-modal row])} (i18n/tr \"编辑\")]\n"
        "     [antd/popconfirm {:title \"确认删除这条记录?\" :onConfirm #(rf/dispatch [:" module "/delete (:id row)])}\n"
-       "      [antd/button {:type \"link\" :danger true :size \"small\" :icon (r/as-element [:> DeleteOutlined])} \"删除\"]]]))\n\n"
+       "      [antd/button {:type \"link\" :danger true :size \"small\" :icon (r/as-element [:> DeleteOutlined])} (i18n/tr \"删除\")]]]))\n\n"
        "(defn- columns []\n"
        "  (clj->js\n"
        "   (concat\n"
@@ -206,7 +207,7 @@
        "     [antd/table {:rowKey \"id\" :loading loading? :columns (columns) :dataSource (clj->js items)\n"
        "                  :scroll #js {:x \"max-content\"}\n"
        "                  :pagination #js {:current page :pageSize size :total total :showSizeChanger true\n"
-       "                                   :showTotal (fn [t] (str \"共 \" t \" 条\"))\n"
+       "                                   :showTotal (fn [t] (i18n/tr \"共 {0} 条\" t))\n"
        "                                   :onChange (fn [p s] (rf/dispatch [:" module "/fetch {:page p :size s}]))}}]\n"
        "     [edit-modal modal]]))\n"))
 
