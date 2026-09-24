@@ -12,7 +12,7 @@
 |------|------|
 | 后端 | Clojure 1.12.6, Kit 1.0.x, Integrant, Reitit 0.11, Ring 1.15, Undertow, next.jdbc / conman (HugSQL), Migratus, Malli 0.20, HikariCP 7 |
 | 数据库 | SQLite 3.53（默认，零配置）；MySQL 8.4（Connector/J 26.7，切换环境变量即可；`docker-compose.yml` 提供本地实例） |
-| 安全 | Buddy（JWT + bcrypt）；会话以 `sys_online` 为准（登出/强退/空闲超时即失效）+ 滑动续期；登录失败限流；验证码开关（生产默认开）；CORS 白名单；上传下载防目录穿越；prod 下强制校验 `JWT_SECRET` / `COOKIE_SECRET` |
+| 安全 | Buddy（JWT + bcrypt）；会话以 `sys_online` 为准（登出/强退/空闲超时即失效）+ 滑动续期；验证码、失败计数、续期宽限存 `sys_kv`，可多实例部署；登录失败限流；验证码开关（生产默认开）；CORS 白名单；上传下载防目录穿越；prod 下强制校验 `JWT_SECRET` / `COOKIE_SECRET` |
 | 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0 (函数组件 + Hooks), re-frame 1.4, React 19.3, Ant Design 6.6；中英文界面切换（`i18n/tr`）、浅色/暗色主题 |
 | 任务调度 | Quartz 2.5（`sys_job` 表驱动，支持暂停/恢复/立即执行） |
 | 工具链 | babashka（`bb.edn` 统一任务入口 + `bb new-module` 脚手架）, Clojure CLI (`deps.edn`), tools.build 0.10, clj-kondo 2026.08, cljfmt 0.16, cljs.test（Node）, Playwright 1.63 (E2E), cloverage, GitHub Actions |
@@ -21,10 +21,10 @@
 
 ## 内置功能
 
-**系统管理**：用户、角色（RBAC + 数据权限）、菜单（树形 + 按钮权限）、部门（树形）、岗位、字典、参数配置、通知公告、文件管理。
+**系统管理**：用户、角色（RBAC + 数据权限）、菜单（树形 + 按钮权限）、部门（树形）、岗位、字典、参数配置、通知公告（顶部铃铛按用户记录已读）、文件管理。
 
 **权限控制**：
-- **认证**：JWT Bearer，令牌带会话 ID（`jti`），会话存 `sys_online`：登出、强退、空闲 30 分钟后令牌立即失效；前端在令牌过半时自动续期，任何 401 都回到登录页。登录失败限流、验证码开关、默认关闭的自助注册。
+- **认证**：JWT Bearer，令牌带会话 ID（`jti`），会话存 `sys_online`：登出、强退、空闲 30 分钟后令牌立即失效；前端在令牌过半时自动续期，任何 401 都回到登录页。登录失败限流、验证码开关、默认关闭的自助注册。验证码、失败计数、续期宽限都存在数据库（`sys_kv`），多个实例共享。
 - **按钮级权限**：路由用数据声明 `{:auth? true}`（要求登录）与 `{:perms "system:user:add"}`（要求权限，集合表示满足任一）；未登录 401、无权限 403。权限来自「用户 → 启用的角色 → 角色勾选的菜单/按钮（`sys_menu.perms`）」，每次请求实时计算，改角色立即生效；`admin` 角色拥有 `*:*:*`。前端按 `getInfo` 下发的 `permissions` 隐藏无权限的按钮（`:perm` / `perm/when-allowed`）。
 - **数据权限**：角色的 `data_scope`（1 全部 / 2 自定义部门 / 3 本部门 / 4 本部门及以下 / 5 仅本人，多角色取并集）真正作用于用户管理：列表按范围过滤，详情、修改、删除、重置密码等先检查目标用户（与要改到的部门）是否在范围内；业务模块可复用 `domain.system.data-scope`。
 
@@ -60,7 +60,7 @@
 ├── src/clj/com/ruoyi/           # 后端
 │   ├── core.clj                 # 入口：密钥校验 → 加载 edge / domain / routes → 启动 Integrant
 │   ├── config.clj               # 读取 system.edn（aero）
-│   ├── infra/                   # 基础设施：db 抽象、security(JWT)、secrets、online(会话)、login-guard(限流)、files、data-perm、cache、scheduler
+│   ├── infra/                   # 基础设施：db 抽象、clock(:now 本地时间)、kv(共享键值)、json(统一编码)、security(JWT)、secrets、online(会话)、login-guard(限流)、files、cache、scheduler
 │   ├── domain/                  # 领域服务（system/*：user, role, menu, dept, ...；gen）
 │   ├── web/handler.clj          # Ring handler / 路由器 / SPA fallback
 │   ├── web/middleware/          # auth、operlog、exception、formats、core
@@ -169,8 +169,11 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | `REGISTER_ENABLED` | `false` | 自助注册；开启后只接受用户名密码，新用户无角色 |
 | `CORS_ORIGINS` | 空（只允许同源） | 允许跨域的前端地址，逗号分隔；`*` 仅建议开发用 |
 | `UPLOAD_MAX_MB` / `UPLOAD_EXTENSIONS` | 10 / 内置白名单 | 单文件大小上限与允许的扩展名（逗号分隔）；头像另限图片、2MB。请求体整体大小请在反向代理上再限制 |
+| `TZ` | 主机时区 | 写库与接口返回的时间都是 JVM 默认时区的本地时间（`yyyy-MM-dd HH:mm:ss`），容器里请显式设置，如 `TZ=Asia/Shanghai` |
 
 `Dockerfile` 提供多阶段镜像构建（`clojure:temurin-21-tools-deps` 构建 → `eclipse-temurin:21-jre-alpine` 运行）；构建镜像前先执行 `bb release`，运行时用 `-e JWT_SECRET=… -e COOKIE_SECRET=…` 注入密钥。
+
+**多实例部署**：会话、验证码、登录失败计数与锁定、续期宽限都在数据库里（`sys_online`、`sys_kv`），多个实例连同一个 MySQL 即可放在负载均衡后面，不需要 Redis 或会话粘滞。各实例请使用相同的 `TZ`、`JWT_SECRET`、`COOKIE_SECRET`。例外是定时任务：Quartz 在每个实例的内存里调度，多实例会重复执行，且在某个实例上改的任务不会同步到其它实例——只在一个实例上跑任务，或改用 Quartz 的 JDBC 集群存储（见 C4 文档 §9.7）。
 
 ---
 
@@ -264,7 +267,8 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 | GET /api/system/{user,role,menu,dept,post,notice,config} | 系统管理 CRUD |
 | GET /api/system/dict/{type,data} | 字典 |
 | PUT /api/system/role/dataScope | 角色数据范围（1~5，自定义时带部门） |
-| GET /api/system/notice/latest | 最新通知（顶部铃铛，登录即可） |
+| GET /api/system/notice/latest | 最新通知与当前用户的未读数（顶部铃铛，登录即可） |
+| PUT /api/system/notice/read-all | 当前用户把已发布通知全部标为已读 |
 | GET /api/system/{oper-log,login-log,online} | 审计与在线用户 |
 | PUT /api/system/login-log/unlock/{userName} | 解除登录失败锁定 |
 | POST /api/common/upload、GET /api/common/download | 通用上传下载（登录；类型与大小受限） |
@@ -288,6 +292,7 @@ Swagger UI：http://localhost:3000/api
 - 接口失败由 `api.transport` 统一提示（403、5xx、网络断开、业务码非 200）并复位 loading，调用方的 `on-error` 只做收尾，不要再各自弹「网络错误」；上传用 `t/request` 的 `:body`，带令牌下载用 `t/download!`。
 - 每个 namespace ≤ 500 行、函数 ≤ 50 行（`bb check` 检查 src / env / test / bb / scripts）；超限时拆分。
 - clj-kondo 零 warning、cljfmt 格式一致（`bb lint`、`bb fmt:check`，CI 强制）。
+- 时间由应用生成：SQL 里写 `:now`（`infra.clock` 自动注入本地时间），不写 `CURRENT_TIMESTAMP` / `NOW()`（lint 检查）；接口里的时间统一编码为 `yyyy-MM-dd HH:mm:ss`（`infra.json`），两库一致。需要多实例共享的临时状态用 `infra.kv`，不要放 atom。
 - SQL 统一放 `resources/sql/*.sql`；两套迁移目录必须同步（`bb lint:migrations` 检查）；共用 SQL 只写两库都支持的语法（如 `INSTR` 代替 `||`、派生表代替 `DUAL`）。
 - 前端状态统一 re-frame；组件局部状态用 Hooks，不用 `reagent/atom`；分页参数固定 `page` / `size`。
 - 前端界面文案用 `(i18n/tr "中文原文")` 包裹、英文译文加到 `i18n.cljs`（外壳与通用组件已完成，业务页面可逐步迁移）；localStorage 只通过 `storage` 命名空间访问；内联样式的颜色用 `var(--app-*)` 变量（见 `resources/public/css/app.css`），暗色主题才能自动适配。

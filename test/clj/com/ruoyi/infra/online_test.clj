@@ -2,14 +2,14 @@
   "在线会话管理测试。"
   (:require
    [clojure.test :refer [deftest is testing use-fixtures]]
+   [com.ruoyi.infra.kv :as kv]
    [com.ruoyi.infra.online :as online]))
 
 (use-fixtures :each
   (fn [f]
-    (reset! @#'online/rotated {})
+    (kv/use-store! (kv/memory-store))
     (reset! @#'online/query-fn-atom nil)
     (f)
-    (reset! @#'online/rotated {})
     (reset! @#'online/query-fn-atom nil)))
 
 (defn- make-mock-query-fn

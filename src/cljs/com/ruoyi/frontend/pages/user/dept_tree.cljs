@@ -37,7 +37,7 @@
                    :height 34
                    :padding "0 8px"
                    :cursor "pointer" :borderRadius 3
-                   :background (if selected? "#ecf5ff" "transparent")
+                   :background (if selected? "var(--app-btn-add-bg)" "transparent")
                    :color (if selected? "#409eff" "#606266")}
            :on-click #(do (toggle! id) ((:on-select props) id))}
      [:span {:style {:display "inline-flex"

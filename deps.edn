@@ -23,26 +23,22 @@
            io.github.kit-clj/kit-core {:mvn/version "1.0.10"}
            io.github.kit-clj/kit-undertow {:mvn/version "1.0.14"}
            io.github.kit-clj/kit-mysql {:mvn/version "1.0.6"}
-           io.github.kit-clj/kit-postgres {:mvn/version "1.0.8"}
            io.github.kit-clj/kit-sql-conman {:mvn/version "1.10.6"}
            io.github.kit-clj/kit-sql-migratus {:mvn/version "1.0.6"}
            io.github.kit-clj/kit-quartz {:mvn/version "1.0.5"}
-           io.github.kit-clj/kit-selmer {:mvn/version "1.0.5"}
            io.github.kit-clj/kit-nrepl {:mvn/version "1.0.6"}
 
            ;; Auth & Security
-           buddy/buddy-auth {:mvn/version "3.0.323"}
            buddy/buddy-hashers {:mvn/version "2.0.167"}
            buddy/buddy-sign {:mvn/version "3.6.1-359"}
 
            ;; Validation
            metosin/malli {:mvn/version "0.20.1"}
 
-           ;; JSON
-           cheshire/cheshire {:mvn/version "6.2.0"}
+           ;; JSON(统一走 com.ruoyi.infra.json;muuntaja 也用它)
+           metosin/jsonista {:mvn/version "1.0.1"}
 
            ;; Database
-           clj-time/clj-time {:mvn/version "0.15.2"}
            org.xerial/sqlite-jdbc {:mvn/version "3.53.4.0"}
            com.mysql/mysql-connector-j {:mvn/version "26.7.0"}
            com.zaxxer/HikariCP {:mvn/version "7.1.0"}

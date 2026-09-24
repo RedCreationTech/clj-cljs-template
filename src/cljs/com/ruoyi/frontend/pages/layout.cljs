@@ -128,18 +128,6 @@
              :items menu-items
              :onClick on-click}]])
 
-;; 右下角悬浮徽标。
-(defn- floating-badge []
-  [:div {:class "app-layout-float"
-         :style {:position "fixed" :right 14 :bottom 54
-                 :width 42 :height 42 :borderRadius "50%"
-                 :background "#e989aa" :color "#fff"
-                 :display "flex" :alignItems "center" :justifyContent "center"
-                 :fontSize 18 :fontWeight 700
-                 :boxShadow "0 4px 12px rgba(233,137,170,0.35)"
-                 :zIndex 20}}
-   "LA"])
-
 ;; 固定底部版权栏。
 (defn- layout-footer
   [content-left]
@@ -148,7 +136,7 @@
                  :height 36 :display "flex" :alignItems "center" :justifyContent "flex-end"
                  :padding "0 20px" :borderTop "1px solid var(--app-border-light)"
                  :color "var(--app-text-secondary)" :fontSize 14 :background "var(--app-bg)" :zIndex 10}}
-   "Copyright © 2018-2026 RuoYi. All Rights Reserved."])
+   config/footer-text])
 
 ;; 主内容区(带 Error Boundary,避免单个页面崩溃导致整个布局白屏)。
 (defn- layout-content
@@ -164,7 +152,6 @@
                       :key (name page)
                       :class "tab-content-enter"}
    [error-boundary/boundary [page-view/render-page page]]
-   [floating-badge]
    (when show-footer? [layout-footer content-left])])
 
 ;; 顶部 Header:左(导航/面包屑) + 右(操作区) + 布局设置抽屉。

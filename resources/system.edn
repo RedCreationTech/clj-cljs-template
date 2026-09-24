@@ -135,9 +135,6 @@
  :cronut/scheduler
  {:schedule []}
 
- :templating/selmer
- {}
-
  :db.sql/connection
  #profile {:dev  {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:ruoyi.db"]
                   :init-size  1

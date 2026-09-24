@@ -17,7 +17,7 @@
    (when show-logo?
      [:div {:style {:display "flex" :alignItems "center" :gap 8
                     :height 56 :paddingRight 16 :fontSize 16 :fontWeight 700
-                    :color "#172033" :whiteSpace "nowrap"}}
+                    :color "var(--app-text-primary)" :whiteSpace "nowrap"}}
       [:div {:style {:width 24 :height 24 :borderRadius "50%"
                      :display "flex" :alignItems "center" :justifyContent "center"
                      :color "#23b99a" :fontSize 20 :fontWeight 300}}

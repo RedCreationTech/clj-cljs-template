@@ -249,7 +249,8 @@
                 :handler (partial notice/list-notices {:query-fn query-fn})}
          :post {:perms "system:notice:add" :summary "新增通知公告" :handler (partial notice/create-notice {:query-fn query-fn})}}]
     ;; 顶部铃铛:登录即可(放在 /:id 之前)
-    ["/latest" {:get {:summary "最新通知" :handler (partial notice/latest-notices {:query-fn query-fn})}}]
+    ["/latest" {:get {:summary "最新通知与未读数" :handler (partial notice/latest-notices {:query-fn query-fn})}}]
+    ["/read-all" {:put {:summary "全部标记为已读" :handler (partial notice/read-all-notices {:query-fn query-fn})}}]
     ["/:id" {:get    {:perms "system:notice:query" :summary "通知公告详情" :parameters {:path PathId}
                       :handler (partial notice/get-notice {:query-fn query-fn})}
              :put    {:perms "system:notice:edit" :summary "更新通知公告" :parameters {:path PathId}

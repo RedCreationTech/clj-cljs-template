@@ -95,6 +95,7 @@
    "job" "ScheduleOutlined"
    "server" "CloudOutlined"
    "cache" "DatabaseOutlined"
+   "database" "DatabaseOutlined"
    "gen" "CodeOutlined"
    "build" "FormOutlined"
    "profile" "ProfileOutlined"

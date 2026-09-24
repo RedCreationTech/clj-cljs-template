@@ -13,8 +13,19 @@
   --app-text-placeholder: #c0c4cc;
   --app-border: #dcdfe6;
   --app-border-light: #ebeef5;
+  /* 工具栏彩色按钮(新增 / 修改 / 删除 / 导入 / 导出):文字、边框、底色 */
+  --app-btn-add-color: #409eff;    --app-btn-add-border: #a0cfff;    --app-btn-add-bg: #ecf5ff;
+  --app-btn-edit-color: #67c23a;   --app-btn-edit-border: #b3e19d;   --app-btn-edit-bg: #f0f9eb;
+  --app-btn-delete-color: #f56c6c; --app-btn-delete-border: #fab6b6; --app-btn-delete-bg: #fef0f0;
+  --app-btn-import-color: #909399; --app-btn-import-border: #d3d4d6; --app-btn-import-bg: #f4f4f5;
+  --app-btn-export-color: #e6a23c; --app-btn-export-border: #f3d19e; --app-btn-export-bg: #fdf6ec;
 }
 :root[data-theme="dark"] {
+  --app-btn-add-color: #409eff;    --app-btn-add-border: #1d3b5c;    --app-btn-add-bg: #18222c;
+  --app-btn-edit-color: #67c23a;   --app-btn-edit-border: #2d481f;   --app-btn-edit-bg: #1c2518;
+  --app-btn-delete-color: #f56c6c; --app-btn-delete-border: #5c2b2b; --app-btn-delete-bg: #2b1d1d;
+  --app-btn-import-color: #a3a6ad; --app-btn-import-border: #4c4d4f; --app-btn-import-bg: #262727;
+  --app-btn-export-color: #e6a23c; --app-btn-export-border: #5c4523; --app-btn-export-bg: #292218;
   --app-bg: #141414;
   --app-fill: #1f1f1f;
   --app-fill-light: #1a1a1a;

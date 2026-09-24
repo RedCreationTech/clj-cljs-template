@@ -4,7 +4,6 @@
    [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api.notices :as notices-api]
-   [com.ruoyi.frontend.storage :as storage]
    [re-frame.core :as rf]))
 
 (rf/reg-event-fx :notices/search
@@ -104,7 +103,7 @@
                                         (fn [_]))))
 
 ;; ─── 顶部铃铛:最新通知与未读角标 ─────────────────────────────────
-;; 「已读」按浏览器记住上次打开铃铛时看到的最新 notice_id(localStorage),不做服务端已读回执。
+;; 已读状态按用户存在后端(sys_notice_read),换设备也一致。
 
 (rf/reg-event-fx :notice-bell/fetch
                  (fn [_ _] {:api/latest-notices nil}))
@@ -112,18 +111,19 @@
 (rf/reg-fx :api/latest-notices
            (fn [_]
              (notices-api/latest-notices
-              #(when (= 200 (:code %)) (rf/dispatch [:notice-bell/set-items (:data %)]))
+              #(when (= 200 (:code %)) (rf/dispatch [:notice-bell/set-data (:data %)]))
               (fn [_]))))
 
-(rf/reg-event-db :notice-bell/set-items
-                 (fn [db [_ items]]
-                   (-> db
-                       (assoc-in [:notice-bell :items] (vec items))
-                       (update-in [:notice-bell :seen-id]
-                                  #(or % (some-> (storage/get-item :notice-seen) js/parseInt))))))
+(rf/reg-event-db :notice-bell/set-data
+                 (fn [db [_ {:keys [rows unread]}]]
+                   (assoc db :notice-bell {:items (vec rows) :unread (or unread 0)})))
 
-(rf/reg-event-db :notice-bell/mark-seen
-                 (fn [db _]
-                   (let [latest (reduce max 0 (map :notice_id (get-in db [:notice-bell :items])))]
-                     (storage/set-item! :notice-seen latest)
-                     (assoc-in db [:notice-bell :seen-id] latest))))
+(rf/reg-event-fx :notice-bell/mark-read
+                 (fn [{:keys [db]} _]
+                   (when (pos? (get-in db [:notice-bell :unread] 0))
+                     {:db (assoc-in db [:notice-bell :unread] 0)
+                      :api/read-all-notices nil})))
+
+(rf/reg-fx :api/read-all-notices
+           (fn [_]
+             (notices-api/read-all-notices #(rf/dispatch [:notice-bell/fetch]) (fn [_]))))

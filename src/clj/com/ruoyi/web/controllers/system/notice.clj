@@ -38,15 +38,23 @@
     (ok {:rows rows :total (:total total)})))
 
 (defn latest-notices
-  "最新的已发布通知(顶部铃铛用,登录即可访问):最多 5 条。"
-  [{:keys [query-fn]} _request]
-  (ok (query-fn :list-latest-notices {:limit 5})))
+  "顶部铃铛(登录即可访问):最新 5 条已发布通知(带 is_read)与当前用户的未读总数。"
+  [{:keys [query-fn]} request]
+  (let [user-id (get-in request [:identity :user-id])]
+    (ok {:rows (query-fn :list-latest-notices {:user_id user-id :limit 5})
+         :unread (:total (query-fn :count-unread-notices {:user_id user-id}))})))
+
+(defn read-all-notices
+  "把当前所有已发布通知记为当前用户已读(打开铃铛时调用)。"
+  [{:keys [query-fn]} request]
+  (query-fn :mark-all-notices-read! {:user_id (get-in request [:identity :user-id])})
+  (ok 200 "操作成功" {}))
 
 (defn get-notice
   "获取通知公告详情。"
   [{:keys [query-fn]} request]
   (let [notice-id (parse-int (get-in request [:path-params :id]))]
-    (if-let [notice (query-fn :find-notice-by-id {:notice_id notice-id} {:result-set-fn first})]
+    (if-let [notice (query-fn :find-notice-by-id {:notice_id notice-id})]
       (ok notice)
       (fail "通知公告不存在"))))
 
@@ -87,5 +95,6 @@
   "删除通知公告。"
   [{:keys [query-fn]} request]
   (let [notice-id (parse-int (get-in request [:path-params :id]))]
+    (query-fn :delete-notice-reads! {:notice_id notice-id})
     (query-fn :delete-notice! {:notice_id notice-id})
     (ok 200 "删除成功" {})))

@@ -77,7 +77,7 @@
           (or (:json_result data) "-")]]
         (when (seq (:error_msg data))
           [antd/descriptions-item {:label "错误消息" :span 2}
-           [:pre {:style {:color "#f56c6c" :maxHeight 160 :overflow "auto" :fontSize 12 :background "#fef0f0" :padding 8 :borderRadius 4}}
+           [:pre {:style {:color "var(--app-btn-delete-color)" :maxHeight 160 :overflow "auto" :fontSize 12 :background "var(--app-btn-delete-bg)" :padding 8 :borderRadius 4}}
             (:error_msg data)]])])]))
 
 (defn- oper-log-columns []

@@ -39,7 +39,7 @@ SELECT * FROM sys_user WHERE user_name = :user_name AND del_flag = '0'
 -- :name create-user! :! :n
 -- :doc 新增用户
 INSERT INTO sys_user (dept_id, user_name, nick_name, user_type, email, phonenumber, sex, avatar, password, status, del_flag, create_by, create_time, remark)
-VALUES (:dept_id, :user_name, :nick_name, :user_type, :email, :phonenumber, :sex, :avatar, :password, :status, '0', :create_by, CURRENT_TIMESTAMP, :remark)
+VALUES (:dept_id, :user_name, :nick_name, :user_type, :email, :phonenumber, :sex, :avatar, :password, :status, '0', :create_by, :now, :remark)
 
 -- :name update-user! :! :n
 -- :doc 更新用户信息
@@ -54,13 +54,13 @@ SET dept_id = COALESCE(:dept_id, dept_id),
     password = COALESCE(:password, password),
     status = COALESCE(:status, status),
     update_by = :update_by,
-    update_time = CURRENT_TIMESTAMP,
+    update_time = :now,
     remark = COALESCE(:remark, remark)
 WHERE user_id = :user_id
 
 -- :name delete-user! :! :n
 -- :doc 逻辑删除用户
-UPDATE sys_user SET del_flag = '2', update_time = CURRENT_TIMESTAMP WHERE user_id = :user_id
+UPDATE sys_user SET del_flag = '2', update_time = :now WHERE user_id = :user_id
 
 -- :name list-roles-by-user-id :? :*
 -- :doc 查询用户的角色列表
@@ -107,7 +107,7 @@ SELECT * FROM sys_dept WHERE dept_id = :dept_id AND del_flag = '0'
 
 -- :name create-dept! :! :n
 INSERT INTO sys_dept (parent_id, ancestors, dept_name, order_num, leader, phone, email, status, create_by, create_time)
-VALUES (:parent_id, :ancestors, :dept_name, :order_num, :leader, :phone, :email, :status, :create_by, CURRENT_TIMESTAMP)
+VALUES (:parent_id, :ancestors, :dept_name, :order_num, :leader, :phone, :email, :status, :create_by, :now)
 
 -- :name update-dept! :! :n
 UPDATE sys_dept
@@ -120,7 +120,7 @@ SET parent_id = COALESCE(:parent_id, parent_id),
     email = COALESCE(:email, email),
     status = COALESCE(:status, status),
     update_by = :update_by,
-    update_time = CURRENT_TIMESTAMP
+    update_time = :now
 WHERE dept_id = :dept_id
 
 -- :name list-depts-by-parent :? :*
@@ -130,7 +130,7 @@ SELECT * FROM sys_dept WHERE parent_id = :parent_id AND del_flag = '0'
 UPDATE sys_dept SET ancestors = :ancestors WHERE dept_id = :dept_id
 
 -- :name delete-dept! :! :n
-UPDATE sys_dept SET del_flag = '2', update_time = CURRENT_TIMESTAMP WHERE dept_id = :dept_id
+UPDATE sys_dept SET del_flag = '2', update_time = :now WHERE dept_id = :dept_id
 
 -- :name list-roles :? :*
 SELECT * FROM sys_role WHERE del_flag = '0'
@@ -144,7 +144,7 @@ SELECT * FROM sys_role WHERE role_id = :role_id AND del_flag = '0'
 
 -- :name create-role! :! :n
 INSERT INTO sys_role (role_name, role_key, role_sort, data_scope, menu_check_strictly, dept_check_strictly, status, create_by, create_time, remark)
-VALUES (:role_name, :role_key, :role_sort, :data_scope, :menu_check_strictly, :dept_check_strictly, :status, :create_by, CURRENT_TIMESTAMP, :remark)
+VALUES (:role_name, :role_key, :role_sort, :data_scope, :menu_check_strictly, :dept_check_strictly, :status, :create_by, :now, :remark)
 
 -- :name update-role! :! :n
 -- :doc 更新角色（所有字段可选）
@@ -156,12 +156,12 @@ SET role_name = COALESCE(:role_name, role_name),
     menu_check_strictly = COALESCE(:menu_check_strictly, menu_check_strictly),
     dept_check_strictly = COALESCE(:dept_check_strictly, dept_check_strictly),
     status = COALESCE(:status, status),
-    update_time = CURRENT_TIMESTAMP,
+    update_time = :now,
     remark = COALESCE(:remark, remark)
 WHERE role_id = :role_id
 
 -- :name delete-role! :! :n
-UPDATE sys_role SET del_flag = '2', update_time = CURRENT_TIMESTAMP WHERE role_id = :role_id
+UPDATE sys_role SET del_flag = '2', update_time = :now WHERE role_id = :role_id
 
 -- :name list-menus :? :*
 SELECT * FROM sys_menu
@@ -175,7 +175,7 @@ SELECT * FROM sys_menu WHERE menu_id = :menu_id
 
 -- :name create-menu! :! :n
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time)
-VALUES (:menu_name, :parent_id, :order_num, :path, :component, :query, :route_name, :is_frame, :is_cache, :menu_type, :visible, :status, :perms, :icon, :create_by, CURRENT_TIMESTAMP)
+VALUES (:menu_name, :parent_id, :order_num, :path, :component, :query, :route_name, :is_frame, :is_cache, :menu_type, :visible, :status, :perms, :icon, :create_by, :now)
 
 -- :name update-menu! :! :n
 UPDATE sys_menu
@@ -194,7 +194,7 @@ SET menu_name = COALESCE(:menu_name, menu_name),
     perms = COALESCE(:perms, perms),
     icon = COALESCE(:icon, icon),
     update_by = :update_by,
-    update_time = CURRENT_TIMESTAMP
+    update_time = :now
 WHERE menu_id = :menu_id
 
 -- :name delete-menu! :! :n
@@ -227,7 +227,7 @@ SELECT * FROM sys_post WHERE post_id = :post_id
 
 -- :name create-post! :! :n
 INSERT INTO sys_post (post_code, post_name, post_sort, status, create_by, create_time, remark)
-VALUES (:post_code, :post_name, :post_sort, :status, :create_by, CURRENT_TIMESTAMP, :remark)
+VALUES (:post_code, :post_name, :post_sort, :status, :create_by, :now, :remark)
 
 -- :name update-post! :! :n
 UPDATE sys_post
@@ -236,7 +236,7 @@ SET post_code = COALESCE(:post_code, post_code),
     post_sort = COALESCE(:post_sort, post_sort),
     status = COALESCE(:status, status),
     update_by = :update_by,
-    update_time = CURRENT_TIMESTAMP,
+    update_time = :now,
     remark = COALESCE(:remark, remark)
 WHERE post_id = :post_id
 
@@ -255,7 +255,7 @@ SELECT * FROM sys_dict_type WHERE dict_id = :dict_id
 
 -- :name create-dict-type! :! :n
 INSERT INTO sys_dict_type (dict_name, dict_type, status, create_by, create_time, remark)
-VALUES (:dict_name, :dict_type, :status, :create_by, CURRENT_TIMESTAMP, :remark)
+VALUES (:dict_name, :dict_type, :status, :create_by, :now, :remark)
 
 -- :name update-dict-type! :! :n
 UPDATE sys_dict_type
@@ -263,7 +263,7 @@ SET dict_name = COALESCE(:dict_name, dict_name),
     dict_type = COALESCE(:dict_type, dict_type),
     status = COALESCE(:status, status),
     update_by = :update_by,
-    update_time = CURRENT_TIMESTAMP,
+    update_time = :now,
     remark = COALESCE(:remark, remark)
 WHERE dict_id = :dict_id
 
@@ -282,7 +282,7 @@ SELECT * FROM sys_dict_data WHERE dict_code = :dict_code
 
 -- :name create-dict-data! :! :n
 INSERT INTO sys_dict_data (dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, remark)
-VALUES (:dict_sort, :dict_label, :dict_value, :dict_type, :css_class, :list_class, :is_default, :status, :create_by, CURRENT_TIMESTAMP, :remark)
+VALUES (:dict_sort, :dict_label, :dict_value, :dict_type, :css_class, :list_class, :is_default, :status, :create_by, :now, :remark)
 
 -- :name update-dict-data! :! :n
 UPDATE sys_dict_data
@@ -295,7 +295,7 @@ SET dict_sort = COALESCE(:dict_sort, dict_sort),
     is_default = COALESCE(:is_default, is_default),
     status = COALESCE(:status, status),
     update_by = :update_by,
-    update_time = CURRENT_TIMESTAMP,
+    update_time = :now,
     remark = COALESCE(:remark, remark)
 WHERE dict_code = :dict_code
 
@@ -317,7 +317,7 @@ SELECT * FROM sys_config WHERE config_key = :config_key
 
 -- :name create-config! :! :n
 INSERT INTO sys_config (config_name, config_key, config_value, config_type, create_by, create_time, remark)
-VALUES (:config_name, :config_key, :config_value, :config_type, :create_by, CURRENT_TIMESTAMP, :remark)
+VALUES (:config_name, :config_key, :config_value, :config_type, :create_by, :now, :remark)
 
 -- :name update-config! :! :n
 UPDATE sys_config
@@ -326,7 +326,7 @@ SET config_name = COALESCE(:config_name, config_name),
     config_value = COALESCE(:config_value, config_value),
     config_type = COALESCE(:config_type, config_type),
     update_by = :update_by,
-    update_time = CURRENT_TIMESTAMP,
+    update_time = :now,
     remark = COALESCE(:remark, remark)
 WHERE config_id = :config_id
 
@@ -352,12 +352,30 @@ ORDER BY notice_id DESC
 LIMIT :page_size OFFSET :offset
 
 -- :name list-latest-notices :? :*
--- :doc 最新的已发布通知(顶部铃铛),只取列表需要的字段
-SELECT notice_id, notice_name, notice_type, create_by, create_time
-FROM sys_notice
-WHERE status = '0'
-ORDER BY notice_id DESC
+-- :doc 最新的已发布通知(顶部铃铛),带当前用户是否已读
+SELECT n.notice_id, n.notice_name, n.notice_type, n.create_by, n.create_time,
+       CASE WHEN r.notice_id IS NULL THEN 0 ELSE 1 END AS is_read
+FROM sys_notice n
+LEFT JOIN sys_notice_read r ON r.notice_id = n.notice_id AND r.user_id = :user_id
+WHERE n.status = '0'
+ORDER BY n.notice_id DESC
 LIMIT :limit
+
+-- :name count-unread-notices :? :1
+-- :doc 当前用户未读的已发布通知数
+SELECT COUNT(*) AS total FROM sys_notice n
+WHERE n.status = '0'
+  AND NOT EXISTS (SELECT 1 FROM sys_notice_read r WHERE r.notice_id = n.notice_id AND r.user_id = :user_id)
+
+-- :name mark-all-notices-read! :! :n
+-- :doc 把当前所有已发布通知记为已读
+INSERT INTO sys_notice_read (user_id, notice_id, read_time)
+SELECT :user_id, n.notice_id, :now FROM sys_notice n
+WHERE n.status = '0'
+  AND NOT EXISTS (SELECT 1 FROM sys_notice_read r WHERE r.notice_id = n.notice_id AND r.user_id = :user_id)
+
+-- :name delete-notice-reads! :! :n
+DELETE FROM sys_notice_read WHERE notice_id = :notice_id
 
 -- :name count-notices :? :1
 -- :doc 统计通知公告数量
@@ -373,7 +391,7 @@ SELECT * FROM sys_notice WHERE notice_id = :notice_id
 -- :name create-notice! :! :n
 -- :doc 新增通知公告
 INSERT INTO sys_notice (notice_name, notice_type, status, create_by, create_time, notice_content, remark)
-VALUES (:notice_name, :notice_type, :status, :create_by, CURRENT_TIMESTAMP, :notice_content, :remark)
+VALUES (:notice_name, :notice_type, :status, :create_by, :now, :notice_content, :remark)
 
 -- :name update-notice! :! :n
 -- :doc 更新通知公告
@@ -383,7 +401,7 @@ SET notice_name = COALESCE(:notice_name, notice_name),
     status = COALESCE(:status, status),
     notice_content = COALESCE(:notice_content, notice_content),
     update_by = :update_by,
-    update_time = CURRENT_TIMESTAMP,
+    update_time = :now,
     remark = COALESCE(:remark, remark)
 WHERE notice_id = :notice_id
 
@@ -509,7 +527,7 @@ SELECT * FROM sys_form_template WHERE form_key = :form_key
 -- :name create-form-template! :! :n
 -- :doc 新增表单模板
 INSERT INTO sys_form_template (form_name, form_key, schema_json, remark, create_by, create_time)
-VALUES (:form_name, :form_key, :schema_json, :remark, :create_by, CURRENT_TIMESTAMP)
+VALUES (:form_name, :form_key, :schema_json, :remark, :create_by, :now)
 
 -- :name update-form-template! :! :n
 -- :doc 更新表单模板
@@ -519,9 +537,31 @@ SET form_name   = COALESCE(:form_name, form_name),
     schema_json = COALESCE(:schema_json, schema_json),
     remark      = COALESCE(:remark, remark),
     update_by   = :update_by,
-    update_time = CURRENT_TIMESTAMP
+    update_time = :now
 WHERE id = :id
 
 -- :name delete-form-template! :! :n
 -- :doc 删除表单模板
 DELETE FROM sys_form_template WHERE id = :id
+
+-- ════════════════════════════════════════════════════════════════
+-- 短期键值(infra.kv):验证码、登录失败计数与锁定、续期宽限
+-- ════════════════════════════════════════════════════════════════
+
+-- :name kv-get :? :1
+SELECT v FROM sys_kv WHERE k = :k AND expire_at > :now_ms
+
+-- :name kv-update! :! :n
+UPDATE sys_kv SET v = :v, expire_at = :expire_at WHERE k = :k
+
+-- :name kv-insert! :! :n
+INSERT INTO sys_kv (k, v, expire_at) VALUES (:k, :v, :expire_at)
+
+-- :name kv-delete! :! :n
+DELETE FROM sys_kv WHERE k = :k
+
+-- :name kv-delete-prefix! :! :n
+DELETE FROM sys_kv WHERE k LIKE :pattern
+
+-- :name kv-purge! :! :n
+DELETE FROM sys_kv WHERE expire_at <= :now_ms

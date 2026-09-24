@@ -23,8 +23,9 @@
   [{:keys [datasource]} _req]
   (let [db (db-status datasource)
         up? (not= "down" (:status db))
-        body {:time     (str (Date.))
-              :up-since (str (Date. (.getStartTime (ManagementFactory/getRuntimeMXBean))))
+        ;; Date 交给 infra.json 编码,与其它接口一样是本地 "yyyy-MM-dd HH:mm:ss"
+        body {:time     (Date.)
+              :up-since (Date. (.getStartTime (ManagementFactory/getRuntimeMXBean)))
               :app      {:status (if up? "up" "down") :message (if up? "" "数据库不可用")}
               :db       db}]
     (if up?

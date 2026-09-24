@@ -102,14 +102,15 @@ clj-nrepl-eval -p 7000 '(user/migrate)'     # 运行迁移
 - **按钮权限**：工具栏按钮给 `page-toolbar/toolbar-button` 传 `:perm "system:user:add"`；其它元素（行内按钮、Popconfirm、Dropdown）包一层 `[perm/when-allowed "system:user:edit" ...]`。权限集合来自 `getInfo` 的 `permissions`（sub `:auth/permissions`），admin 为 `*:*:*`。前端只负责显隐，后端路由的 `:perms` 才是拦截。
 - **localStorage**：只通过 `com.ruoyi.frontend.storage`（`get-item` / `set-item!` / `get-json` / `set-json!` / `remove-item!`），键名自动加 `ruoyi_` 前缀、隐私模式下不会抛异常。
 - **界面文案**：用 `(i18n/tr "中文原文")`，英文译文加到 `i18n.cljs` 的 `en-US` 词典；没有译文时显示中文，不会出现键名。带参数：`(i18n/tr "共 {0} 条" total)`。外壳（登录、头部、菜单、Tab、面包屑、通用工具栏、分页）已完成，业务页面按需逐步迁移。
-- **颜色**：内联样式里的背景、文字、边框颜色用 `resources/public/css/app.css` 定义的变量（`var(--app-bg)`、`var(--app-text-regular)`、`var(--app-border-light)` 等），不要写死 `#fff` / `#606266`，否则暗色主题会出现白块或看不清的文字。
+- **颜色**：内联样式里的背景、文字、边框颜色用 `resources/public/css/app.css` 定义的变量（`var(--app-bg)`、`var(--app-text-regular)`、`var(--app-border-light)` 等），不要写死 `#fff` / `#606266`，否则暗色主题会出现白块或看不清的文字。增删改导入导出按钮的配色是 `--app-btn-<add|edit|delete|import|export>-{color,border,bg}`（亮 / 暗两套），自己画的按钮用 `(page-toolbar/kind-style :add)` 取同一套样式。
 - **纯函数放可测试的命名空间**：不依赖浏览器 / HTTP 库的逻辑（如 `api.token`）单独成命名空间，才能在 `test/cljs` 里用 Node 跑单元测试（`bb test:cljs`）。
 
 ## 认证与会话（改动认证相关代码前先读）
 
 - 令牌 claims：`:user-id :user-name :roles :jti :iat :exp`，`:exp` 是 Unix 秒。`:jti` 是会话 ID，对应 `sys_online.session_id`。
-- **会话是否有效以 `sys_online` 为准**：`wrap-jwt-auth` 每次请求更新心跳，更新 0 行即视为未登录；登出、强退、空闲超过 30 分钟（后台清理）都会删掉会话行，令牌立即失效。续期（`/api/auth/refresh`）把会话改挂到新 `jti`，旧令牌 30 秒宽限。
+- **会话是否有效以 `sys_online` 为准**：`wrap-jwt-auth` 每次请求更新心跳，更新 0 行即视为未登录；登出、强退、空闲超过 30 分钟（后台清理）都会删掉会话行，令牌立即失效。续期（`/api/auth/refresh`）把会话改挂到新 `jti`，旧令牌 30 秒宽限（宽限记在 `infra.kv`，多实例共享）。
 - 登录：验证码开关（`:auth-config :captcha-enabled?`，prod 默认开）→ 失败限流（`infra.login-guard`，按用户名）→ 校验密码与状态。失败提示统一为“用户名或密码错误”，不要区分“用户不存在”。
+- **需要跨实例共享的临时状态放 `infra.kv`**（`put!` 带毫秒 TTL、`get-val`、`take!` 一次性读取、`del!`）：系统运行时存在 `sys_kv` 表，单元测试 / REPL 没起系统时是进程内存（测试里用 `(kv/use-store! (kv/memory-store))` 隔离）。验证码（`captcha:<uuid>`）、登录失败计数与锁定（`login-fail:` / `login-lock:`）、续期宽限（`grace:<jti>`）都在这里；不要再用 atom 存这类状态，否则多实例部署时各实例各记一份。过期键由会话清理线程每 5 分钟顺带删除。
 - **鉴权由路由数据驱动**(`web.middleware.auth`,挂在 `routes/api.clj` 的顶层):`wrap-jwt-auth` 写入 `:identity`,`authorize` 读取路由数据 `:auth? true`(要求登录,可放在路由组上)与 `:perms "模块:资源:动作"`(字符串或集合,满足任一);未登录 401、无权限 403。**不要**再在路由组里挂中间件。权限按请求实时算(`domain.system.permission`),新接口的权限标识要在迁移里登记成按钮菜单(F)并授权给 admin 角色(参考 `20260924000001-add-button-perms`)。
 - **数据权限**:`domain.system.data-scope` 计算当前用户可见范围(角色 `data_scope` 1~5,多角色取并集),列表查询把 `sql-params` 传给 SQL 里固定的 `AND (:scope_all = 1 OR x.dept_id IN (:v*:scope_dept_ids) OR x.user_id = :scope_user_id)`,单条操作用 `allows?` 检查(用户管理控制器是完整示例)。
 - 文件上传下载要求登录,路径必须经 `infra.files/resolve-in` / `resolve-under` / `store!`,不能直接用请求里的文件名拼路径;上传先用 `files/upload-error` 按 `:upload-config`(类型白名单、大小上限)校验。
@@ -395,7 +396,7 @@ DDL 差异无法兼容，因此有两套目录：
 | 场景 | SQLite | MySQL |
 |------|--------|-------|
 | 自增主键 | `INTEGER PRIMARY KEY` | `BIGINT AUTO_INCREMENT PRIMARY KEY` |
-| 时间字段 | `TEXT DEFAULT CURRENT_TIMESTAMP` | `TIMESTAMP DEFAULT CURRENT_TIMESTAMP` |
+| 时间字段 | `TEXT`（历史表带 `DEFAULT CURRENT_TIMESTAMP`，只是兜底） | `DATETIME` / `TIMESTAMP` |
 | 布尔/状态 | `CHAR(1)` / `INTEGER` | `CHAR(1)` / `TINYINT` |
 
 #### 查询 SQL 优先共用，必要时分支
@@ -437,6 +438,15 @@ DDL 差异无法兼容，因此有两套目录：
 4. **元数据/动态查询在 Clojure 层分支**
 
    `com.ruoyi.infra.db` 里对 `get-tables`、`get-table-columns`、`paginate-query` 等按 `:sqlite` / `:mysql` 分情况处理，不要把 `PRAGMA`、`sqlite_master`、`information_schema` 混进共用 `.sql`。
+
+#### 时间一律由应用生成（不要在 SQL 里取当前时间）
+
+SQLite 的 `CURRENT_TIMESTAMP` 是 UTC、MySQL 的是会话时区，两库写出来的时间不一致（仪表盘曾显示“8 小时前”）。规则：
+
+- 写时间用参数 `:now`：`create_time = :now`、`update_time = :now`。`infra.clock/with-now` 包在 query-fn 外层，**每次调用自动注入** `:now`（JVM 默认时区的本地时间，`yyyy-MM-dd HH:mm:ss`），不用手动传；需要指定时间时自己传 `:now` 即可覆盖。
+- `resources/sql/*.sql` 里禁止 `CURRENT_TIMESTAMP`、`NOW()`、`datetime(`、`||`，`bb lint:migrations` 会检查（`bb new-module` 生成的 SQL 同样用 `:now`）。
+- 接口返回的时间由 `com.ruoyi.infra.json` 统一编码成本地 `yyyy-MM-dd HH:mm:ss`（日期 `yyyy-MM-dd`）：MySQL 驱动返回的 `Timestamp` / `java.time` 对象与 SQLite 的文本在前端看起来一样。控制器里直接返回时间对象，不要自己 `str`。后端 JSON 编解码只用 `infra.json`（`write-str` / `read-str`，基于 jsonista，与 muuntaja 同一个 mapper），已不再依赖 cheshire。
+- 部署时各实例与数据库主机用同一个时区（容器里设 `TZ`）。
 
 #### 迁移文件格式
 
@@ -488,7 +498,7 @@ Available helpers (defined in `env/dev/clj/user.clj`):
 | `reload-middleware` | `rm` | Ring middleware (auth, exception, operlog, core) |
 | `reload-routes` | `rroutes` | Route definitions (needs `rr` to apply) |
 | `reload-controllers` | — | Web controllers |
-| `reload-infra` | — | Security, online, data-perm |
+| `reload-infra` | — | Security, online, login-guard（`infra.kv` 定义了协议，改它之后用 `rr`，单独 reload 会让已装配的存储失效） |
 | `reload-all` | `ra` | All of the above |
 | `reload-system` | `rr` | Full system reset (halt → prep → go) |
 
@@ -535,7 +545,7 @@ npm run test:e2e:report                  # 查看 HTML 报告
 - `post-crud.spec.js` — 岗位管理新增/修改/删除示例
 - `permission.spec.js` — 只读用户看不到增删改按钮、越权接口统一提示;角色自定义数据范围的勾选与回显
 - `search.spec.js` — 角色、岗位、参数列表的搜索条件生效
-- `header.spec.js` — 顶部菜单搜索跳转、通知铃铛未读数
+- `header.spec.js` — 顶部菜单搜索跳转、通知铃铛未读数与已读（按用户记录，刷新后不再显示）
 - `auth-helper.js` — 登录/登出公共辅助
 - `<module>.spec.js` — `bb new-module` 为每个生成的模块写的新增/修改/删除用例
 

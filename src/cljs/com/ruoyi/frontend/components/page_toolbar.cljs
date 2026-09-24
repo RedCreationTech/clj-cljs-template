@@ -16,13 +16,17 @@
    left
    right])
 
+(defn kind-style
+  "彩色按钮的配色(css/app.css 的 --app-btn-<kind>-* 变量,浅色 / 暗色主题各一套)。"
+  [kind]
+  (let [k (name kind)]
+    {:color (str "var(--app-btn-" k "-color)")
+     :border (str "1px solid var(--app-btn-" k "-border)")
+     :background (str "var(--app-btn-" k "-bg)")}))
+
 (def button-colors
-  {:add {:color "#409eff" :border "1px solid #a0cfff" :background "#ecf5ff"}
-   :edit {:color "#67c23a" :border "1px solid #b3e19d" :background "#f0f9eb"}
-   :delete {:color "#f56c6c" :border "1px solid #fab6b6" :background "#fef0f0"}
-   :import {:color "var(--app-text-secondary)" :border "1px solid #d3d4d6" :background "#f4f4f5"}
-   :export {:color "#e6a23c" :border "1px solid #f3d19e" :background "#fdf6ec"}
-   :default {:height 36 :borderRadius 4}})
+  (assoc (into {} (map (juxt identity kind-style)) [:add :edit :delete :import :export])
+         :default {:height 36 :borderRadius 4}))
 
 (defn- toolbar-button*
   [kind icon on-click disabled? loading? content]

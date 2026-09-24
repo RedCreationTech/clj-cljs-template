@@ -39,7 +39,7 @@
        :else
        [{:title (r/as-element
                  [:span
-                  [:span {:style {:color "#999"}} (str label " = ")]
+                  [:span {:style {:color "var(--app-text-secondary)"}} (str label " = ")]
                   (pr-str value)])
          :key (str node-path "-leaf")}]))))
 
@@ -72,7 +72,7 @@
         ^{:key (str d "->" k)}
         [:line {:x1 (:x p1) :y1 (:y p1)
                 :x2 (- (:x p2) 75) :y2 (:y p2)
-                :stroke "#999" :strokeWidth 1
+                :stroke "var(--app-text-secondary)" :strokeWidth 1
                 :markerEnd "url(#ig-arrow)"}]))))
 
 (defn- dep-graph-fn-toggle [k active? on-toggle]
@@ -116,11 +116,11 @@
         height layer-height]
     [:svg {:width width :height height
            :className "integrant-dep-graph"
-           :style {:border "1px solid #f0f0f0" :background "#fafafa" :borderRadius 4}}
+           :style {:border "1px solid #f0f0f0" :background "var(--app-fill-light)" :borderRadius 4}}
      [:defs
       [:marker {:id "ig-arrow" :markerWidth 8 :markerHeight 8
                 :refX 7 :refY 4 :orient "auto" :markerUnits "strokeWidth"}
-       [:path {:d "M0,0 L0,8 L8,4 z" :fill "#999"}]]]
+       [:path {:d "M0,0 L0,8 L8,4 z" :fill "var(--app-text-secondary)"}]]]
      (dep-graph-edges order dependencies node-pos)
      (for [[k pos] node-pos]
        ^{:key k}
@@ -136,12 +136,12 @@
       [:span {:style {:color (if error? "#ff4d4f" "#52c41a")
                       :fontWeight 600}}
        (if error? "[error]" "[return]")]
-      [:span {:style {:color "#999" :marginLeft 8}}
+      [:span {:style {:color "var(--app-text-secondary)" :marginLeft 8}}
        (str (:duration log) "ms")]]
-     [:div {:style {:color "#666"}}
+     [:div {:style {:color "var(--app-text-regular)"}}
       [:span {:style {:color "#1890ff"}} "in "]
       (pr-str (:args log))]
-     [:div {:style {:color "#666"}}
+     [:div {:style {:color "var(--app-text-regular)"}}
       [:span {:style {:color (if error? "#ff4d4f" "#52c41a")}}
        (if error? "err " "out ")]
       (pr-str (if error? (:error log) (:result log)))]]))
@@ -193,10 +193,10 @@
       [:div {:style {:padding "8px 12px"
                      :borderRadius 4
                      :cursor "pointer"
-                     :background (if (= k selected) "#e6f7ff" "#fafafa")
+                     :background (if (= k selected) "#e6f7ff" "var(--app-fill-light)")
                      :border (if (= k selected) "1px solid #1677ff" "1px solid #f0f0f0")}
              :onClick #(set-selected! k)}
-       [:span {:style {:color "#999" :marginRight 8 :fontSize 12}} (inc idx)]
+       [:span {:style {:color "var(--app-text-secondary)" :marginRight 8 :fontSize 12}} (inc idx)]
        [:span {:style {:fontWeight (if (= k selected) 600 400)}} k]])]])
 
 (defn- dep-tags [color deps set-selected!]
@@ -208,7 +208,7 @@
 (defn- trace-log-block [trace-data]
   [:div {:style {:marginTop 12}}
    [:div {:style {:fontWeight 500 :marginBottom 8}} "输入/输出日志"]
-   [:div {:style {:maxHeight 240 :overflow "auto" :background "#fafafa" :padding "0 12px"}}
+   [:div {:style {:maxHeight 240 :overflow "auto" :background "var(--app-fill-light)" :padding "0 12px"}}
     (for [log (reverse (:logs trace-data))]
       ^{:key (:id log)}
       [trace-log-line log])]])
@@ -289,7 +289,7 @@
          js/undefined))
      [selected (:active trace-data)])
     (if (nil? data)
-      [:div {:style {:textAlign "center" :padding 48 :color "#999"}} "加载中..."]
+      [:div {:style {:textAlign "center" :padding 48 :color "var(--app-text-secondary)"}} "加载中..."]
       (let [sel-k (keyword selected)
             deps (get-in data [:dependencies sel-k] [])
             dents (get-in data [:dependents sel-k] [])

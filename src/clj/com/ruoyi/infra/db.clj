@@ -244,11 +244,10 @@
       (let [set-dynamic! (resolve 'com.ruoyi.integrant.trace/set-dynamic!)
             load-queries (fn []
                            (require 'conman.core)
-                           (let [bind-fn (resolve 'conman.core/bind-connection-map)]
-                             (bind-fn conn {}
-                                      "queries.sql" "sql/system.sql" "sql/log.sql"
-                                      "sql/job.sql" "sql/gen.sql" "sql/generated.sql"
-                                      "sql/business.sql")))
+                           (let [bind-fn (resolve 'conman.core/bind-connection-map)
+                                 files @@(resolve 'com.ruoyi.integrant.trace/query-filenames)]
+                             ;; 与启动时相同的 SQL 文件清单(含 bb new-module 登记的业务模块)
+                             (apply bind-fn conn {} files)))
             new-qf (fn
                      ([query params]
                       (let [f (get (:fns (load-queries)) query)]

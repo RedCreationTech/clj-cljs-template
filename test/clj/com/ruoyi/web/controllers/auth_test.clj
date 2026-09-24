@@ -2,6 +2,7 @@
   "认证控制器测试。"
   (:require
    [clojure.test :refer [deftest is testing use-fixtures]]
+   [com.ruoyi.infra.kv :as kv]
    [com.ruoyi.infra.login-guard :as guard]
    [com.ruoyi.infra.online :as online]
    [com.ruoyi.infra.security :as security]
@@ -59,7 +60,7 @@
 (use-fixtures :each
   (fn [test-fn]
     (online/set-query-fn! (fn [_q _p] nil))
-    (reset! captcha/captcha-store {})
+    (kv/use-store! (kv/memory-store))
     (guard/reset-all!)
     (test-fn)
     (guard/reset-all!)))
@@ -80,8 +81,7 @@
 (deftest test-login-success-with-captcha
   (testing "开启验证码且验证码正确时登录成功"
     (let [uuid "test-uuid"]
-      (swap! captcha/captcha-store assoc uuid {:code "abcd"
-                                               :expire (+ (System/currentTimeMillis) 60000)})
+      (captcha/store-code! uuid "abcd")
       (let [request {:body-params {:username "admin" :password "admin123"
                                    :captcha "AbCd" :uuid uuid}
                      :remote-addr "127.0.0.1"}
@@ -92,15 +92,14 @@
 (deftest test-login-invalid-captcha
   (testing "开启验证码时验证码错误返回 400,且验证码被作废"
     (let [uuid "bad-uuid"]
-      (swap! captcha/captcha-store assoc uuid {:code "abcd"
-                                               :expire (+ (System/currentTimeMillis) 60000)})
+      (captcha/store-code! uuid "abcd")
       (let [request {:body-params {:username "admin" :password "admin123"
                                    :captcha "wrong" :uuid uuid}
                      :remote-addr "127.0.0.1"}
             response (login request :config {:captcha-enabled? true})]
         (is (= 400 (-> response :body :code)))
         (is (= "验证码错误或已过期" (-> response :body :msg)))
-        (is (not (contains? @captcha/captcha-store uuid)))))))
+        (is (nil? (captcha/take-code! uuid)) "验证码已作废")))))
 
 (deftest test-login-captcha-required-when-enabled
   (testing "开启验证码时不能靠留空绕过"

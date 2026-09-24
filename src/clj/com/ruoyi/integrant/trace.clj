@@ -2,6 +2,7 @@
   "Integrant 函数组件的运行时调用追踪。"
   (:require
    [clojure.string :as str]
+   [com.ruoyi.infra.clock :as clock]
    [com.ruoyi.infra.datasource :as ds]
    [com.ruoyi.integrant.state :as state]
    [com.ruoyi.web.handler :as handler]
@@ -68,10 +69,15 @@
 (def ^:private original-query-fn-init
   (get-method ig/init-key :db.sql/query-fn))
 
+(defonce ^{:doc "query-fn 加载的 SQL 文件(swap-db! 换库后按同一份清单重新绑定)。"}
+  query-filenames
+  (atom nil))
+
 (defmethod ig/init-key :db.sql/query-fn
   [k opts]
-  (let [actual (original-query-fn-init k opts)]
-    (register-dynamic! :db.sql/query-fn actual)))
+  (reset! query-filenames (or (:filenames opts) [(:filename opts)]))
+  ;; 外层补 :now(infra.clock):追踪包装、换库都在代理内部发生,时间参数始终注入
+  (clock/with-now (register-dynamic! :db.sql/query-fn (original-query-fn-init k opts))))
 
 (def ^:private max-log-entries 200)
 

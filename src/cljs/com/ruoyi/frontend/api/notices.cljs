@@ -28,7 +28,13 @@
               :on-success on-success :on-error on-error}))
 
 (defn latest-notices
-  "最新的已发布通知(顶部铃铛)。后台轮询,失败不提示。"
+  "顶部铃铛:最新通知与当前用户的未读数。后台请求,失败不提示。"
   [on-success on-error]
   (t/request {:method :get :uri "/system/notice/latest" :silent? true
+              :on-success on-success :on-error on-error}))
+
+(defn read-all-notices
+  "把当前所有已发布通知记为已读。"
+  [on-success on-error]
+  (t/request {:method :put :uri "/system/notice/read-all" :silent? true
               :on-success on-success :on-error on-error}))

@@ -1,6 +1,7 @@
 (ns com.ruoyi.web.controllers.captcha
-  "验证码控制器 — 生成图片验证码。"
+  "验证码控制器 — 生成图片验证码。验证码存在 infra.kv(5 分钟有效、一次性),多实例共享。"
   (:require
+   [com.ruoyi.infra.kv :as kv]
    [ring.util.response :as response])
   (:import
    [java.awt Color Font RenderingHints]
@@ -9,8 +10,21 @@
    [java.util Random]
    [javax.imageio ImageIO]))
 
-;; 验证码存储（实际项目应用 Redis）
-(defonce captcha-store (atom {}))
+(def ttl-ms
+  "验证码有效期。"
+  (* 5 60 1000))
+
+(defn- store-key [uuid] (str "captcha:" uuid))
+
+(defn store-code!
+  "保存验证码(infra.kv,多实例共享)。"
+  [uuid code]
+  (kv/put! (store-key uuid) code ttl-ms))
+
+(defn take-code!
+  "取出并作废验证码:每个验证码只能校验一次,无论对错。"
+  [uuid]
+  (when (seq uuid) (kv/take! (store-key uuid))))
 
 (defn- generate-code
   "生成随机验证码。"
@@ -70,11 +84,7 @@
     (ImageIO/write image "png" baos)
     (let [uuid (or (get-in request [:query-params "r"])
                    (str (java.util.UUID/randomUUID)))]
-      ;; 存储验证码，5分钟有效
-      (swap! captcha-store assoc uuid {:code code :expire (+ (System/currentTimeMillis) 300000)})
-      ;; 清理过期验证码
-      (let [now (System/currentTimeMillis)]
-        (swap! captcha-store #(into {} (filter (fn [[_ v]] (< now (:expire v))) %))))
+      (store-code! uuid code)
       ;; 返回图片和 UUID
       (-> (response/response (.toByteArray baos))
           (response/content-type "image/png")

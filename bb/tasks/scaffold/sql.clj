@@ -110,9 +110,9 @@
          "SELECT * FROM " table " WHERE id = :id\n\n"
          "-- :name create-" module "! :! :n\n"
          "INSERT INTO " table " (" (str/join ", " cols) ", create_by, create_time)\n"
-         "VALUES (" (str/join ", " (map #(str ":" %) cols)) ", :create_by, CURRENT_TIMESTAMP)\n\n"
+         "VALUES (" (str/join ", " (map #(str ":" %) cols)) ", :create_by, :now)\n\n"
          "-- :name update-" module "! :! :n\n"
          "UPDATE " table "\nSET " (str/join ",\n    " (map #(str % " = :" %) cols))
-         ",\n    update_by = :update_by,\n    update_time = CURRENT_TIMESTAMP\nWHERE id = :id\n\n"
+         ",\n    update_by = :update_by,\n    update_time = :now\nWHERE id = :id\n\n"
          "-- :name delete-" module "! :! :n\n"
          "DELETE FROM " table " WHERE id = :id\n")))

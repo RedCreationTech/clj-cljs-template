@@ -90,16 +90,30 @@
            :when (not (fs/exists? (str dir "/" down)))]
        (str dir "/" f ": 缺少 " down)))))
 
+(def ^:private query-forbidden
+  "resources/sql 下的查询两库共用,不能用只在一个库里成立、或两库结果不同的写法。"
+  [[#"(?i)\bCURRENT_TIMESTAMP\b|\bNOW\s*\(\)" "CURRENT_TIMESTAMP / NOW()(SQLite 是 UTC、MySQL 是会话时区;用 :now,见 infra.clock)"]
+   [#"(?i)\bdatetime\s*\(" "SQLite 的 datetime()"]
+   [#"\|\|" "|| 字符串拼接(MySQL 默认当作 OR;用 CONCAT 或在 Clojure 里拼)"]])
+
+(defn- query-problems []
+  (for [f (->> (fs/glob "resources/sql" "*.sql") (map str) sort)
+        :let [code (strip-comments (slurp f))]
+        [re why] query-forbidden
+        :when (re-find re code)]
+    (str f ": " why)))
+
 (defn migrations!
-  "两套迁移同名成对、各有 down、语句分隔正确、没有混入对方方言。"
+  "两套迁移同名成对、各有 down、语句分隔正确、没有混入对方方言;共用查询不含单库写法。"
   []
   (let [problems (concat (pairing-problems)
                          (dialect-problems :sqlite (:sqlite dirs))
-                         (dialect-problems :mysql (:mysql dirs)))]
+                         (dialect-problems :mysql (:mysql dirs))
+                         (query-problems))]
     (if (seq problems)
       (do (doseq [p problems] (println "  ✖" p))
           (u/fail! "迁移检查未通过(" (count problems) " 处)"))
-      (println "✔ 迁移检查通过:" (count (base-names (:sqlite dirs))) "组迁移,SQLite/MySQL 成对且语法干净"))))
+      (println "✔ 迁移检查通过:" (count (base-names (:sqlite dirs))) "组迁移,SQLite/MySQL 成对且语法干净;共用查询无单库写法"))))
 
 ;; ─── 规模约束 ──────────────────────────────────────────────────────
 

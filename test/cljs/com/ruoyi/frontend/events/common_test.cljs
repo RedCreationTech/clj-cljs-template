@@ -35,10 +35,3 @@
               :auth {:token "t"}
               :page :config}
              (ec/stop-all-loading db))))))
-
-(deftest unread-count-test
-  (let [items [{:notice_id 7} {:notice_id 5} {:notice_id 3}]]
-    (is (= 3 (ec/unread-count items nil)) "从没看过:全部未读")
-    (is (= 1 (ec/unread-count items 5)))
-    (is (= 0 (ec/unread-count items 7)))
-    (is (= 0 (ec/unread-count [] 0)))))

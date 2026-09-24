@@ -1,7 +1,7 @@
 (ns com.ruoyi.web.middleware.exception
   (:require
-   [cheshire.core :as json]
    [clojure.tools.logging :as log]
+   [com.ruoyi.infra.json :as json]
    [reitit.ring.middleware.exception :as exception]))
 
 (def ^:private default-msgs
@@ -25,7 +25,7 @@
     (log/error exception "Exception:" (.getMessage exception)))
   {:status  status
    :headers {"content-type" "application/json;charset=utf-8"}
-   :body    (json/generate-string
+   :body    (json/write-str
              (cond-> {:code      status
                       :msg       (user-message status exception)
                       :message   message

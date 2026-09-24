@@ -87,7 +87,7 @@ flowchart TB
 
 *边界说明*
 - 同一个 JVM 进程同时提供 API 与前端静态文件(同端口 3000),不需要独立的 Web 服务器;生产可在前面放 Nginx 做 TLS/反向代理(见 §8)。
-- 数据库是唯一的状态存储;在线用户、验证码、缓存监控用的是进程内存(见 §9),不引入 Redis。
+- 数据库是唯一的状态存储:会话、验证码、登录失败计数、续期宽限都在数据库( ~sys_online~ / ~sys_kv~ ),多实例部署共享,不引入 Redis;只有 Quartz 调度与缓存监控的演示数据在各实例内存里(见 §9.7)。
 
 * 3. Containers(L2)
 
@@ -146,7 +146,7 @@ flowchart TB
     handler["handler<br/>[Reitit ring-handler]<br/>静态资源 · Swagger UI · SPA fallback<br/>路由器(dev 每请求重建)"]:::comp
     mwcore["middleware.core<br/>[Ring]<br/>wrap-base:ring-defaults + CORS 白名单 +<br/>静态资源 no-cache + operlog(敏感字段打码)+<br/>query-fn 注入 + JSON body"]:::comp
     routes["routes.api + routes.*<br/>[Reitit 数据路由]<br/>/api 聚合:auth · system · monitor · gen · common · captcha<br/>:auth? / :perms 声明 · Malli 参数校验 · Swagger 元数据"]:::comp
-    mwfmt["middleware.formats + exception<br/>[Muuntaja / Ring]<br/>JSON/Transit 协商 · 统一异常 → {:code :msg}"]:::comp
+    mwfmt["middleware.formats + exception<br/>[Muuntaja / Ring]<br/>JSON/Transit 协商(JSON 用 infra.json 的 mapper)·<br/>统一异常 → {:code :msg}"]:::comp
     mwauth["middleware.auth<br/>[Ring + reitit :compile]<br/>wrap-jwt-auth:Bearer JWT · 会话校验即心跳(sys_online)<br/>authorize:按路由数据 :auth? / :perms → 401 / 403"]:::comp
     ctrl["controllers.*<br/>[Clojure fn]<br/>auth(登录 / 续期 / 登出 / 登录页配置)· register · captcha ·<br/>common(上传校验 · 头像)· health(含 DB)· monitor · job · gen · system/*<br/>params/query:查询参数 → 关键字键"]:::comp
   end
@@ -160,8 +160,9 @@ flowchart TB
     direction TB
     idb["infra.db + infra.datasource<br/>[next.jdbc]<br/>detect-db-type · insert-and-get-id! · 分页<br/>SQLite↔MySQL 语法适配 · 连接池热切换"]:::comp
     isec["infra.security + secrets<br/>[buddy]<br/>bcrypt 哈希 · JWT(jti / iat / exp 秒)签发与解析<br/>prod 启动前校验密钥"]:::comp
-    ionl["infra.online<br/>[sys_online + 内存宽限表]<br/>会话即在线记录:心跳 · 续期改挂 jti ·<br/>登出/强退删除 · 空闲清理线程"]:::comp
-    iguard["infra.login-guard + infra.files<br/>[atom / java.io]<br/>登录失败限流与解锁 · 上传类型/大小校验 ·<br/>文件名清洗与防目录穿越"]:::comp
+    ionl["infra.online<br/>[sys_online + infra.kv]<br/>会话即在线记录:心跳 · 续期改挂 jti(旧令牌宽限记在 kv)·<br/>登出/强退删除 · 清理线程(空闲会话 + 过期键)"]:::comp
+    iguard["infra.login-guard + infra.files<br/>[infra.kv / java.io]<br/>登录失败限流与解锁(多实例共享)· 上传类型/大小校验 ·<br/>文件名清洗与防目录穿越"]:::comp
+    ikv["infra.kv + clock + json<br/>[sys_kv / java.time / jsonista]<br/>带过期的共享键值(验证码 · 限流 · 宽限)·<br/>每次查询注入 :now 本地时间 · 接口时间统一编码"]:::comp
     isch["infra.scheduler + task + cron<br/>[Quartz]<br/>sys_job 驱动:调度 / 暂停 / 恢复 / 立即执行"]:::comp
     icache["infra.cache<br/>[atom]<br/>内存缓存"]:::comp
     itrace["integrant.trace + state<br/>[Integrant 包装]<br/>函数组件调用追踪"]:::comp
@@ -182,6 +183,11 @@ flowchart TB
   ctrl --> isec
   ctrl --> iguard
   ctrl --> icache
+  ctrl -- "验证码 take!" --> ikv
+  ionl --> ikv
+  iguard --> ikv
+  ikv -- "sys_kv" --> conman
+  mwfmt -. "mapper" .-> ikv
   ctrl -- "数据范围 → SQL 参数 / allows?" --> dperm
   mwauth --> isec
   mwauth --> ionl
@@ -343,7 +349,7 @@ echo "routes:     $(grep -c '" :' src/cljs/com/ruoyi/frontend/router.cljs)"
 | ~src/clj/com/ruoyi/domain/*~ | 领域服务:输入 map、输出 map,可脱离 HTTP 测试 | 通过 ~{:query-fn :db}~ 上下文访问数据库 |
 | ~src/clj/com/ruoyi/web/routes/*~ | Reitit 数据路由 + Swagger 元数据 + Malli 参数 | 每个模块一个文件,在 ~routes/api.clj~ 聚合 |
 | ~src/clj/com/ruoyi/web/controllers/*~ | Ring handler: ~(partial ctrl/fn services)~ 形式注入服务 | 只做参数提取、调用服务、组装响应 |
-| ~resources/sql/*.sql~ | HugSQL 查询(~-- :name~) | 两库通用语法;库特定变体加后缀并在 Clojure 层选择 |
+| ~resources/sql/*.sql~ | HugSQL 查询(~-- :name~) | 两库通用语法;写时间用 ~:now~ (自动注入);库特定变体加后缀并在 Clojure 层选择 |
 | ~resources/migrations{,-sqlite}/~ | Migratus 迁移 | 两目录同名同步维护 |
 | ~env/{dev,prod}/clj/com/ruoyi/env.clj~ | 环境差异(dev 中间件、日志文案) | 通过 ~:extra-paths~ 选择 |
 | ~env/dev/clj/user.clj~ | REPL 助手: ~rd rm rroutes ra rr reset-db migrate~ | 新增领域命名空间时加进 ~reload-domain~ |
@@ -426,7 +432,7 @@ grep -rnE "\[com\.ruoyi\.web" src/clj/com/ruoyi/infra src/clj/com/ruoyi/domain &
 
 ** 6.5 数据模型(由迁移文件推导)
 
-19 张 ~sys_ *~ 表,由 ~resources/migrations* /2024061100xx~ 、 ~202406130005~ 与 ~20260924000002~ ( ~sys_role_dept~ )建立;通用审计列 ~create_by/create_time/update_by/update_time/remark~,逻辑删除用 ~del_flag~,状态用 ~status~ ('0' 正常 / '1' 停用)。
+21 张 ~sys_ *~ 表,由 ~resources/migrations* /2024061100xx~ 、 ~202406130005~ 与模板新增的 ~20260924000002~ ( ~sys_role_dept~ )、 ~20260924000003~ ( ~sys_kv~ )、 ~20260924000004~ ( ~sys_notice_read~ )建立;通用审计列 ~create_by/create_time/update_by/update_time/remark~,逻辑删除用 ~del_flag~,状态用 ~status~ ('0' 正常 / '1' 停用)。时间列由应用写入本地时间文本 ~yyyy-MM-dd HH:mm:ss~ ( ~:now~ ,见 §9.3),DDL 里的 ~DEFAULT CURRENT_TIMESTAMP~ 只是兜底。
 
 #+begin_src mermaid :file img/data-model.svg :exports results
 erDiagram
@@ -444,6 +450,8 @@ erDiagram
   sys_dict_type ||--o{ sys_dict_data : "dict_type"
   sys_job ||--o{ sys_job_log : "job_name+job_group"
   sys_user ||--o{ sys_online : "user_name(逻辑关联)"
+  sys_user ||--o{ sys_notice_read : "user_id"
+  sys_notice ||--o{ sys_notice_read : "notice_id"
   sys_user {
     int user_id PK
     int dept_id FK
@@ -477,6 +485,16 @@ erDiagram
   }
   sys_config { int config_id PK }
   sys_notice { int notice_id PK }
+  sys_notice_read {
+    int user_id PK
+    int notice_id PK
+    string read_time
+  }
+  sys_kv {
+    string k PK "captcha: / login-fail: / login-lock: / grace:"
+    string v
+    int expire_at "毫秒"
+  }
   sys_oper_log { int oper_id PK }
   sys_login_log { int info_id PK }
   sys_form_template { int id PK }
@@ -532,7 +550,7 @@ sequenceDiagram
   B->>API: GET /auth/config
   API-->>B: {captchaEnabled, registerEnabled, demoAccount?(仅 dev/test)}
   opt 开启验证码
-    B->>API: GET /captcha/image?r=uuid(验证码存内存,5 分钟有效)
+    B->>API: GET /captcha/image?r=uuid(验证码存 sys_kv,5 分钟有效)
   end
   B->>E: dispatch [:auth/login {username password captcha? uuid?}]
   E->>API: POST /auth/login
@@ -715,8 +733,8 @@ docker run -e JWT_SECRET=… -e COOKIE_SECRET=… -p 3000:3000 clojure-template
 
 ** 9.1 认证与授权
 - *身份*:登录成功签发 JWT(~infra.security/generate-token~,claims 含 user-id / user-name / roles(角色 id)/ jti(会话 ID)/ iat / exp(Unix 秒,默认 720 分钟,~TOKEN_TTL_MINUTES~)),前端经 ~storage~ 存在 localStorage 并以 ~Authorization: Bearer~ 发送。
-- *会话*:令牌可验签不等于会话有效—— ~wrap-jwt-auth~ 用 ~jti~ 更新 ~sys_online~ 心跳,更新 0 行即视为未登录。登出与强退删除会话行,令牌立即失效(存在数据库里,多实例同样生效);后台线程每 5 分钟删除空闲超过 30 分钟的会话。续期( ~/api/auth/refresh~ )把会话改挂到新 ~jti~,旧令牌在进程内存里记 30 秒宽限,避免与续期并发的请求被误判。
-- *登录保护*:验证码开关( ~CAPTCHA_ENABLED~ ,prod 默认开,开启后空验证码判失败);同一用户名 10 分钟内失败 5 次锁定 10 分钟( ~infra.login-guard~ ,不存在的用户名同样计数);失败提示统一为「用户名或密码错误」,用户不存在时也做一次 bcrypt 校验,响应时间一致;自助注册默认关闭,开启后只接受用户名与密码,新用户不带任何角色。
+- *会话*:令牌可验签不等于会话有效—— ~wrap-jwt-auth~ 用 ~jti~ 更新 ~sys_online~ 心跳,更新 0 行即视为未登录。登出与强退删除会话行,令牌立即失效(存在数据库里,多实例同样生效);后台线程每 5 分钟删除空闲超过 30 分钟的会话。续期( ~/api/auth/refresh~ )把会话改挂到新 ~jti~,旧令牌记 30 秒宽限( ~infra.kv~ 的 ~grace:<jti>~ ,多实例共享),避免与续期并发的请求被误判。
+- *登录保护*:验证码开关( ~CAPTCHA_ENABLED~ ,prod 默认开,开启后空验证码判失败);同一用户名 10 分钟内失败 5 次锁定 10 分钟( ~infra.login-guard~ ,计数与锁存在 ~infra.kv~ ,不存在的用户名同样计数);验证码同样存 ~infra.kv~ ,5 分钟有效、校验一次即作废;失败提示统一为「用户名或密码错误」,用户不存在时也做一次 bcrypt 校验,响应时间一致;自助注册默认关闭,开启后只接受用户名与密码,新用户不带任何角色。
 - *功能权限(按钮级)*:路由用数据声明 ~:auth? true~ (要求登录)与 ~:perms~ (字符串或集合,满足任一); ~web.middleware.auth/authorize~ 是 reitit ~:compile~ 中间件,编译期只包装有声明的路由,运行期未登录 401、缺权限 403。权限集合由 ~domain.system.permission/user-permissions~ *每次请求实时* 计算:用户 → 启用的角色( ~status = '0'~ )→ 角色勾选的菜单/按钮( ~sys_menu.perms~ ,可用逗号写多个,停用菜单不计);角色键 ~admin~ 直接得到通配 ~*:*:*~ 。改角色菜单、停用角色立即生效,无需重新登录;代价是每个受保护请求多一次查询(与会话心跳同量级,需要时可加短时缓存)。 ~getInfo~ 返回同一份 ~permissions~,前端据此隐藏按钮( ~toolbar-button :perm~ 、 ~perm/when-allowed~ )——前端只管显隐,拦截以后端为准。每个接口的标识都登记成按钮菜单(F),迁移 ~20260924000001-add-button-perms~ 补齐了各模块的按钮并新增「文件管理」菜单, ~bb new-module~ 生成的模块同样带 ~biz:<模块>:list/query/add/edit/remove~ 。
 - *数据权限*:角色 ~data_scope~ (1 全部 / 2 自定义部门,存 ~sys_role_dept~ / 3 本部门 / 4 本部门及以下 / 5 仅本人)由 ~domain.system.data-scope~ 计算成可见范围 ~{:all? true}~ 或 ~{:dept-ids #{..} :self-id ..}~,多个角色取并集,admin 或任一「全部」不过滤;下级部门按 ~parent_id~ 遍历(不依赖 ~ancestors~ 字段)。查询时转成固定的 SQL 参数( ~:scope_all~ ~:scope_dept_ids~ ~:scope_user_id~ ),SQL 里写死 ~AND (:scope_all = 1 OR u.dept_id IN (:v*:scope_dept_ids) OR u.user_id = :scope_user_id)~ ,不拼接 SQL 字符串,两库通用。已接入用户管理:列表与导出按范围过滤;详情、修改、删除、改状态、重置密码、分配角色先检查目标用户在范围内,新增 / 修改时目标部门也必须在范围内,否则 403。部门、角色等其它列表不做数据过滤(与若依的默认一致,需要时照用户管理的写法接入)。
 
@@ -736,7 +754,9 @@ echo "前端按权限显隐的位置: $(grep -rho 'perm/when-allowed\|:perm \"' 
 - 两套迁移目录同名同步;DDL 差异(自增、时间类型)分别处理。
 - 共用 SQL 只用两库都支持的语法(~INSTR~ 代替 ~||~ 拼接, ~LIMIT :size OFFSET :offset~)。
 - 函数名不同(~last_insert_rowid()~ vs ~LAST_INSERT_ID()~)提供命名变体,由 ~infra.db/detect-db-type~ 在 Clojure 层选择;元数据查询(~PRAGMA~ / ~information_schema~)也在 Clojure 层分支。
-- ~infra.datasource~ 让连接池可在运行时热切换,用于"连接池监视/数据源切换"演示与测试。
+- *时间由应用生成*:SQLite 的 ~CURRENT_TIMESTAMP~ 是 UTC、MySQL 是会话时区,所以共用 SQL 一律写 ~:now~ ; ~infra.clock/with-now~ 包在 query-fn 外层,每次调用自动注入 JVM 默认时区的本地时间( ~yyyy-MM-dd HH:mm:ss~ ,调用方传了 ~:now~ 则不覆盖)。 ~bb lint:migrations~ 禁止 ~resources/sql~ 里出现 ~CURRENT_TIMESTAMP~ / ~NOW()~ / ~datetime(~ / ~||~ 。
+- *接口里的时间统一编码*:MySQL 驱动返回 ~Timestamp~ / ~java.time~ 对象,SQLite 返回文本; ~infra.json~ (jsonista,muuntaja 与兜底响应共用)把各种时间类型都编码成本地 ~yyyy-MM-dd HH:mm:ss~ (日期 ~yyyy-MM-dd~ ),前端在两库上拿到的一样。
+- ~infra.datasource~ 让连接池可在运行时热切换,用于"连接池监视/数据源切换"演示与测试(换库后按 query-fn 实际加载的 SQL 文件清单重新绑定)。
 
 可执行:两套迁移目录必须成对:
 
@@ -761,6 +781,32 @@ diff <(ls resources/migrations-sqlite | sed 's/\.\(up\|down\)\.sql$//' | sort -u
 - 操作日志:参数里的 password / token / secret 类字段打码后再入库。
 - 文件类型与大小:上传先按 ~:upload-config~ (扩展名白名单,默认不含可执行文件与 HTML/SVG;单文件上限 ~UPLOAD_MAX_MB~ ,默认 10MB)校验;头像只收常见图片、最大 2MB,保存在 ~uploads/avatar/~ ,经公开接口 ~/api/common/avatar/<名字>~ 访问(只读该目录里的图片, ~<img>~ 带不了令牌)。请求体整体大小请在反向代理上限制。
 - 前端错误处理:所有请求走 ~api.transport~ 。带令牌的请求收到 401(HTTP 状态或业务码)触发 ~:auth/session-expired~ 回登录页;其它失败(403、5xx、网络断开、HTTP 200 但业务码非 200)派发 ~:api/error~ :弹出后端的 ~msg~ (相同文案只显示一条,文案规则在 ~api.errors~ )并把各模块的 ~:loading?~ 复位。调用方的 ~on-error~ 只做收尾;后台请求用 ~:silent? true~ 。带令牌下载走 ~t/download!~ (fetch → blob),业务错误的 JSON 不会被存成文件。
+
+** 9.7 多实例部署与共享状态
+
+多个实例连同一个 MySQL、放在负载均衡后面即可,不需要会话粘滞或 Redis。各实例需要相同的 ~JWT_SECRET~ 、 ~COOKIE_SECRET~ 与 ~TZ~ (时间按 JVM 默认时区生成与编码)。
+
+| 状态 | 存放 | 多实例 |
+|------+------+--------|
+| 会话 / 在线用户 | ~sys_online~ | 共享 |
+| 验证码(5 分钟,一次性) | ~sys_kv~ ~captcha:<uuid>~ | 共享 |
+| 登录失败计数与锁定 | ~sys_kv~ ~login-fail:<用户>~ / ~login-lock:<用户>~ | 共享 |
+| 续期宽限(30 秒) | ~sys_kv~ ~grace:<旧 jti>~ | 共享 |
+| 按钮权限、数据范围 | 每次请求查库,不缓存 | 共享 |
+| 通知已读 | ~sys_notice_read~ | 共享 |
+| 定时任务调度 | Quartz 内存存储(进程内) | *不共享*:每个实例都会触发同一个任务;在某个实例上新增 / 修改 / 暂停任务只影响该实例的调度器 |
+| 缓存监控页的数据、函数调用追踪、连接池热切换 | 进程内 atom | 各实例各一份(运维 / 演示功能) |
+
+~infra.kv~ 是一个小协议( ~Store~ :取、写、删、清过期、按前缀删),系统启动时由 ~:app.system/online-service~ 切到数据库实现(表 ~sys_kv~ ),停止后切回进程内存,单元测试与 REPL 不起系统也能用。写入先 ~UPDATE~ 再 ~INSERT~ ,两个实例同时插入同一个键撞主键时再 ~UPDATE~ 一次,不依赖两库不同的 UPSERT 语法。需要 Redis 时实现同一个协议即可。
+
+定时任务要在多实例下运行,两种做法:① 改用 Quartz 的 JDBC JobStore 集群模式( ~org.quartz.jobStore.isClustered = true~ ,两套迁移各加 ~QRTZ_*~ 表),任务由集群里的一个实例执行、变更对所有实例生效;② 只让一个实例调度,其它实例的 ~controllers.job~ 只改 ~sys_job~ 表、不操作本地调度器,再由调度实例定期按表重新加载。模板没有内置任何一种(§13 #5)。
+
+可执行:共享状态的使用点与剩余的进程内状态
+
+#+begin_src sh :exports both
+echo "使用 infra.kv 的命名空间:"; grep -rl "infra.kv :as kv" src/clj | sed 's|src/clj/com/ruoyi/||' | sort
+echo "进程内 defonce:"; grep -rn "^(defonce" src/clj | sed 's|src/clj/com/ruoyi/||' | cut -d: -f1 | sort | uniq -c
+#+end_src
 
 * 10. 扩展指南
 
@@ -854,9 +900,9 @@ bb ci                            # lint + fmt:check + test,确认改名后一切
 | 层 | 工具 | 命令 | 说明 |
 |----+------+------+------|
 | 单元 / 集成 | clojure.test + peridot + ~test_utils~ | ~bb test~ | 起一套 :test profile 的 Integrant 系统(独立 ~test.db~ 、端口 3100/7100),控制器测试走真实路由与中间件;测试进程里 bcrypt 用最低强度,整套约 30 秒 |
-| 前端单元 | cljs.test + shadow-cljs ~:node-test~ | ~bb test:cljs~ | ~test/cljs~ 下的纯函数:路由表、令牌续期时机、失败提示文案、按钮权限判断、storage、i18n、Tab 与菜单派生、loading 复位与未读数 |
+| 前端单元 | cljs.test + shadow-cljs ~:node-test~ | ~bb test:cljs~ | ~test/cljs~ 下的纯函数:路由表、令牌续期时机、失败提示文案、按钮权限判断、storage、i18n、Tab 与菜单派生、loading 复位 |
 | 双库 | MySQL 8.4 | ~bb test:mysql~ | docker compose(3308)或 ~JDBC_URL~ ;每次先清空库 |
-| 迁移 | Migratus | ~bb db:roundtrip~ 、 ~bb lint:migrations~ | up → down → up 后表数一致、无待执行迁移;两目录成对、有 down、 ~--;;~ 分隔、无对方方言 |
+| 迁移 | Migratus | ~bb db:roundtrip~ 、 ~bb lint:migrations~ | up → down → up 后表数一致、无待执行迁移;两目录成对、有 down、 ~--;;~ 分隔、无对方方言;共用查询里没有取当前时间的函数与 ~||~ |
 | 端到端 | Playwright | ~bb e2e~ | 需后端已在 3000 运行;串行(共享 SQLite)。覆盖登录与会话、导航、岗位 CRUD、按钮权限与数据范围、列表搜索、顶部工具 |
 | 静态检查 | clj-kondo 2026.08 | ~bb lint:kondo~ | warning 即失败(配置 ~.clj-kondo/config.edn~ );没装二进制时自动用 pod |
 | 格式 | cljfmt 0.16 | ~bb fmt:check~ / ~bb fmt~ | 配置 ~.cljfmt.edn~ ;编辑器用 ~.editorconfig~ / clojure-lsp 同一套规则 |
@@ -945,21 +991,21 @@ bb lint:migrations 2>&1 | tail -1
 | 2 | 数据权限接入 SQL | *已解决*(ADR-010): ~domain.system.data-scope~ + 固定写法的 SQL 参数,已接入用户管理(列表、导出、单条读写);自定义部门存 ~sys_role_dept~ 。其它按部门归属的业务表需要时照此接入 | 业务表加 ~dept_id~ / ~create_by~ 列后复用 ~sql-params~ 与 ~allows?~ | ~domain/system/data_scope.clj~ |
 | 3 | 前端统一错误处理 | *已解决*(ADR-010): ~api.transport~ 对 403 / 5xx / 网络断开 / 业务码非 200 统一提示并复位 loading;带令牌下载统一走 ~t/download!~ | — | — |
 | 4 | 生产安全默认值 | *已解决*:prod 密钥强制(ADR-008);CORS 改为白名单(ADR-009) | — | — |
-| 5 | 多实例部署 | 会话已在数据库(登出 / 强退 / 空闲超时跨实例生效);仍在进程内存:验证码、登录失败计数、续期宽限表、缓存监控 | 多实例时把 ~captcha-store~ 、 ~infra.login-guard~ 、 ~infra.online~ 的宽限表、 ~infra.cache~ 换成 Redis 等共享存储(先抽协议) | ~controllers/captcha.clj~ ~infra/login_guard.clj~ ~infra/online.clj~ ~infra/cache.clj~ |
-| 6 | 未使用的 edge | ~:templating/selmer~ 已装配但无模板; ~:cronut/scheduler~ 的 ~:schedule []~ 由 ~infra.scheduler~ 动态填充 | 不做服务端渲染可删 selmer 依赖与组件 | ~core.clj~ ~system.edn~ ~deps.edn~ |
+| 5 | 多实例部署 | *基本解决*(ADR-011):会话、验证码、登录失败计数与锁定、续期宽限都在数据库( ~sys_online~ / ~sys_kv~ ),多实例共享;仍在进程内:Quartz 调度(每个实例都会触发)、缓存监控演示数据 | 定时任务改用 Quartz JDBC JobStore 集群模式,或只让一个实例调度(§9.7) | ~infra/scheduler.clj~ ~domain/system.clj~ ~controllers/job.clj~ |
+| 6 | 未使用的依赖 | *已解决*(ADR-011):删除 selmer(组件与依赖)、cheshire(JSON 统一用 jsonista)、clj-time、buddy-auth、kit-postgres; ~:cronut/scheduler~ 的 ~:schedule []~ 由 ~infra.scheduler~ 动态填充,保留 | — | — |
 | 7 | 两套代码生成 | 页面内生成器已修正(路径随命名空间、deploy 仅 dev、两库迁移、文件名下划线,ADR-009),但模板与 ~bb new-module~ 是两套,风格不一致 | 长期把页面生成器改为调用 ~bb/tasks/scaffold~ 的模板(按已有表结构生成字段规格) | ~domain/gen.clj~ ~controllers/gen.clj~ |
 | 8 | 静态检查遗留 | *已解决*(ADR-008) | 保持零 warning | ~.clj-kondo/config.edn~ |
 | 9 | 文档站 | *已解决*:标题、快速开始与目录已更新为模板与 bb 命令 | — | ~docs/index.html~ |
 | 10 | 验证码可绕过 | *已解决*(ADR-009):开启时空验证码判失败;E2E 在 dev profile(默认关闭)下运行 | — | — |
-| 11 | 时间戳时区 | SQLite ~CURRENT_TIMESTAMP~ 写的是 UTC,前端按本地时间解析 → 仪表盘"最近操作"显示"8 小时前" | 统一用 Clojure 层生成 ~yyyy-MM-dd HH:mm:ss~ 本地时间传参(两库一致),或前端按 UTC 解析 | ~resources/sql/*.sql~ ~middleware/operlog.clj~ ~pages/dashboard.cljs~ |
+| 11 | 时间戳时区 | *已解决*(ADR-011):SQL 用 ~:now~ (应用生成的本地时间,自动注入),lint 禁止在共用查询里取当前时间;接口里的时间统一编码为 ~yyyy-MM-dd HH:mm:ss~ 。升级前写进开发库的旧记录仍是 UTC,重建开发库( ~bb dev --reset-db~ )即可 | 部署时统一 ~TZ~ | — |
 | 12 | 脚手架生成的路由只校验登录 | *已解决*(ADR-010):生成的路由声明 ~biz:<模块>:list/query/add/edit/remove~ ,迁移生成对应按钮菜单并授权 admin,页面按权限显示按钮 | — | — |
 | 13 | MySQL 需要手动设 ~MIGRATION_DIR~ | *已解决*(ADR-009):按 ~JDBC_URL~ 推导 | — | ~config.clj~ |
 | 14 | 业务页面文案 | 外壳已国际化( ~i18n/tr~ ),业务页面与后端返回的 ~msg~ 仍是中文 | 页面逐个把字面量包进 ~tr~ 并补 ~en-US~ 词条;后端 ~msg~ 改为错误码 + 前端翻译 | ~pages/*.cljs~ ~i18n.cljs~ ~controllers/*.clj~ |
-| 15 | 暗色主题细节 | 页面颜色已改用 ~--app-*~ 变量;少数写在条件表达式里的颜色、工具栏按钮的浅色底、登录页固定配色仍按浅色设计 | 继续把残留的十六进制颜色换成变量;按钮配色改用 antd token | ~components/page_toolbar.cljs~ ~pages/*.cljs~ |
-| 16 | 头部占位按钮 | *已解决*:搜索 = 在当前用户可访问的页面里搜索并跳转;文档 = ~config/docs-url~ ;铃铛 = 最新 5 条已发布通知 + 本浏览器未读数(不做服务端已读回执) | 需要按用户的已读状态时加 ~sys_notice_read~ 表 | ~pages/layout/header_tools.cljs~ |
+| 15 | 暗色主题细节 | *大部分解决*(ADR-011):工具栏按钮改用 ~--app-btn-*~ 变量(亮 / 暗两套),部门树选中、错误详情、组件依赖图、缓存图表、错误边界、顶部导航、布局设置面板的固定颜色已换成变量;剩下的十六进制颜色是两种主题下都可读的强调色(图表、标签、主题色板)与登录页的固定配色 | 新写的页面只用变量;登录页需要随主题变化时同样改成变量 | ~resources/public/css/app.css~ ~pages/login.cljs~ |
+| 16 | 头部占位按钮 | *已解决*:搜索 = 在当前用户可访问的页面里搜索并跳转;文档 = ~config/docs-url~ ;铃铛 = 最新 5 条已发布通知 + 当前用户的未读数(按用户记录已读,见 #19) | — | — |
 | 17 | 上传限制 | *已解决*:扩展名白名单 + 单文件大小上限( ~:upload-config~ / ~UPLOAD_MAX_MB~ / ~UPLOAD_EXTENSIONS~ ),头像只收图片;请求体整体上限仍需反向代理 | 需要在应用内限制请求体时给 Undertow 配 ~max-entity-size~ | ~infra/files.clj~ ~system.edn~ |
 | 18 | 权限查询无缓存 | 每个受保护请求实时查一次「用户 → 角色 → 菜单 perms」(与会话心跳同量级),换来改角色立即生效 | 请求量大时加几秒的进程内缓存(按用户 ID),并在角色/菜单变更时清除;多实例时注意缓存一致性 | ~domain/system/permission.clj~ |
-| 19 | 用户已读状态 | 铃铛的「未读」记在浏览器 localStorage,换设备会重新显示 | 加 ~sys_notice_read~ (user_id, notice_id)与「标记已读」接口 | ~controllers/system/notice.clj~ ~events/notices.cljs~ |
+| 19 | 用户已读状态 | *已解决*(ADR-011): ~sys_notice_read~ (user_id, notice_id);关闭铃铛面板时 ~PUT /api/system/notice/read-all~ 把已发布通知全部标为已读,换设备、刷新后保持 | 需要逐条已读时加 ~PUT /notice/read/{id}~ | ~controllers/system/notice.clj~ ~events/notices.cljs~ |
 
 可执行:设计债 1/2/3 的接入指标(都应非 0)
 
@@ -970,7 +1016,7 @@ printf "统一错误事件派发   %s\n" "$(grep -c ':api/error' src/cljs/com/ru
 #+end_src
 
 ** ADR-007 依赖升级到 2026-09 最新稳定版
-- *决策*:后端 27 个坐标、前端 9 个 npm 包与 re-frame 一次性升到最新稳定版(不取 alpha/beta/rc):Clojure 1.12.6、Reitit 0.11.0、Ring 1.15.5、Malli 0.20.1、Cheshire 6.2.0、Logback 1.6.3、HikariCP 7.1.0、Quartz 2.5.2、sqlite-jdbc 3.53.4.0、MySQL Connector/J 26.7.0(MySQL 自 2026-07 起改用年份版本号)、tools.build 0.10.14、nREPL 1.7.0 / cider-nrepl 0.62.2;shadow-cljs 3.5.3、re-frame 1.4.7、React 19.3.0、antd 6.6.5、@ant-design/icons 6.3.4、dayjs 1.11.23、Playwright 1.63.0;Docker 镜像换成 temurin 21。未升级:Kit 全家桶、Buddy、Reagent 2.0.1、cljs-ajax 0.8.4、bidi 均已是最新;移除未使用的 ~venantius/accountant~ 。
+- *决策*:后端 27 个坐标、前端 9 个 npm 包与 re-frame 一次性升到最新稳定版(不取 alpha/beta/rc):Clojure 1.12.6、Reitit 0.11.0、Ring 1.15.5、Malli 0.20.1、Cheshire 6.2.0(后由 ADR-011 移除)、Logback 1.6.3、HikariCP 7.1.0、Quartz 2.5.2、sqlite-jdbc 3.53.4.0、MySQL Connector/J 26.7.0(MySQL 自 2026-07 起改用年份版本号)、tools.build 0.10.14、nREPL 1.7.0 / cider-nrepl 0.62.2;shadow-cljs 3.5.3、re-frame 1.4.7、React 19.3.0、antd 6.6.5、@ant-design/icons 6.3.4、dayjs 1.11.23、Playwright 1.63.0;Docker 镜像换成 temurin 21。未升级:Kit 全家桶、Buddy、Reagent 2.0.1、cljs-ajax 0.8.4、bidi 均已是最新;移除未使用的 ~venantius/accountant~ 。
 - *验证*: ~clojure -M:test~ 350/860 全过; ~shadow-cljs compile/release~ 0 warnings;Playwright auth / navigation(19)/ post-crud 全过;登录后遍历 6 个页面浏览器控制台 0 warning/error。
 - *注意*:HikariCP 7 与 Quartz 2.5 是通过顶层坐标覆盖 kit-sql-conman(hikari-cp 3.0.1 → HikariCP 5)与 cronut(Quartz 2.3)的传递依赖, ~clojure -Stree~ 可见 ~:use-top~;若 Kit 后续升级请以 Kit 的版本为准。顺手修正 SQLite ~create-sys-notice~ 迁移缺少 ~--;;~ 分隔符导致的 Migratus 警告。
 
@@ -1023,18 +1069,44 @@ printf "统一错误事件派发   %s\n" "$(grep -c ':api/error' src/cljs/com/ru
   - 登录日志页的「解锁」只弹成功提示、不做任何事;定时任务的暂停 / 恢复走普通更新接口,调度器状态不变;文件管理的下载链接不带令牌(401);头部对所有用户都显示「管理员」;新建用户的 ~create_by~ 永远为空(读错 identity 键)。
 - *验证*: ~bb test~ 374 tests / 1069 assertions 在 SQLite 与 MySQL 8.0 上全过(新增:鉴权中间件、权限计算、数据范围纯函数与 HTTP 端到端、用户资料不再破坏密码、头像上传与公开访问、列表筛选生效);两库迁移往返通过; ~bb test:cljs~ 22 tests / 77 assertions;release 0 warning;Playwright 32 个用例连续 2 轮零失败(新增只读用户看不到增删改按钮且越权接口统一提示、角色自定义数据范围勾选回显、列表搜索、菜单搜索与通知铃铛);脚手架冒烟(生成模块后 lint / 格式 / 测试 / 两库往返 / 编译 / E2E)通过,生成的按钮菜单出现在 getInfo 里。
 
+** ADR-011 时间由应用生成、临时状态落库、通知已读按用户、JSON 只用一套
+- *背景*:
+  - SQLite 的 ~CURRENT_TIMESTAMP~ 是 UTC,MySQL 是会话时区;接口里 SQLite 返回文本、MySQL 返回 ISO UTC 字符串,仪表盘「最近操作」显示「8 小时前」。
+  - 验证码、登录失败计数、续期宽限在进程内存,多实例部署时各实例各算各的。
+  - 铃铛的未读数存在浏览器里,换设备会重新出现。
+  - 依赖里有从没用到的 selmer、clj-time、buddy-auth、kit-postgres,JSON 同时用 cheshire 与 jsonista(muuntaja 自带)。
+- *决策*:
+  - *时间*: ~infra.clock/with-now~ 包在 query-fn 外层,每次调用注入 ~:now~ (JVM 默认时区的 ~yyyy-MM-dd HH:mm:ss~ ); ~resources/sql~ 全部改用 ~:now~ ,脚手架生成的 SQL 也一样, ~bb lint:migrations~ 禁止在共用查询里取当前时间。没有选「前端按 UTC 解析」:MySQL 返回的本来就是会话时区的时间,只有在应用侧统一才能两库一致;库里存人能直接读的本地时间,导出与排查 SQL 都方便。代价是各实例与数据库主机要用同一个时区( ~TZ~ )。
+  - *JSON*: ~infra.json~ 是后端唯一的 JSON 入口(jsonista),muuntaja、兜底响应、异常响应、操作日志都用同一个 mapper; ~Timestamp~ / ~Date~ / ~java.time~ 一律编码为本地 ~yyyy-MM-dd HH:mm:ss~ ,日期为 ~yyyy-MM-dd~ 。
+  - *共享临时状态*: ~infra.kv~ ( ~Store~ 协议,内存与数据库两种实现)+ 表 ~sys_kv(k, v, expire_at 毫秒)~ 。验证码(一次性 ~take!~ )、登录失败计数与锁定、续期宽限改用它;过期键由会话清理线程每 5 分钟删除。没有选 Redis:模板的定位是「一个数据库就能跑」,这些数据量小、只在登录与续期时写;需要时实现同一个协议即可换成 Redis。
+  - *通知已读*:新表 ~sys_notice_read(user_id, notice_id, read_time)~ 。 ~GET /notice/latest~ 返回最新 5 条(带 ~is_read~ )与未读数;关闭铃铛面板时 ~PUT /notice/read-all~ 把已发布的通知全部标为已读;删除通知时一并删除已读记录。前端不再在 localStorage 里记已读时间。
+  - *清理*:删除 selmer(组件与依赖)、cheshire、clj-time、buddy-auth、kit-postgres。暗色主题下,工具栏按钮配色改为 ~--app-btn-*~ 变量(亮 / 暗两套),下列位置的固定颜色也换成了变量:部门树选中项、错误详情、组件依赖图、缓存环形图、错误边界、顶部导航、布局设置面板。删除布局右下角遗留的「LA」浮动徽标,页脚文字改为取 ~config/footer-text~ 。
+- *附带修复*:
+  - ~swap-db!~ 重新加载查询时引用了不存在的 ~sql/business.sql~ ,现在按 query-fn 实际加载的文件清单。
+  - ~get-notice~ 给 query-fn 多传了一个参数,通知详情接口报错。
+  - 「数据监控」菜单的图标缺失。
+  - 健康检查的时间改为与其它接口相同的格式。
+- *验证*:
+  - ~bb test~ 在 SQLite 与 MySQL 8.0 上都是 383 tests / 1110 assertions 全过。新增的测试覆盖 clock、kv 的两种实现与跨实例共享、各种时间类型的 JSON 编码(含 muuntaja 路径)、通知已读,以及写入的 ~create_time~ 是本地时间。
+  - 两库迁移往返均为 21 张表; ~bb test:cljs~ 21 tests / 73 assertions;release 0 warning。
+  - Playwright 32 个用例连续 2 轮零失败:铃铛面板关闭后未读消失,刷新后仍是已读。
+  - 脚手架冒烟通过:生成模块后跑 lint、格式检查,生成的测试在两库上都过,两库往返也通过。
+  - uberjar 构建成功,以 prod profile 启动后健康检查返回本地格式的时间。
+  - 暗色主题截图检查。
+- *未做*:定时任务的多实例调度(§9.7、§13 #5)、业务页面国际化(#14)、两套代码生成器合并(#7)。
+
 * 附录 A:模板与源项目的差异清单
 
 | 类别 | 已删除 | 已新增 / 修改 |
 |------+--------+---------------|
-| 后端 | ~domain/{synthetic,formal_backend}.clj~ 、 ~infra/synthetic_scheduler.clj~ 、 ~web/{controllers,routes}/{synthetic,formal_backend}.clj~ | ~core.clj~ / ~routes/api.clj~ / ~system.edn~ 去引用,并留出模块登记点注释 |
+| 后端 | ~domain/{synthetic,formal_backend}.clj~ 、 ~infra/synthetic_scheduler.clj~ 、 ~web/{controllers,routes}/{synthetic,formal_backend}.clj~ | ~core.clj~ / ~routes/api.clj~ / ~system.edn~ 去引用,并留出模块登记点注释;模板新增 ~infra/{clock,kv,json}.clj~ (ADR-011) |
 | 前端 | ~api/{synthetic,formal}.cljs~ 、 ~pages/{synthetic,formal}/*~ | ~config.cljs~ (品牌); ~router~ / ~menu_data~ / ~page_view~ / ~events/common~ / ~api.cljs~ 去引用; ~db.cljs~ 删除废弃的 ~:projects~ 状态 |
-| 数据 | ~sql/synthetic.sql~ 、源项目的 ~2026092*~ 迁移、 ~2024061300[1-4]~ / ~202606150002~ / ~202606150010~ 业务迁移 | MySQL ~20260613215630-add-notice-content~ ;模板新增 ~20260924000001-add-button-perms~ (按钮菜单)、 ~20260924000002-create-sys-role-dept~ (自定义数据范围) |
-| 配置 | ~deps.edn~ 外部 ~:paths~ 、 ~jarohen/chime~ 、未使用的 ~h2~; ~deps-cov.edn~; ~formal-backend.edn(.example)~; ~deploy.sh~ (含固定主机) | ~.gitignore~ 重写 |
+| 数据 | ~sql/synthetic.sql~ 、源项目的 ~2026092*~ 迁移、 ~2024061300[1-4]~ / ~202606150002~ / ~202606150010~ 业务迁移 | MySQL ~20260613215630-add-notice-content~ ;模板新增 ~20260924000001-add-button-perms~ (按钮菜单)、 ~20260924000002-create-sys-role-dept~ (自定义数据范围)、 ~20260924000003-create-sys-kv~ (共享临时状态)、 ~20260924000004-create-sys-notice-read~ (通知已读);共用查询的时间改为 ~:now~ |
+| 配置 | ~deps.edn~ 外部 ~:paths~ 、 ~jarohen/chime~ 、未使用的 ~h2~ 、 ~selmer~ 、 ~cheshire~ 、 ~clj-time~ 、 ~buddy-auth~ 、 ~kit-postgres~; ~deps-cov.edn~; ~formal-backend.edn(.example)~; ~deploy.sh~ (含固定主机) | ~.gitignore~ 重写 |
 | 文档 | ~GAP_ANALYSIS.md~ ~REMAINING.md~ ~ROADMAP.md~ ~test/coverage-report.md~ ~docs/pic-field-checklist.md~;README 合成流量章节 | README 重写为模板说明; ~CLAUDE.md~ 指向本文;本文 |
 | 工具 | ~.beads/~ ~.agents/~ ~.claude/settings.json~ (issue 跟踪钩子)、 ~test-frontend.mjs~ 、 ~Makefile~ 、 ~start_dev.sh~ 、 ~scripts/*.sh~ / ~*.py~ (由 bb 任务取代) | ~bb.edn~ + ~bb/tasks/~ ( ~dev~ / ~lint~ / ~rename~ / ~new-module~ )、 ~.github/workflows/ci.yml~ 、 ~docker-compose.yml~ 、 ~scripts/db.clj~ 、 ~LICENSE~ 、 ~.editorconfig~ 、 ~.cljfmt.edn~ 、 ~.clj-kondo/config.edn~ |
 | 测试 | ~synthetic_profile_test.clj~ 、 ~synthetic-profile.spec.js~ 、 ~formal-pages.spec.js~ | ~navigation.spec.js~ / ~post-crud.spec.js~ 修正 |
-| 修复 | | ~middleware/operlog.clj~ 操作人解析;MySQL notice_content 迁移; ~routes/system.clj~ 拆分;注册提权、文件上传下载目录穿越、令牌永不过期、登出不失效等安全问题(ADR-009);修改用户后无法登录、个人资料越权修改、头像路径穿越、列表搜索失效等问题(ADR-010) |
+| 修复 | | ~middleware/operlog.clj~ 操作人解析;MySQL notice_content 迁移; ~routes/system.clj~ 拆分;注册提权、文件上传下载目录穿越、令牌永不过期、登出不失效等安全问题(ADR-009);修改用户后无法登录、个人资料越权修改、头像路径穿越、列表搜索失效等问题(ADR-010);两库时间不一致、多实例状态不共享、通知详情报错等问题(ADR-011) |
 
 * 附录 B:术语
 

@@ -79,8 +79,3 @@
                  acc))
              db
              db))
-
-(defn unread-count
-  "铃铛角标:比上次查看时最新的一条更新的通知数(notice_id 自增)。"
-  [items seen-id]
-  (count (filter #(> (:notice_id %) (or seen-id 0)) items)))

@@ -44,7 +44,7 @@
   "显示可点击的缩略设置卡片。"
   [label selected? child on-click]
   [:div {:style {:display "flex" :flexDirection "column" :gap 8 :alignItems "center"
-                 :cursor "pointer" :color (if selected? "#409eff" "#606266")
+                 :cursor "pointer" :color (if selected? "#409eff" "var(--app-text-regular)")
                  :fontSize 12}
          :on-click on-click}
    child
@@ -53,7 +53,7 @@
 (defn- section-title
   "绘制分组标题。"
   [text]
-  [:div {:style {:fontSize 16 :fontWeight 700 :color "#303133" :margin "0 0 18px"}}
+  [:div {:style {:fontSize 16 :fontWeight 700 :color "var(--app-text-primary)" :margin "0 0 18px"}}
    text])
 
 (defn- switch-style-overrides
@@ -66,7 +66,7 @@
   "绘制一行开关设置。"
   [label checked? on-change]
   [:div {:style {:display "flex" :alignItems "center" :justifyContent "space-between"
-                 :height 42 :fontSize 14 :color "#606266"}}
+                 :height 42 :fontSize 14 :color "var(--app-text-regular)"}}
    [:span label]
    [:> Switch {:checked checked? :onChange on-change}]])
 
@@ -86,7 +86,7 @@
   "绘制主题颜色选择控件。"
   [primary-color]
   [:div {:style {:display "flex" :alignItems "center" :justifyContent "space-between"
-                 :height 44 :fontSize 14 :color "#606266"}}
+                 :height 44 :fontSize 14 :color "var(--app-text-regular)"}}
    [:span "主题颜色"]
    [:> Space {:size 8}
     (for [color theme-colors]
@@ -136,7 +136,7 @@
      [setting-row "持久化标签页" (:cache-tags? settings) #(set-layout! :cache-tags? %)]
      [setting-row "显示页签图标" (:show-tab-icon? settings) #(set-layout! :show-tab-icon? %)]
      [:div {:style {:display "flex" :alignItems "center" :justifyContent "space-between"
-                    :height 46 :fontSize 14 :color "#606266"}}
+                    :height 46 :fontSize 14 :color "var(--app-text-regular)"}}
       [:span "标签页样式"]
       [:> Segmented {:value (:tab-style settings)
                      :onChange #(set-layout! :tab-style %)

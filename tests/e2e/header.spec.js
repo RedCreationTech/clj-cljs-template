@@ -12,7 +12,7 @@ test.describe('顶部工具', () => {
     await expect(page.getByText('岗位名称').first()).toBeVisible();
   });
 
-  test('通知铃铛:新发布的通知显示未读数,打开后清零', async ({ page }) => {
+  test('通知铃铛:新发布的通知显示未读数,看过后清零(按用户记在后端)', async ({ page }) => {
     await login(page);
     const token = await page.evaluate(() => localStorage.getItem('ruoyi_token'));
     const title = `E2E 通知 ${Date.now()}`;
@@ -25,6 +25,11 @@ test.describe('顶部工具', () => {
     await expect(bell.locator('.ant-badge-count')).toBeVisible({ timeout: 10000 });
     await bell.getByRole('button').click();
     await expect(page.getByText(title)).toBeVisible();
+    // 关闭弹层时记为已读,刷新后仍为 0(已读状态在服务端)
+    await bell.getByRole('button').click();
     await expect(bell.locator('.ant-badge-count')).toHaveCount(0);
+    await page.reload();
+    await page.locator('.ant-layout-sider').first().waitFor();
+    await expect(page.locator('.ant-layout-header .ant-badge .ant-badge-count')).toHaveCount(0);
   });
 });

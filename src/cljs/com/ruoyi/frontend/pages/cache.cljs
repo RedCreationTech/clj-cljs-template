@@ -101,14 +101,14 @@
                    :justifyContent "center"
                    :flexDirection "column"}}
      [:svg {:width 240 :height 240 :viewBox "0 0 240 240"}
-      [:circle {:cx 120 :cy 120 :r 84 :fill "none" :stroke "#e4e7ed" :strokeWidth 30}]
+      [:circle {:cx 120 :cy 120 :r 84 :fill "none" :stroke "var(--app-border-light)" :strokeWidth 30}]
       [:circle {:cx 120 :cy 120 :r 84 :fill "none" :stroke "#67c23a" :strokeWidth 30
                 :strokeLinecap "round"
                 :strokeDasharray (str dash " 264")
                 :transform "rotate(-90 120 120)"}]
-      [:text {:x 120 :y 112 :textAnchor "middle" :fontSize 28 :fill "#303133" :fontWeight 600}
+      [:text {:x 120 :y 112 :textAnchor "middle" :fontSize 28 :fill "var(--app-text-primary)" :fontWeight 600}
        (str (.toFixed (js/Number. percent) 1) "%")]
-      [:text {:x 120 :y 140 :textAnchor "middle" :fontSize 13 :fill "#909399"}
+      [:text {:x 120 :y 140 :textAnchor "middle" :fontSize 13 :fill "var(--app-text-secondary)"}
        (str used "M / " total "M")]]
      [:div {:style {:fontSize 12 :color "var(--app-text-secondary)"}} "内存使用率"]]))
 
@@ -163,7 +163,7 @@
              :footer nil
              :onCancel #(rf/dispatch [:cache/close-value])
              :style {:width 560}}
-   [:pre {:style {:background "#f6f8fa"
+   [:pre {:style {:background "var(--app-fill)"
                   :padding 16
                   :borderRadius 4
                   :maxHeight 400

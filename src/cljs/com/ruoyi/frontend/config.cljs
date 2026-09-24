@@ -21,3 +21,7 @@
 (def docs-url
   "顶部工具栏「文档」图标跳转的地址。"
   (str repo-url "#readme"))
+
+(def footer-text
+  "主布局底部版权栏。"
+  "Copyright © 2018-2026 RuoYi. All Rights Reserved.")

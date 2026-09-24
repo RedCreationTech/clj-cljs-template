@@ -1,7 +1,6 @@
 (ns com.ruoyi.frontend.subs.config
   "re-frame 订阅：个人中心/字典/参数/操作日志/登录日志/通知公告(含顶部铃铛)/首页仪表盘。"
   (:require
-   [com.ruoyi.frontend.events.common :as ec]
    [re-frame.core :as rf]))
 
 ;; ─── 个人中心 ──────────────────────────────────────────────────────
@@ -128,4 +127,4 @@
 
 (rf/reg-sub :notice-bell/unread
             (fn [db _]
-              (ec/unread-count (get-in db [:notice-bell :items]) (get-in db [:notice-bell :seen-id]))))
+              (get-in db [:notice-bell :unread] 0)))

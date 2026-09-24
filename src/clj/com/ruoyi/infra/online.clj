@@ -7,19 +7,17 @@
   - 空闲超时:后台每 5 分钟删除 idle-timeout-ms 内没有请求的会话;
   - 登出 / 强退:删除会话,令牌立即失效(存在数据库里,多实例部署同样生效);
   - 续期:rotate! 把会话改挂到新令牌的 jti 上,旧令牌在 rotate-grace-ms 宽限期内仍可用,
-    避免与续期并发的请求被误判为未登录(宽限记录在进程内存里)。"
+    避免与续期并发的请求被误判为未登录(宽限记录在 infra.kv,多实例共享)。
+  清理线程每 5 分钟顺带删除 infra.kv 里过期的键。"
   (:require
-   [clojure.tools.logging :as log])
+   [clojure.tools.logging :as log]
+   [com.ruoyi.infra.kv :as kv])
   (:import
    [java.util.concurrent ScheduledThreadPoolExecutor TimeUnit]))
 
 ;; ──────────── 全局状态 ────────────
 
 (defonce ^:private query-fn-atom (atom nil))
-
-(defonce ^:private rotated
-  ;; 旧 session-id -> 宽限截止时间(毫秒)
-  (atom {}))
 
 (def idle-timeout-ms
   "会话空闲超时:超过这么久没有任何请求,会话被清理,令牌随之失效。"
@@ -43,15 +41,12 @@
 
 ;; ──────────── 续期宽限 ────────────
 
+(defn- grace-key [session-id] (str "grace:" session-id))
+
 (defn in-grace?
   "session-id 是否是刚续期的旧会话且仍在宽限期内。"
   [session-id]
-  (when-let [until (get @rotated session-id)]
-    (< (now) until)))
-
-(defn- cleanup-rotated! []
-  (let [t (now)]
-    (swap! rotated #(into {} (remove (fn [[_ until]] (< until t))) %))))
+  (boolean (and session-id (kv/get-val (grace-key session-id)))))
 
 ;; ──────────── 清理调度 ────────────
 
@@ -65,7 +60,7 @@
          (run [_]
            (try
              (cleanup-expired-sessions!)
-             (cleanup-rotated!)
+             (kv/purge!)
              (catch Exception e
                (log/warn e "Online user cleanup failed")))))
        5 5 TimeUnit/MINUTES))))
@@ -111,9 +106,10 @@
         true))))
 
 (defn active?
-  "请求鉴权用:宽限期内的旧会话直接放行,否则以心跳是否命中会话为准。"
+  "请求鉴权用:以心跳是否命中会话为准;没命中时再看是不是刚续期、仍在宽限期内的旧令牌
+   (先心跳:绝大多数请求只需一次数据库更新)。"
   [session-id]
-  (boolean (or (in-grace? session-id) (heartbeat! session-id))))
+  (boolean (or (heartbeat! session-id) (in-grace? session-id))))
 
 (defn unregister!
   "删除会话(登出、强退),对应令牌立即失效。"
@@ -137,7 +133,7 @@
               (log/warn e "Failed to rotate online session")
               0))]
     (when (pos? n)
-      (swap! rotated assoc old-session-id (+ (now) rotate-grace-ms)))
+      (kv/put! (grace-key old-session-id) new-session-id rotate-grace-ms))
     (pos? n)))
 
 (defn cleanup-expired-sessions!

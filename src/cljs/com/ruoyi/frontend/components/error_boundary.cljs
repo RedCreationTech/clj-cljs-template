@@ -25,7 +25,7 @@
    (when js/goog.DEBUG
      [:details {:style {:marginTop 24 :textAlign "left"}}
       [:summary {:style {:cursor "pointer" :color "#1677ff"}} "错误详情"]
-      [:pre {:style {:background "#f5f5f5"
+      [:pre {:style {:background "var(--app-fill)"
                      :padding 12
                      :borderRadius 4
                      :overflow "auto"

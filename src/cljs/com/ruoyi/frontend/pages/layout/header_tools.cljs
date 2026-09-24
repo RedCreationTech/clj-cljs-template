@@ -41,9 +41,10 @@
                                                    (rf/dispatch [:navigate (keyword v)]))}])}
      [:> Button (assoc icon-btn :title (i18n/tr "搜索菜单") :icon (r/as-element [:> SearchOutlined]))]]))
 
-(defn- notice-item [{:keys [notice_name notice_type create_time]}]
+(defn- notice-item [{:keys [notice_name notice_type create_time is_read]}]
   [:div {:style {:padding "8px 0" :borderBottom "1px solid var(--app-border-light)"}}
-   [:div {:style {:color "var(--app-text-primary)" :fontSize 14}} notice_name]
+   [:div {:style {:color "var(--app-text-primary)" :fontSize 14 :fontWeight (if (= 1 is_read) 400 600)}}
+    notice_name]
    [:div {:style {:color "var(--app-text-secondary)" :fontSize 12 :marginTop 2}}
     (str (i18n/tr (if (= "2" notice_type) "公告" "通知")) " · " (or create_time ""))]])
 
@@ -58,7 +59,7 @@
       [:a {:on-click #(rf/dispatch [:navigate :notice])} (i18n/tr "查看全部")]])])
 
 (defn notice-bell
-  "通知铃铛:进入主布局时拉取一次,打开时刷新并记为已读。"
+  "通知铃铛:进入主布局时拉取一次;打开时显示最新通知(未读加粗)并把全部记为已读。"
   []
   (hooks/use-effect (fn [] (rf/dispatch [:notice-bell/fetch]) js/undefined) [])
   (let [items @(rf/subscribe [:notice-bell/items])
@@ -68,8 +69,8 @@
                  :title (i18n/tr "通知")
                  :content (r/as-element [notice-list items])
                  :onOpenChange (fn [open?]
-                                 (when open?
+                                 (if open?
                                    (rf/dispatch [:notice-bell/fetch])
-                                   (rf/dispatch [:notice-bell/mark-seen])))}
+                                   (rf/dispatch [:notice-bell/mark-read])))}
      [:> Badge {:count unread :size "small"}
       [:> Button (assoc icon-btn :title (i18n/tr "通知") :icon (r/as-element [:> BellOutlined]))]]]))

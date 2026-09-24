@@ -4,6 +4,7 @@
    - 列表与详情不返回密码哈希。"
   (:require
    [clojure.data.json :as json]
+   [clojure.string :as str]
    [clojure.test :refer [deftest is testing use-fixtures]]
    [com.ruoyi.test-utils :refer [GET PUT system-fixture system-state]]
    [peridot.core :as p]))
@@ -81,3 +82,14 @@
         (finally
           (.delete png)
           (when url (.delete (java.io.File. (str "uploads/avatar/" (last (re-find #"avatar/(.+)$" url)))))))))))
+
+(deftest create-time-is-local-test
+  (testing "写入的时间是服务器本地时间(不是 SQLite 的 UTC),与当前时间相差不超过 2 分钟"
+    (let [admin {"authorization" (str "Bearer " (login "admin" "admin123"))}
+          user-name (str "ts" (System/currentTimeMillis))
+          _ (POST "/api/system/user" {:user_name user-name :nick_name "时间" :password "ts12345"} admin)
+          row (first (get-in (parse-json (GET (handler) "/api/system/user" {"user_name" user-name} admin))
+                             [:data :rows]))
+          created (java.time.LocalDateTime/parse (str/replace (str (:create_time row)) " " "T"))
+          diff (Math/abs (.toSeconds (java.time.Duration/between created (java.time.LocalDateTime/now))))]
+      (is (< diff 120) (str "create_time = " (:create_time row))))))

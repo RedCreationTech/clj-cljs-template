@@ -52,12 +52,10 @@
   "验证码开启时必须提交且与缓存一致(不区分大小写、未过期);关闭时不校验。
    验证码一次性:只要带了 uuid,无论对错都立即作废。"
   [enabled? {:keys [captcha uuid]}]
-  (let [stored (when (seq uuid) (get @captcha/captcha-store uuid))]
-    (when (seq uuid) (swap! captcha/captcha-store dissoc uuid))
+  (let [stored (captcha/take-code! uuid)]
     (or (not enabled?)
         (boolean (and stored (seq captcha)
-                      (<= (System/currentTimeMillis) (:expire stored))
-                      (= (str/upper-case captcha) (str/upper-case (:code stored))))))))
+                      (= (str/upper-case captcha) (str/upper-case stored)))))))
 
 (def ^:private dummy-hash
   "用户不存在时也做一次密码校验,使响应时间与「密码错误」一致,无法借此探测账号。"

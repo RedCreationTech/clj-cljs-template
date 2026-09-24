@@ -10,7 +10,7 @@ SELECT * FROM sys_job WHERE job_id = :job_id
 
 -- :name create-job! :! :n
 INSERT INTO sys_job (job_name, job_group, invoke_target, cron_expression, misfire_policy, concurrent, status, create_by, create_time, remark)
-VALUES (:job_name, :job_group, :invoke_target, :cron_expression, :misfire_policy, :concurrent, :status, :create_by, CURRENT_TIMESTAMP, :remark)
+VALUES (:job_name, :job_group, :invoke_target, :cron_expression, :misfire_policy, :concurrent, :status, :create_by, :now, :remark)
 
 -- :name last-insert-job-id :? :1
 -- :doc 获取最后插入的任务ID (SQLite)
@@ -30,7 +30,7 @@ SET job_name = COALESCE(:job_name, job_name),
     concurrent = COALESCE(:concurrent, concurrent),
     status = COALESCE(:status, status),
     update_by = :update_by,
-    update_time = CURRENT_TIMESTAMP,
+    update_time = :now,
     remark = COALESCE(:remark, remark)
 WHERE job_id = :job_id
 
@@ -53,7 +53,7 @@ SELECT COUNT(*) AS total FROM sys_job_log WHERE 1=1
 
 -- :name create-job-log! :! :n
 INSERT INTO sys_job_log (job_name, job_group, invoke_target, job_message, status, exception_info, create_time)
-VALUES (:job_name, :job_group, :invoke_target, :job_message, :status, :exception_info, CURRENT_TIMESTAMP)
+VALUES (:job_name, :job_group, :invoke_target, :job_message, :status, :exception_info, :now)
 
 -- :name clear-job-logs! :! :n
 DELETE FROM sys_job_log WHERE 1=1

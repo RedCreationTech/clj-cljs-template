@@ -1,8 +1,8 @@
 (ns com.ruoyi.web.middleware.core
   (:require
-   [cheshire.core :as json]
    [clojure.string :as str]
    [com.ruoyi.env :as env]
+   [com.ruoyi.infra.json :as json]
    [com.ruoyi.web.middleware.operlog :as operlog]
    [ring.middleware.defaults :as defaults]
    [ring.middleware.session.cookie :as cookie]))
@@ -60,7 +60,7 @@
     (let [resp (handler request)]
       (if (map? (:body resp))
         (-> resp
-            (assoc :body (json/generate-string (:body resp)))
+            (assoc :body (json/write-str (:body resp)))
             (assoc-in [:headers "content-type"] "application/json;charset=utf-8"))
         resp))))
 

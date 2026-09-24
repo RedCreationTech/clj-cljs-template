@@ -22,7 +22,7 @@ SELECT COUNT(*) AS total FROM sys_oper_log WHERE 1=1
 
 -- :name create-oper-log! :! :n
 INSERT INTO sys_oper_log (title, business_type, method, request_method, operator_type, oper_name, dept_name, oper_url, oper_ip, oper_location, oper_param, json_result, status, error_msg, oper_time, cost_time)
-VALUES (:title, :business_type, :method, :request_method, :operator_type, :oper_name, :dept_name, :oper_url, :oper_ip, :oper_location, :oper_param, :json_result, :status, :error_msg, CURRENT_TIMESTAMP, :cost_time)
+VALUES (:title, :business_type, :method, :request_method, :operator_type, :oper_name, :dept_name, :oper_url, :oper_ip, :oper_location, :oper_param, :json_result, :status, :error_msg, :now, :cost_time)
 
 -- :name clear-oper-logs! :! :n
 DELETE FROM sys_oper_log WHERE 1=1
@@ -52,7 +52,7 @@ SELECT COUNT(*) AS total FROM sys_login_log WHERE 1=1
 
 -- :name create-login-log! :! :n
 INSERT INTO sys_login_log (user_name, ipaddr, login_location, browser, os, status, msg, login_time)
-VALUES (:user_name, :ipaddr, :login_location, :browser, :os, :status, :msg, CURRENT_TIMESTAMP)
+VALUES (:user_name, :ipaddr, :login_location, :browser, :os, :status, :msg, :now)
 
 -- :name clear-login-logs! :! :n
 DELETE FROM sys_login_log WHERE 1=1

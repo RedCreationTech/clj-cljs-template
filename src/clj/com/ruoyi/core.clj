@@ -27,12 +27,10 @@
    [com.ruoyi.web.routes.system]
    [integrant.core :as ig]
    [kit.edge.db.mysql]
-   [kit.edge.db.postgres]
    [kit.edge.db.sql.conman]
    [kit.edge.db.sql.migratus]
    [kit.edge.scheduling.quartz]
    [kit.edge.server.undertow]
-   [kit.edge.templating.selmer]
    [kit.edge.utils.nrepl])
   (:gen-class))
 
