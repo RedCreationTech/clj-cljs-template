@@ -3,7 +3,10 @@
   (:require
    [clojure.test :refer [deftest is testing use-fixtures]]
    [com.ruoyi.infra.kv :as kv]
-   [com.ruoyi.web.controllers.captcha :as captcha]))
+   [com.ruoyi.web.controllers.captcha :as captcha])
+  (:import
+   [java.awt Color]
+   [java.awt.image BufferedImage]))
 
 (use-fixtures :each
   (fn [test]
@@ -35,3 +38,25 @@
       (is (= "abc123" (get-in response [:headers "Captcha-UUID"])))
       (is (pos? (count (:body response))))
       (is (= 4 (count (kv/get-val "captcha:abc123")))))))
+
+(defn- margin-clean?
+  "只画字符(不画干扰线)后,四周 2 像素的边框内是否仍然全白 —— 即字符没有顶到或超出图片边缘。"
+  [code]
+  (let [w 150 h 50
+        img (BufferedImage. w h BufferedImage/TYPE_INT_RGB)
+        g (.createGraphics img)
+        white (.getRGB Color/WHITE)]
+    (.setColor g Color/WHITE)
+    (.fillRect g 0 0 w h)
+    (captcha/draw-code! g code w h)
+    (.dispose g)
+    (every? (fn [[x y]] (= white (.getRGB img x y)))
+            (for [x (range w) y (range h)
+                  :when (or (< x 2) (>= x (- w 2)) (< y 2) (>= y (- h 2)))]
+              [x y]))))
+
+(deftest test-captcha-fits-image
+  (testing "每个字符(含最宽的 W、M)排满 4 位时都完整落在图片内,不会被右边裁掉"
+    (doseq [ch captcha/code-chars
+            _ (range 3)] ; 纵向有随机抖动,多画几次
+      (is (margin-clean? (apply str (repeat 4 ch))) (str "字符 " ch)))))

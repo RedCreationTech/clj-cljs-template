@@ -26,12 +26,15 @@
   [uuid]
   (when (seq uuid) (kv/take! (store-key uuid))))
 
+(def code-chars
+  "验证码字符集(去掉易混的 I、O、0、1)。"
+  "ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+
 (defn- generate-code
   "生成随机验证码。"
   [length]
-  (let [chars "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        random (Random.)]
-    (apply str (repeatedly length #(nth chars (.nextInt random (count chars)))))))
+  (let [random (Random.)]
+    (apply str (repeatedly length #(nth code-chars (.nextInt random (count code-chars)))))))
 
 (defn- generate-color
   "生成随机颜色。"
@@ -42,36 +45,45 @@
         b (+ min-val (.nextInt random (- max-val min-val)))]
     (Color. r g b)))
 
-(defn- create-captcha-image
-  "创建验证码图片。"
-  [code width height]
-  (let [image (BufferedImage. width height BufferedImage/TYPE_INT_RGB)
-        g (.createGraphics image)
-        random (Random.)]
-    ;; 设置背景
-    (.setColor g Color/WHITE)
-    (.fillRect g 0 0 width height)
-
-    ;; 设置字体
-    (.setFont g (Font. "Arial" Font/BOLD 36))
+(defn draw-code!
+  "按字体的实际宽度把字符均匀排进图片(左右各留 pad),字号随图片高度,纵向略微抖动。
+   不写死坐标:服务器上没有 Arial 时 Java 会换字体,字宽会变。"
+  [^java.awt.Graphics2D g code width height]
+  (let [random (Random.)
+        n (count code)
+        pad 8
+        slot (/ (- width (* 2 pad)) (double n))]
     (.setRenderingHint g RenderingHints/KEY_ANTIALIASING RenderingHints/VALUE_ANTIALIAS_ON)
+    (.setFont g (Font. Font/SANS_SERIF Font/BOLD (int (* height 0.62))))
+    (let [fm (.getFontMetrics g)
+          baseline (quot (+ height (- (.getAscent fm) (.getDescent fm))) 2)]
+      (dotimes [i n]
+        (let [ch (str (nth code i))
+              x (+ pad (* i slot) (/ (- slot (.stringWidth fm ch)) 2))]
+          (.setColor g (generate-color 50 180))
+          (.drawString g ch (int x) (int (+ baseline (- (.nextInt random 7) 3)))))))))
 
-    ;; 绘制验证码字符
-    (dotimes [i (count code)]
-      (.setColor g (generate-color 50 180))
-      (.drawString g (str (nth code i)) (+ 15 (* i 40)) (+ 35 (.nextInt random 10))))
-
-    ;; 绘制干扰线
+(defn- draw-noise!
+  "干扰线与干扰点。"
+  [^java.awt.Graphics2D g width height]
+  (let [random (Random.)]
     (dotimes [_ 6]
       (.setColor g (generate-color 100 200))
       (.drawLine g (.nextInt random width) (.nextInt random height)
                  (.nextInt random width) (.nextInt random height)))
-
-    ;; 绘制干扰点
     (dotimes [_ 30]
       (.setColor g (generate-color 150 230))
-      (.drawOval g (.nextInt random width) (.nextInt random height) 2 2))
+      (.drawOval g (.nextInt random width) (.nextInt random height) 2 2))))
 
+(defn- create-captcha-image
+  "创建验证码图片。"
+  [code width height]
+  (let [image (BufferedImage. width height BufferedImage/TYPE_INT_RGB)
+        g (.createGraphics image)]
+    (.setColor g Color/WHITE)
+    (.fillRect g 0 0 width height)
+    (draw-code! g code width height)
+    (draw-noise! g width height)
     (.dispose g)
     image))
 
