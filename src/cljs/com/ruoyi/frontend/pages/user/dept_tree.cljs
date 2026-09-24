@@ -1,10 +1,10 @@
 (ns com.ruoyi.frontend.pages.user.dept-tree
   "部门树侧边栏（presentational：部门数据与选择回调由 user-page 传入，保留折叠/展开局部状态）。"
   (:require
+   ["@ant-design/icons" :refer [FileTextOutlined FolderOpenOutlined ReloadOutlined SearchOutlined]]
+   [com.ruoyi.frontend.antd :as antd]
    [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   ["@ant-design/icons" :refer [SearchOutlined ReloadOutlined FolderOpenOutlined FileTextOutlined]]
-   [com.ruoyi.frontend.antd :as antd]))
+   [reagent.hooks :as hooks]))
 
 (defn- flatten-visible-tree
   "展平可见的部门节点（只展开 expanded-ids 中的节点）。"

@@ -3,4 +3,3 @@ CREATE TABLE sys_user_post (
   post_id BIGINT NOT NULL,
   PRIMARY KEY (user_id, post_id)
 );
---;;

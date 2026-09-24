@@ -1,0 +1,5 @@
+;; clojure-lsp 项目配置:编辑器(Emacs lsp-mode / Calva / Cursive 插件)与 `clojure-lsp clean-ns` / `format` 共用
+{:source-paths #{"src/clj" "src/cljs" "test/clj" "env/dev/clj" "env/prod/clj"}
+ :clean {:ns-inner-blocks-indentation :next-line
+         :sort {:ns true :require true :import true :refer {:max-line-length 100}}}
+ :cljfmt-config-path ".cljfmt.edn"}

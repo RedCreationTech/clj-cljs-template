@@ -3,10 +3,18 @@
 ## 代码规模约束（强制 · 持续重构）
 
 - **单个源文件（`.clj/.cljs/.cljc`）尽量不超过 500 行**；超过必须按职责/领域拆分为多个命名空间或组件文件。
-- **单个函数 / Reagent 组件不超过 50 行**（不含 docstring 与空行）；超过必须抽取私有辅助函数、拆分子组件或将长逻辑下沉。
+- **单个函数 / Reagent 组件不超过 50 行**（`defn`/`defn-`/`defmacro`/`defmethod`，按原始行数计，含 docstring 与空行）；超过必须抽取私有辅助函数、拆分子组件或将长逻辑下沉。
 - **持续重构**：任何改动若使文件/函数超限，应在本次提交内顺手拆分，不要留待以后。
-- 每次编辑 Clojure 源文件后，若该文件已超限，优先拆分再交付；对遗留超限文件（如 `events.cljs`、`api.cljs`、`layout.cljs`、`subs.cljs`、`pages/user.cljs`）按优先级增量重构，改动到相关区域时即顺带拆分。
-- 该约束与 `README.md`「开发约定」一致；函数上限以本文件 **50 行** 为准。
+- `bb check` 检查 `src` / `env` / `test` / `bb` / `scripts` 下全部 Clojure 文件，当前全部达标，CI 强制执行；超限即失败。
+- 该约束与 `README.md`「开发约定」一致。
+
+## 任务入口与质量门禁
+
+- **所有任务走 babashka**：`bb tasks` 列出全部任务；不要再写 Makefile / shell 脚本，新任务加到 `bb.edn`，实现放 `bb/tasks/*.clj`（跨平台，Windows 也能跑）。
+- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`）、`bb lint:migrations`、`bb check`；格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
+- **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟。改了任务名或参数，要同步改 CI。
+- **新增业务模块用 `bb new-module`**（见 README「新增业务模块」）。源码里的 `;; [new-module] <tag>` 注释是脚手架的登记点（`system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs`），**不要删除或改写这些标记行**；重构这些文件时把标记保留在对应集合的末尾。改动脚手架模板（`bb/tasks/scaffold/*.clj`）后，至少生成一个模块跑一遍 lint / fmt:check / 生成的测试 / `bb cljs:check`（CI 的 scaffold 任务会做完整检查）。
+- **生产密钥**：prod profile 下 `JWT_SECRET`（≥32 字符）与 `COOKIE_SECRET`（16 字节）缺失或为内置默认值时拒绝启动（`com.ruoyi.infra.secrets`）；dev/test 用默认值即可，不要把真实密钥写进仓库。
 
 ## Non-Interactive Shell Commands
 
@@ -229,6 +237,8 @@ Reagent 函数组件作为 `Form.Item` 子元素时，antd 无法像对原生 In
                                    (.setFieldsValue form #js {"dept_id" v}))}]])
 ```
 
+如果只是按条件选择不同的 antd 控件，不要把选择逻辑写成 Reagent 组件 `[form-control f]`，而是普通函数调用 `(form-control f)` 直接返回控件本身（`bb new-module` 生成的页面就是这样），Form.Item 才能把 `value`/`onChange`/`id` 注入到它身上。
+
 ### 11. 后端分页参数使用 `page` / `size`
 
 前端传给后端列表接口的分页参数必须是 `page` 和 `size`，而不是 `pageNum`/`pageSize`/`page-num`/`page-size`。
@@ -406,34 +416,33 @@ DDL 差异无法兼容，因此有两套目录：
 
    `com.ruoyi.infra.db` 里对 `get-tables`、`get-table-columns`、`paginate-query` 等按 `:sqlite` / `:mysql` 分情况处理，不要把 `PRAGMA`、`sqlite_master`、`information_schema` 混进共用 `.sql`。
 
+#### 迁移文件格式
+
+- 一个迁移文件里有多条语句时，语句之间用单独一行 `--;;` 分隔（MySQL 驱动一次只能执行一条语句）；不要留只有注释的分段（MySQL 会报 `Query was empty`）。
+- 每个 `.up.sql` 必须有对应的 `.down.sql`，down 能把 up 完整撤销（`bb db:roundtrip` 会执行 up → down → up 验证）。
+- MySQL 目录不能出现 SQLite 语法（`AUTOINCREMENT`、`DROP INDEX IF EXISTS` 等），反之亦然；`bb lint:migrations` 会检查成对、分隔与方言。
+
 #### 修改后必须双库跑测试
 
 任何 `resources/migrations*` 或 `resources/sql/*.sql` 改动，都要验证两套数据库：
 
 ```bash
-# SQLite
-rm -f rouyi.db && bb test
-
-# MySQL（先清空数据库）
-docker exec ruoyi-mysql mysql -uroot -ppassword -e \
-  "DROP DATABASE IF EXISTS ruoyi; CREATE DATABASE ruoyi CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-JDBC_URL="jdbc:mysql://root:password@127.0.0.1:3308/ruoyi?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true" \
-MIGRATION_DIR=migrations bb test
+bb lint:migrations     # 成对 / 分隔 / 方言
+bb test                # SQLite(独立的 test.db,每次从空库迁移)
+bb test:mysql          # MySQL:自动 docker compose up -d mysql(3308)并清空库;或设置 JDBC_URL 用已有实例
+bb db:roundtrip        # 迁移往返;设 JDBC_URL=jdbc:mysql://… 则检查 MySQL(自动用 migrations 目录)
 ```
 
 ### Starting Dev Environment
 
 ```bash
-# 1. Start backend (port 3000, nREPL port 7000)
-clojure -M:dev -m com.ruoyi.core &
-
-# 2. Start frontend watch (auto-recompiles on .cljs changes)
-npx shadow-cljs watch app &
-# First compilation takes ~2min, subsequent changes compile in seconds
-
-# 3. Access
-open http://localhost:3000
+bb dev                 # 后端(3000 / nREPL 7000)+ 前端 watch,输出带 [backend]/[frontend] 前缀
+bb dev --reset-db      # 先删除 rouyi.db 再启动
+bb dev --backend-only  # 只起后端(或分别 bb backend / bb frontend)
+# 首次前端编译约 1~3 分钟,之后增量编译几秒;打开 http://localhost:3000
 ```
+
+端口被占用时 `bb dev` 会直接报出占用的端口；用 `PORT=3200 NREPL_PORT=7200 bb dev` 换端口。`bb test` 使用独立端口（3100/7100）与独立的 `test.db`，可以和 `bb dev` 同时运行。
 
 ### Hot-Reload Workflow
 
@@ -461,7 +470,7 @@ Available helpers (defined in `env/dev/clj/user.clj`):
 | `reload-all` | `ra` | All of the above |
 | `reload-system` | `rr` | Full system reset (halt → prep → go) |
 
-**Note**: Route changes require a full system reset (`rr`) because routes are compiled once at startup. If `(user/rr)` fails with `BindException: Address already in use` (Undertow can't rebind), kill the process and restart with `clojure -M:dev -m com.ruoyi.core`.
+**Note**: Route changes require a full system reset (`rr`) because routes are compiled once at startup. If `(user/rr)` fails with `BindException: Address already in use` (Undertow can't rebind), stop `bb dev` / `bb backend` and start it again.
 
 #### Frontend (ClojureScript) — shadow-cljs auto-compiles
 
@@ -481,9 +490,9 @@ Available helpers (defined in `env/dev/clj/user.clj`):
 ### Build Uberjar
 
 ```bash
-npx shadow-cljs release app    # Compile frontend for production
-clojure -T:build all            # Build standalone jar (includes frontend)
-java -jar target/rouyi-standalone.jar  # Run (port 3000, SQLite)
+bb uberjar             # 前端 release(编译 warning 即失败)+ 后端 standalone jar
+JWT_SECRET=$(openssl rand -hex 32) COOKIE_SECRET=$(openssl rand -hex 8) \
+  java -jar target/rouyi-standalone.jar   # prod profile:缺少合格密钥会拒绝启动
 ```
 
 ### E2E 测试 (Playwright)
@@ -491,14 +500,10 @@ java -jar target/rouyi-standalone.jar  # Run (port 3000, SQLite)
 已接入 Playwright（1.63）对主要功能做端到端验证，默认跑在 `http://localhost:3000`。
 
 ```bash
-# 安装浏览器（首次）
-npx playwright install chromium
-
-# 运行全部 E2E 用例并生成 HTML/JSON 报告
-npm run test:e2e
-
-# 查看 HTML 报告
-npm run test:e2e:report
+npx playwright install chromium          # 安装浏览器（首次）
+bb e2e                                   # 运行全部用例(先检查后端是否在 3000 运行),生成 HTML/JSON 报告
+bb e2e tests/e2e/post-crud.spec.js       # 只跑一个文件
+npm run test:e2e:report                  # 查看 HTML 报告
 ```
 
 测试目录：`tests/e2e/`
@@ -507,6 +512,7 @@ npm run test:e2e:report
 - `navigation.spec.js` — 系统管理、系统监控、系统工具等核心菜单可访问性
 - `post-crud.spec.js` — 岗位管理新增/修改/删除示例
 - `auth-helper.js` — 登录/登出公共辅助
+- `<module>.spec.js` — `bb new-module` 为每个生成的模块写的新增/修改/删除用例
 
 报告输出：`playwright-report/`
 

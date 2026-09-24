@@ -1,8 +1,9 @@
 (ns com.ruoyi.web.controllers.gen-test
   "代码生成器控制器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [clojure.java.io :as io]
-            [com.ruoyi.web.controllers.gen :as gen]))
+  (:require
+   [clojure.java.io :as io]
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.controllers.gen :as gen]))
 
 (def mock-columns
   [{:name "id" :type "INTEGER" :pk 1 :notnull 1}

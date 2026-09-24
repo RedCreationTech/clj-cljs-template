@@ -1,8 +1,9 @@
 (ns com.ruoyi.web.handler-test
   "Ring 处理器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.handler :as handler]
-            [integrant.core :as ig]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.handler :as handler]
+   [integrant.core :as ig]))
 
 (deftest test-spa-not-found-handler-api
   (testing "API 路径返回 404 纯文本"

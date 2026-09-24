@@ -1,33 +1,73 @@
-{:min-bb-version "0.8.156"
- :deps  {failjure/failjure {:mvn/version "2.3.0"}}
- :tasks {:requires ([babashka.fs :as fs]
-                    [babashka.tasks :refer [shell]])
+;; 统一任务入口(跨平台,只需要 babashka):`bb tasks` 查看全部任务。
+;; 实现在 bb/tasks/*.clj;CI(.github/workflows/ci.yml)也只调用这里的任务。
+{:min-bb-version "1.12.200"
+ :paths ["bb"]
+ :tasks
+ {:requires ([tasks.dev :as dev]
+             [tasks.lint :as lint]
+             [tasks.util :as u])
 
-         run       {:doc  "starts the app"
-                    :task (if (fs/windows?)
-                            (clojure {:dir "."} "-M:dev")
-                            (shell {:dir "."} "clj -M:dev"))}
+  ;; ── 开发 ──────────────────────────────────────────────
+  dev              {:doc  "一键启动后端(3000 / nREPL 7000)+ 前端 watch;--reset-db 清空本地库,--backend-only 只起后端"
+                    :task (dev/dev! *command-line-args*)}
+  backend          {:doc  "只启动后端(前台)"
+                    :task (dev/backend!)}
+  frontend         {:doc  "只启动前端 shadow-cljs watch(前台)"
+                    :task (dev/frontend!)}
+  nrepl            {:doc  "启动 nREPL(不启动应用;在 REPL 里 (user/go))"
+                    :task (u/exec! (into (u/clojure-cmd) ["-M:dev:nrepl"]))}
+  cider            {:doc  "启动带 CIDER 中间件的 nREPL"
+                    :task (u/exec! (into (u/clojure-cmd) ["-M:dev:cider"]))}
+  new-module       {:doc  "生成一个完整 CRUD 模块并自动登记:bb new-module <名称> --label 中文名 --fields \"title:string:required,amount:int\""
+                    :task (do (require 'tasks.new-module)
+                              ((resolve 'tasks.new-module/generate!) *command-line-args*))}
+  rename           {:doc  "把 com.ruoyi / rouyi 改成你的命名空间与项目名:bb rename com.acme.myapp myapp"
+                    :task (do (require 'tasks.rename)
+                              ((resolve 'tasks.rename/rename!) *command-line-args*))}
 
-         nrepl     {:doc  "starts the nREPL"
-                    :task (clojure {:dir "."} "-M:dev:nrepl")}
+  ;; ── 测试 ──────────────────────────────────────────────
+  test             {:doc  "后端测试(独立的 test.db;额外参数传给 test-runner,如 -n com.ruoyi.web.handler-test)"
+                    :task (dev/test! *command-line-args*)}
+  test:mysql       {:doc  "在 MySQL 上跑后端测试(docker compose 起 3308 端口;或设置 JDBC_URL 用已有实例)"
+                    :task (dev/test-mysql! *command-line-args*)}
+  e2e              {:doc  "Playwright 端到端测试(需后端已在 3000 运行)"
+                    :task (dev/e2e! *command-line-args*)}
+  db:roundtrip     {:doc  "迁移往返检查:up → down → up(默认临时 SQLite;设 JDBC_URL 则用该库,MySQL 自动选 migrations 目录)"
+                    :task (dev/roundtrip!)}
+  coverage         {:doc  "测试覆盖率(报告在 target/coverage/index.html)"
+                    :task (u/exec! (into (u/clojure-cmd) ["-M:coverage"]))}
 
-         cider     {:doc  "starts the cider"
-                    :task (clojure {:dir "."} "-M:dev:cider")}
+  ;; ── 质量 ──────────────────────────────────────────────
+  lint             {:doc  "全部静态检查:clj-kondo + 迁移文件 + 规模约束"
+                    :depends [lint:kondo lint:migrations check]}
+  lint:kondo       {:doc  "clj-kondo,warning 即失败"
+                    :task (lint/kondo!)}
+  lint:migrations  {:doc  "两套迁移成对、有 down、--;; 分隔正确、无对方方言"
+                    :task (lint/migrations!)}
+  check            {:doc  "规模约束:命名空间 ≤500 行、函数 ≤50 行"
+                    :task (lint/constraints!)}
+  fmt              {:doc  "cljfmt 格式化全部源码(规则见 .cljfmt.edn)"
+                    :task (u/exec! (into (u/clojure-cmd) ["-M:fmt" "fix" "src" "test" "env" "bb" "scripts"]))}
+  fmt:check        {:doc  "cljfmt 只检查不修改(CI 用)"
+                    :task (u/exec! (into (u/clojure-cmd) ["-M:fmt" "check" "src" "test" "env" "bb" "scripts"]))}
 
-         test      {:doc  "runs tests"
-                    :task (clojure {:dir "."} "-M:test")}
+  ;; ── 构建 ──────────────────────────────────────────────
+  release          {:doc  "前端生产构建(resources/public/js);编译 warning 视为错误"
+                    :task (u/exec! [(u/npx-cmd) "shadow-cljs" "release" "app" "--config-merge" u/strict-cljs])}
+  cljs:check       {:doc  "前端快速编译检查(不压缩,warning 视为错误;CI 脚手架冒烟用)"
+                    :task (u/exec! [(u/npx-cmd) "shadow-cljs" "compile" "app" "--config-merge" u/strict-cljs])}
+  uberjar          {:doc  "前端 release + 后端 uberjar(target/*-standalone.jar)"
+                    :depends [release]
+                    :override-builtin true
+                    :task (u/exec! (into (u/clojure-cmd) ["-T:build" "all"]))}
+  docs             {:doc  "重新生成 C4 架构文档 HTML 与 img/*.svg(需要 pandoc、node)"
+                    :task (u/exec! ["python3" "docs/architecture/build-html.py"])}
+  clean            {:doc  "删除构建产物与本地测试库"
+                    :task (do (doseq [d ["target" ".cpcache" ".shadow-cljs" "resources/public/js"]]
+                                (babashka.fs/delete-tree d))
+                              (doseq [f ["test.db" "roundtrip.db"]] (babashka.fs/delete-if-exists f))
+                              (println "已清理"))}
 
-         coverage  {:doc  "runs coverage (report at target/coverage/index.html)"
-                    :task (clojure {:dir "."} "-M:coverage")}
-
-         uberjar   {:doc  "builds the uberjar"
-                    :task (clojure {:dir "."} "-T:build all")}
-
-         check     {:doc  "规模约束检查(命名空间 ≤500 行 / 函数 ≤50 行)"
-                    :task (shell "python3 scripts/check_constraints.py")}
-
-         format    {:doc  "Formats codebase"
-                    :task (try
-                            (shell {:dir "src"} "cljstyle fix")
-                            (catch Exception _
-                              (clojure {:dir "src"} "-M:dev -m cljstyle.main fix")))}}}
+  ;; ── CI ────────────────────────────────────────────────
+  ci               {:doc  "本地跑一遍与 CI 相同的快速检查(不含 MySQL 与 E2E)"
+                    :depends [lint fmt:check test]}}}

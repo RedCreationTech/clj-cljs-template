@@ -12,8 +12,3 @@ CREATE TABLE IF NOT EXISTS sys_form_template (
 );
 --;;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sys_form_template_key ON sys_form_template(form_key);
---;;
---;;
---;;
---;;
---;;

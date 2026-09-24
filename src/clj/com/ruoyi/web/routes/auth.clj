@@ -1,10 +1,10 @@
 (ns com.ruoyi.web.routes.auth
   "认证路由。"
   (:require
+   [clojure.string]
+   [com.ruoyi.infra.security :as security]
    [com.ruoyi.web.controllers.auth :as auth]
    [com.ruoyi.web.controllers.register :as register]
-   [com.ruoyi.web.middleware.auth :as auth-mw]
-   [com.ruoyi.infra.security :as security]
    [ring.util.response :as response]))
 
 (defn- wrap-parse-token

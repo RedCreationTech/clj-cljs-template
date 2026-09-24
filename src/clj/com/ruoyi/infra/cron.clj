@@ -6,8 +6,9 @@
    [org.quartz CronExpression]
    [org.quartz CronScheduleBuilder]))
 
-(defn- normalize [expression]
+(defn- normalize
   "将 5 字段 Unix cron 补全为 Quartz 6 字段（秒位为 0）。"
+  [expression]
   (if (and (seq expression)
            (= 5 (count (str/split expression #"\s+"))))
     (str "0 " expression)

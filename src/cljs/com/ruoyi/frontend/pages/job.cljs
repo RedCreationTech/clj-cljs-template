@@ -1,13 +1,14 @@
 (ns com.ruoyi.frontend.pages.job
   "定时任务管理页面。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [PlusOutlined EditOutlined DeleteOutlined PlayCircleOutlined FileTextOutlined SearchOutlined ReloadOutlined]]
+   ["@ant-design/icons" :refer [DeleteOutlined EditOutlined FileTextOutlined PlayCircleOutlined
+                                PlusOutlined ReloadOutlined SearchOutlined]]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
-   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]))
+   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 (defn- status-tag [status]
   [antd/tag {:color (if (= status "0") "green" "red")}

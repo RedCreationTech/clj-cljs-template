@@ -1,9 +1,10 @@
 (ns com.ruoyi.web.middleware.auth-test
   "认证与授权中间件测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.infra.online :as online]
-            [com.ruoyi.infra.security :as security]
-            [com.ruoyi.web.middleware.auth :as auth]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.infra.online :as online]
+   [com.ruoyi.infra.security :as security]
+   [com.ruoyi.web.middleware.auth :as auth]))
 
 (deftest test-wrap-jwt-auth-with-valid-token
   (testing "合法 Token 附加 identity 并更新心跳"
@@ -51,13 +52,13 @@
 
 (deftest test-require-auth-authorized
   (testing "已认证请求放行"
-    (let [handler (auth/require-auth (fn [req] {:ok true}))
+    (let [handler (auth/require-auth (fn [_req] {:ok true}))
           response (handler {:identity {:user-id 1}})]
       (is (= {:ok true} response)))))
 
 (deftest test-require-auth-unauthorized
   (testing "未认证请求返回 401"
-    (let [handler (auth/require-auth (fn [req] {:ok true}))
+    (let [handler (auth/require-auth (fn [_req] {:ok true}))
           response (handler {})]
       (is (= 401 (:status response)))
       (is (= {:code 401 :msg "未登录或令牌已过期"} (:body response)))
@@ -66,14 +67,14 @@
 (deftest test-require-perms-allowed
   (testing "拥有任一所需权限时放行"
     (let [handler ((auth/require-perms ["system:user:list" "system:user:add"])
-                   (fn [req] {:ok true}))
+                   (fn [_req] {:ok true}))
           response (handler {:identity {:perms #{"system:user:add"}}})]
       (is (= {:ok true} response)))))
 
 (deftest test-require-perms-denied
   (testing "无所需权限时返回 403"
     (let [handler ((auth/require-perms ["system:user:list"])
-                   (fn [req] {:ok true}))
+                   (fn [_req] {:ok true}))
           response (handler {:identity {:perms #{"system:user:add"}}})]
       (is (= 403 (:status response)))
       (is (= {:code 403 :msg "没有操作权限"} (:body response)))
@@ -82,7 +83,7 @@
 (deftest test-require-perms-no-identity
   (testing "无身份时返回 403"
     (let [handler ((auth/require-perms ["system:user:list"])
-                   (fn [req] {:ok true}))
+                   (fn [_req] {:ok true}))
           response (handler {})]
       (is (= 403 (:status response)))
       (is (= {:code 403 :msg "没有操作权限"} (:body response))))))
@@ -90,7 +91,7 @@
 (deftest test-require-perms-single-string
   (testing "单个字符串权限也正常工作"
     (let [handler ((auth/require-perms "system:user:list")
-                   (fn [req] {:ok true}))
+                   (fn [_req] {:ok true}))
           response (handler {:identity {:perms #{"system:user:list"}}})]
       (is (= {:ok true} response)))))
 
@@ -115,6 +116,6 @@
                   online/blacklisted? (fn [_] false)
                   online/heartbeat! (fn [_] nil)]
       (let [middleware (auth/auth-middleware {})
-            handler (middleware (fn [req] {:ok true}))
+            handler (middleware (fn [_req] {:ok true}))
             response (handler {})]
         (is (= {:ok true} response))))))

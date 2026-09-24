@@ -1,18 +1,14 @@
 (ns com.ruoyi.frontend.pages.layout.tabs
   "主布局的多 Tab 栏组件(标签项/右键菜单/滚动容器/操作按钮)。"
   (:require
-   [reagent.core :as r]
-   [re-frame.core :as rf]
-   [reagent.hooks :as hooks]
-   [com.ruoyi.frontend.antd :as antd]
+   ["@ant-design/icons" :refer [ArrowRightOutlined CloseCircleOutlined CloseOutlined DownOutlined
+                                HomeOutlined LeftOutlined ReloadOutlined RightOutlined]]
    ["antd" :refer [Dropdown]]
-   ["@ant-design/icons" :refer [HomeOutlined
-                                CloseOutlined
-                                ReloadOutlined DownOutlined
-                                LeftOutlined RightOutlined
-                                CloseCircleOutlined
-                                ArrowRightOutlined]]
-   [com.ruoyi.frontend.components.icon-picker :as icon-picker]))
+   [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.components.icon-picker :as icon-picker]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 (defn- tab-context-menu
   "标签页右键菜单项。"

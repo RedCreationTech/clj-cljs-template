@@ -1,11 +1,9 @@
 (ns com.ruoyi.frontend.events.notices
   "通知公告事件。"
   (:require
-   [com.ruoyi.frontend.events.common :as ec]
+   [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api :as api]
-   [com.ruoyi.frontend.db :as db]
-   [com.ruoyi.frontend.router :as router]
    [re-frame.core :as rf]))
 
 (rf/reg-event-fx :notices/search

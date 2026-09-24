@@ -1,14 +1,16 @@
 (ns com.ruoyi.frontend.pages.menu
   "菜单管理页面 — 树形表格、CRUD、图标选择器。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [PlusOutlined EditOutlined DeleteOutlined ReloadOutlined SearchOutlined CheckOutlined ColumnHeightOutlined]]
+   ["@ant-design/icons" :refer [CheckOutlined ColumnHeightOutlined DeleteOutlined EditOutlined
+                                PlusOutlined ReloadOutlined SearchOutlined]]
    [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.components.icon-picker :as icon-picker]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
-   [com.ruoyi.frontend.components.icon-picker :as icon-picker]))
+   [goog.object]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 ;; ─── 辅助：平铺菜单转树 ──────────────────────────────────────────────────────
 
@@ -72,7 +74,7 @@
                      :style (merge page-search/select-style {:width 260})
                      :allowClear true
                      :value status
-                     :onChange #(set-status! %)}
+                     :onChange set-status!}
         [antd/select-option {:value "0"} "正常"]
         [antd/select-option {:value "1"} "停用"]]
        {:width 340}]

@@ -1,17 +1,13 @@
 (ns com.ruoyi.frontend.pages.layout.header
   "主布局 Header 的组成部分:顶部/侧边导航区、右侧操作区、显示设置面板。"
   (:require
-   [reagent.core :as r]
-   [re-frame.core :as rf]
+   ["@ant-design/icons" :refer [BellOutlined ExpandOutlined FontSizeOutlined GithubOutlined
+                                MenuFoldOutlined MenuUnfoldOutlined QuestionCircleOutlined
+                                SearchOutlined]]
+   ["antd" :refer [Avatar Badge Button Dropdown Menu Popover Segmented]]
    [com.ruoyi.frontend.config :as config]
-   ["antd" :refer [Menu Button Badge Dropdown Avatar Popover Segmented]]
-   ["@ant-design/icons" :refer [SearchOutlined
-                                GithubOutlined
-                                QuestionCircleOutlined
-                                ExpandOutlined
-                                BellOutlined
-                                FontSizeOutlined
-                                MenuFoldOutlined MenuUnfoldOutlined]]))
+   [re-frame.core :as rf]
+   [reagent.core :as r]))
 
 ;; 顶部导航模式下的 Header 左侧:品牌 + 横向菜单。
 (defn top-nav-header

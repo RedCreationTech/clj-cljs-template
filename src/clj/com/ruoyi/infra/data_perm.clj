@@ -9,10 +9,7 @@
   - 5: SELF         — 仅本人
 
   用法: (data-perm-filter identity role-key table-alias)
-  返回一个 SQL 片段或 WHERE 条件 map，注入到 HugSQL 查询中。"
-  (:require
-   [clojure.string :as str]
-   [clojure.tools.logging :as log]))
+  返回一个 SQL 片段或 WHERE 条件 map，注入到 HugSQL 查询中。")
 
 ;; ──────────── 数据权限 SQL 片段生成 ────────────
 
@@ -69,7 +66,7 @@
   [identity role-key & {:keys [dept-ids alias]
                         :or   {alias "u"}}]
   (let [user-id  (:user-id identity)
-        user-name (:user-name identity)
+        _user-name (:user-name identity)
         roles    (:roles identity [])]
     ;; 管理员不过滤
     (if (some #(= "admin" (:role-key %)) roles)

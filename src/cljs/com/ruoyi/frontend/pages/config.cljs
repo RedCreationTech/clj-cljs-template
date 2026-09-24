@@ -1,14 +1,14 @@
 (ns com.ruoyi.frontend.pages.config
   "参数配置管理页面 — 完整 CRUD。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [PlusOutlined DownloadOutlined SearchOutlined ReloadOutlined]]
+   ["@ant-design/icons" :refer [DownloadOutlined PlusOutlined ReloadOutlined SearchOutlined]]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api :as api]
    [com.ruoyi.frontend.components.page-search :as page-search]
-   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]))
+   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 (defn- search-bar []
   (let [[keyword set-keyword!] (hooks/use-state "")]
@@ -108,14 +108,14 @@
                [page-toolbar/round-tool-button {:title "刷新"
                                                 :icon (r/as-element [:> ReloadOutlined])
                                                 :on-click #(rf/dispatch [:configs/fetch {}])}]]}]
-      [antd/table {:rowKey "config_id" :loading loading? :scroll #js {:x 800}
-                   :rowSelection #js {}
-                   :columns (config-columns
-                             #(do (set-editing! %) (set-modal-visible! true))
-                             #(rf/dispatch [:configs/delete %]))
-                   :dataSource (clj->js items)
-                   :pagination {:pageSize 10 :total total
-                                :show-total (fn [t] (str "共 " t " 条"))}}]
+     [antd/table {:rowKey "config_id" :loading loading? :scroll #js {:x 800}
+                  :rowSelection #js {}
+                  :columns (config-columns
+                            #(do (set-editing! %) (set-modal-visible! true))
+                            #(rf/dispatch [:configs/delete %]))
+                  :dataSource (clj->js items)
+                  :pagination {:pageSize 10 :total total
+                               :show-total (fn [t] (str "共 " t " 条"))}}]
      [config-modal
       {:visible? modal-visible?
        :editing editing

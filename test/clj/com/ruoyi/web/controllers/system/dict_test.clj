@@ -1,22 +1,23 @@
 (ns com.ruoyi.web.controllers.system.dict-test
   "字典控制器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.controllers.system.dict :as dict]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.controllers.system.dict :as dict]))
 
 (def mock-dict-service
-  {:query-fn (fn [q p] (case q
-                         :list-dict-types [{:dict_id 1 :dict_name "test"}]
-                         :find-dict-type-by-id {:dict_id 1 :dict_name "test"}
-                         :find-dict-data-by-id {:dict_code 1 :dict_label "test"}
-                         :list-dict-data [{:dict_code 1 :dict_label "test"}]
-                         :create-dict-type! [{:dict_id 2}]
-                         :last-insert-rowid {:last_insert_rowid 2}
-                         :update-dict-type! nil
-                         :delete-dict-type! nil
-                         :create-dict-data! [{:dict_code 2}]
-                         :update-dict-data! nil
-                         :delete-dict-data! nil
-                         []))})
+  {:query-fn (fn [q _p] (case q
+                          :list-dict-types [{:dict_id 1 :dict_name "test"}]
+                          :find-dict-type-by-id {:dict_id 1 :dict_name "test"}
+                          :find-dict-data-by-id {:dict_code 1 :dict_label "test"}
+                          :list-dict-data [{:dict_code 1 :dict_label "test"}]
+                          :create-dict-type! [{:dict_id 2}]
+                          :last-insert-rowid {:last_insert_rowid 2}
+                          :update-dict-type! nil
+                          :delete-dict-type! nil
+                          :create-dict-data! [{:dict_code 2}]
+                          :update-dict-data! nil
+                          :delete-dict-data! nil
+                          []))})
 
 (deftest test-list-dict-types
   (testing "查询字典类型列表"
@@ -32,7 +33,7 @@
 
 (deftest test-get-dict-type-not-found
   (testing "获取不存在的字典类型"
-    (let [service {:query-fn (fn [q p] (case q :find-dict-type-by-id nil []))}
+    (let [service {:query-fn (fn [q _p] (case q :find-dict-type-by-id nil []))}
           request {:path-params {:id "999"}}
           response (dict/get-dict-type {:dict-service service} request)]
       (is (map? response))
@@ -72,7 +73,7 @@
 
 (deftest test-get-dict-data-not-found
   (testing "获取不存在的字典数据"
-    (let [service {:query-fn (fn [q p] (case q :find-dict-data-by-id nil []))}
+    (let [service {:query-fn (fn [q _p] (case q :find-dict-data-by-id nil []))}
           request {:path-params {:id "999"}}
           response (dict/get-dict-data {:dict-service service} request)]
       (is (map? response))

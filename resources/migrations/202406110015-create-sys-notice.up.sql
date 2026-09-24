@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS sys_notice (
   remark      VARCHAR(500) NOT NULL DEFAULT ''
 );
 --;;
-
 CREATE INDEX idx_sys_notice_type ON sys_notice(notice_type);
 --;;
 CREATE INDEX idx_sys_notice_status ON sys_notice(status);

@@ -1,8 +1,8 @@
 (ns com.ruoyi.frontend.pages.layout.menu-build
   "把后端返回的菜单树转换为 antd Menu 结构,并派生页面标签/图标/展开键。"
   (:require
-   [com.ruoyi.frontend.router :as router]
-   [com.ruoyi.frontend.components.icon-picker :as icon-picker]))
+   [com.ruoyi.frontend.components.icon-picker :as icon-picker]
+   [com.ruoyi.frontend.router :as router]))
 
 (defn filter-visible-menus
   "过滤掉 F 类型（按钮权限）菜单，只保留 M 目录和 C 菜单。"
@@ -105,7 +105,7 @@
                 (cond
                   (= item-key target-key) group-trail
                   (seq children) (find-ancestor-keys children target-key full-path
-                                                      (conj group-trail item-key))
+                                                     (conj group-trail item-key))
                   :else nil))))
           nil
           menus))

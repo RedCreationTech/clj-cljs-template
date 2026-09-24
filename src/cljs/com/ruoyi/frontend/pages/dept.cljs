@@ -1,14 +1,15 @@
 (ns com.ruoyi.frontend.pages.dept
   "部门管理页面 — 树形表格、CRUD。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [PlusOutlined EditOutlined DeleteOutlined ReloadOutlined SearchOutlined CheckOutlined ColumnHeightOutlined]]
+   ["@ant-design/icons" :refer [CheckOutlined ColumnHeightOutlined DeleteOutlined EditOutlined
+                                PlusOutlined ReloadOutlined SearchOutlined]]
    [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.components.dept-tree-select :refer [dept-tree-select]]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
-   [com.ruoyi.frontend.components.dept-tree-select :refer [dept-tree-select]]))
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 ;; ─── 辅助函数 ──────────────────────────────────────────────────────
 
@@ -42,7 +43,7 @@
                      :style page-search/select-style
                      :allowClear true
                      :value status
-                     :onChange #(set-status! %)}
+                     :onChange set-status!}
         [antd/select-option {:value "0"} "正常"]
         [antd/select-option {:value "1"} "停用"]]]
       [page-search/search-actions

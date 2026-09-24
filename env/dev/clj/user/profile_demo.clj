@@ -4,10 +4,9 @@
    1. GC 压力 — 大量临时对象 vs 基本类型数组
    2. 反射开销 — 无 type hint vs 有 type hint"
   (:require
+   [clj-async-profiler.core :as prof]
    [clojure.java.io :as io]
-   [clojure.string :as str]
-   [criterium.core :as c]
-   [clj-async-profiler.core :as prof]))
+   [criterium.core :as c]))
 
 (set! *warn-on-reflection* true)
 

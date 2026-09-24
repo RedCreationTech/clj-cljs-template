@@ -1,11 +1,12 @@
 (ns com.ruoyi.frontend.pages.profile
   "个人中心页面。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
+   ["@ant-design/icons" :refer [ApartmentOutlined CalendarOutlined MailOutlined MobileOutlined
+                                TeamOutlined UserOutlined]]
+   [com.ruoyi.frontend.antd :as antd]
    [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [ApartmentOutlined CalendarOutlined MailOutlined MobileOutlined TeamOutlined UserOutlined]]
-   [com.ruoyi.frontend.antd :as antd]))
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 (def card-style
   {:border "1px solid #e4e7ed"

@@ -37,4 +37,3 @@ CREATE TABLE sys_login_log (
 CREATE INDEX idx_sys_login_log_login_time ON sys_login_log(login_time);
 --;;
 CREATE INDEX idx_sys_login_log_user_name ON sys_login_log(user_name);
---;;

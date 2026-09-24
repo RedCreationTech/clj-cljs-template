@@ -1,7 +1,8 @@
 (ns com.ruoyi.domain.system.dept-test
   "部门领域服务测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.domain.system.dept :as dept]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.domain.system.dept :as dept]))
 
 (def mock-depts
   [{:dept_id 1 :dept_name "总公司" :parent_id 0 :order_num 1 :status "0" :ancestors "0"}

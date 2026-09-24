@@ -1,2 +1,2 @@
-DROP INDEX IF EXISTS idx_sys_form_template_key ON sys_form_template;
+-- form_key 的唯一索引随表一起删除
 DROP TABLE IF EXISTS sys_form_template;

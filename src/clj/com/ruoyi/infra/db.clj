@@ -1,11 +1,12 @@
 (ns com.ruoyi.infra.db
   "数据库抽象层 — 支持 SQLite 和 MySQL。"
-  (:require [clojure.string :as str]
-            [clojure.tools.logging :as log]
-            [next.jdbc :as jdbc]
-            [next.jdbc.result-set :as rs]
-            [com.ruoyi.infra.datasource :as ds]
-            [migratus.core]))
+  (:require
+   [clojure.string :as str]
+   [clojure.tools.logging :as log]
+   [com.ruoyi.infra.datasource :as ds]
+   [migratus.core]
+   [next.jdbc :as jdbc]
+   [next.jdbc.result-set :as rs]))
 
 ;; ─── 数据库类型检测 ──────────────────────────────────────────────────────
 
@@ -199,9 +200,9 @@
         hc (doto (com.zaxxer.hikari.HikariConfig.)
              (.setJdbcUrl jdbc-url)
              (.setMaximumPoolSize
-               (int (if (.contains jdbc-url "sqlite") 1 pool-size)))
+              (int (if (.contains jdbc-url "sqlite") 1 pool-size)))
              (.setMinimumIdle
-               (int (if (.contains jdbc-url "sqlite") 1 1)))
+              (int (if (.contains jdbc-url "sqlite") 1 1)))
              (.setConnectionTestQuery "SELECT 1")
              (.setValidationTimeout 3000))]
     (com.zaxxer.hikari.HikariDataSource. hc)))
@@ -225,7 +226,7 @@
     (log/info "[swap-db!] 创建新连接池:" jdbc-url)
     (let [new-ds (make-hikari-datasource jdbc-url {:pool-size pool-size})
           migration-dir (or migration-dir
-                           (if (.contains jdbc-url "mysql") "migrations" "migrations-sqlite"))]
+                            (if (.contains jdbc-url "mysql") "migrations" "migrations-sqlite"))]
       ;; 运行迁移
       (log/info "[swap-db!] 运行迁移 (" migration-dir ")...")
       (run-migrations! new-ds migration-dir)

@@ -1,8 +1,9 @@
 (ns com.ruoyi.infra.data-perm-test
   "数据权限过滤测试。"
-  (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.infra.data-perm :as dp]))
+  (:require
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.infra.data-perm :as dp]))
 
 (deftest test-scope-names
   (testing "数据权限范围名称映射"

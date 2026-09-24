@@ -1,6 +1,8 @@
 # syntax = docker/dockerfile:1.4
 # 多阶段构建:第一阶段用 Clojure CLI 打 uberjar,第二阶段只带 JRE 运行。
-# 前端产物需在构建镜像前先执行 `npx shadow-cljs release app`(或在 CI 里加一个 node 阶段)。
+# 前端产物需在构建镜像前先执行 `bb release`(生成 resources/public/js,会被 COPY 进镜像)。
+# 运行时必须注入生产密钥,否则应用拒绝启动(com.ruoyi.infra.secrets):
+#   docker run -e JWT_SECRET=$(openssl rand -hex 32) -e COOKIE_SECRET=$(openssl rand -hex 8) -p 3000:3000 <image>
 FROM clojure:temurin-21-tools-deps-bookworm-slim AS build
 
 WORKDIR /app

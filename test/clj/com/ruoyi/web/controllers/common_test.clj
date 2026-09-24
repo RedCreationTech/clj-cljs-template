@@ -1,10 +1,12 @@
 (ns com.ruoyi.web.controllers.common-test
   "通用控制器测试。"
-  (:require [clojure.java.io :as io]
-            [clojure.test :refer [deftest is testing use-fixtures]]
-            [com.ruoyi.web.controllers.common :as common])
-  (:import [java.io File]
-           [java.nio.file Files]))
+  (:require
+   [clojure.java.io :as io]
+   [clojure.test :refer [deftest is testing use-fixtures]]
+   [com.ruoyi.web.controllers.common :as common])
+  (:import
+   [java.io File]
+   [java.nio.file Files]))
 
 (defn- temp-dir []
   (-> (Files/createTempDirectory "common-test" (make-array java.nio.file.attribute.FileAttribute 0))
@@ -56,7 +58,7 @@
 (deftest test-upload-exception
   (testing "上传复制失败时返回异常信息"
     (let [response (common/upload {} {:params {:file {:tempfile (io/file "/nonexistent/path.txt")
-                                                       :filename "x.txt"}}})]
+                                                      :filename "x.txt"}}})]
       (is (= 200 (:status response)))
       (is (= 500 (get-in response [:body :code])))
       (is (string? (get-in response [:body :msg]))))))

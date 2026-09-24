@@ -1,19 +1,18 @@
 (ns com.ruoyi.web.controllers.system.import-export
   "用户导入导出控制器，使用 multipart 上传与 clojure.data.csv。"
   (:require
-   [com.ruoyi.domain.system.user :as user-service]
-   [com.ruoyi.domain.system.role :as role-service]
-   [com.ruoyi.domain.system.menu :as menu-service]
-   [com.ruoyi.domain.system.dept :as dept-service]
-   [com.ruoyi.domain.system.post :as post-service]
-   [com.ruoyi.domain.system.dict :as dict-service]
-   [com.ruoyi.domain.system.config :as config-service]
-   [com.ruoyi.infra.data-perm :as data-perm]
-   [ring.util.response :as response]
-   [ring.middleware.multipart-params :as multipart]
    [clojure.data.csv :as csv]
    [clojure.java.io :as io]
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [com.ruoyi.domain.system.config :as config-service]
+   [com.ruoyi.domain.system.dept :as dept-service]
+   [com.ruoyi.domain.system.dict :as dict-service]
+   [com.ruoyi.domain.system.menu :as menu-service]
+   [com.ruoyi.domain.system.post :as post-service]
+   [com.ruoyi.domain.system.role :as role-service]
+   [com.ruoyi.domain.system.user :as user-service]
+   [com.ruoyi.infra.data-perm :as data-perm]
+   [ring.util.response :as response]))
 
 (defn- ok
   ([data] (ok 200 "操作成功" data))
@@ -155,7 +154,7 @@
 
 (defn- generic-export
   "通用导出函数。"
-  [list-fn service params header csv-fn filename request]
+  [list-fn service params header csv-fn filename _request]
   (try
     (let [result (list-fn service (merge {:page-num 1 :page-size 10000} params))
           rows (if (sequential? result) result (:rows result []))

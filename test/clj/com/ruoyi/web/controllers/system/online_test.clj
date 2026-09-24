@@ -1,7 +1,8 @@
 (ns com.ruoyi.web.controllers.system.online-test
   "在线用户控制器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.controllers.system.online :as online]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.controllers.system.online :as online]))
 
 (def mock-online-service
   {:list-online (fn [_params] {:rows [{:tokenId "1" :userName "admin"}]

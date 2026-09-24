@@ -1,10 +1,11 @@
 (ns com.ruoyi.web.controllers.auth-test
   "认证控制器测试。"
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [com.ruoyi.web.controllers.auth :as auth]
-            [com.ruoyi.infra.security :as security]
-            [com.ruoyi.infra.online :as online]
-            [com.ruoyi.web.controllers.captcha :as captcha]))
+  (:require
+   [clojure.test :refer [deftest is testing use-fixtures]]
+   [com.ruoyi.infra.online :as online]
+   [com.ruoyi.infra.security :as security]
+   [com.ruoyi.web.controllers.auth :as auth]
+   [com.ruoyi.web.controllers.captcha :as captcha]))
 
 (def hashed-password (security/hash-password "admin123"))
 

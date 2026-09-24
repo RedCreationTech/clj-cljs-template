@@ -1,10 +1,12 @@
 (ns com.ruoyi.web.controllers.system.profile-test
   "个人中心控制器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.infra.security :as security]
-            [com.ruoyi.web.controllers.system.profile :as profile])
-  (:import [java.nio.file Files]
-           [java.nio.file.attribute FileAttribute]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.infra.security :as security]
+   [com.ruoyi.web.controllers.system.profile :as profile])
+  (:import
+   [java.nio.file Files]
+   [java.nio.file.attribute FileAttribute]))
 
 (defn mock-user-service
   "返回指定用户的 mock 用户服务。"

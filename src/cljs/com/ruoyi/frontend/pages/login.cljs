@@ -1,12 +1,10 @@
 (ns com.ruoyi.frontend.pages.login
   "登录页面 — 带验证码。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
+   ["@ant-design/icons" :refer [LockOutlined SafetyOutlined UserOutlined]]
+   [com.ruoyi.frontend.config :as config]
    [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [UserOutlined LockOutlined SafetyOutlined]]
-   [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.config :as config]))
+   [reagent.hooks :as hooks]))
 
 (defn- login-field [icon type label value set-value!]
   [:div {:style {:marginBottom 20}}

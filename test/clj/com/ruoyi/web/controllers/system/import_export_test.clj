@@ -2,7 +2,6 @@
   "导入导出控制器测试。"
   (:require
    [clojure.test :refer [deftest is testing]]
-   [clojure.java.io :as io]
    [com.ruoyi.web.controllers.system.import-export :as ie]))
 
 (defn- temp-csv-file [content]
@@ -92,7 +91,7 @@
 (deftest test-import-users-success
   (testing "成功导入用户 CSV"
     (let [file (temp-csv-file (str "user_name,nick_name,email,phonenumber,sex,status,dept_id,remark\n"
-                                     "testuser,测试用户,test@example.com,13800138001,0,0,1,备注"))
+                                   "testuser,测试用户,test@example.com,13800138001,0,0,1,备注"))
           request {:multipart-params {"file" {:tempfile file :filename "users.csv"}}
                    :identity {:user_name "admin"}}
           response (ie/import-users {:user-service mock-user-service} request)]
@@ -110,9 +109,9 @@
 (deftest test-export-users
   (testing "导出用户 CSV"
     (let [request {:query-params {}
-                  :identity {:user-id 1
-                             :user-name "admin"
-                             :roles [{:role-key "admin"}]}}
+                   :identity {:user-id 1
+                              :user-name "admin"
+                              :roles [{:role-key "admin"}]}}
           response (ie/export-users {:user-service mock-user-service} request)]
       (is (= 200 (:status response)))
       (is (= "text/csv; charset=utf-8" (get-in response [:headers "Content-Type"])))

@@ -2,11 +2,12 @@
   "验证码控制器 — 生成图片验证码。"
   (:require
    [ring.util.response :as response])
-  (:import [java.awt Color Font RenderingHints]
-           [java.awt.image BufferedImage]
-           [javax.imageio ImageIO]
-           [java.io ByteArrayOutputStream]
-           [java.util Random]))
+  (:import
+   [java.awt Color Font RenderingHints]
+   [java.awt.image BufferedImage]
+   [java.io ByteArrayOutputStream]
+   [java.util Random]
+   [javax.imageio ImageIO]))
 
 ;; 验证码存储（实际项目应用 Redis）
 (defonce captcha-store (atom {}))

@@ -1,13 +1,14 @@
 (ns com.ruoyi.domain.system.post-test
   "岗位领域服务测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.domain.system.post :as post]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.domain.system.post :as post]))
 
 (def mock-posts
   [{:post_id 1 :post_code "ceo" :post_name "董事长" :post_sort 1 :status "0"}
    {:post_id 2 :post_code "cto" :post_name "技术总监" :post_sort 2 :status "0"}])
 
-(defn- mock-query-fn [query-name params]
+(defn- mock-query-fn [query-name _params]
   (case query-name
     :list-posts mock-posts
     :find-post-by-id (first mock-posts)

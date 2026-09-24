@@ -1,16 +1,14 @@
 (ns com.ruoyi.frontend.pages.dashboard
   "仪表盘首页 — 统计卡片 + 快捷入口 + 系统信息。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [UserOutlined TeamOutlined MenuOutlined
-                                FileTextOutlined ScheduleOutlined
-                                DashboardOutlined SettingOutlined
-                                SafetyOutlined DatabaseOutlined
-                                CloudOutlined CodeOutlined]]
+   ["@ant-design/icons" :refer [CloudOutlined CodeOutlined DatabaseOutlined FileTextOutlined
+                                MenuOutlined SafetyOutlined ScheduleOutlined SettingOutlined
+                                TeamOutlined UserOutlined]]
+   [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.config :as config]))
+   [com.ruoyi.frontend.config :as config]
+   [re-frame.core :as rf]
+   [reagent.hooks :as hooks]))
 
 ;; ─── 工具函数 ──────────────────────────────────────────────────────
 

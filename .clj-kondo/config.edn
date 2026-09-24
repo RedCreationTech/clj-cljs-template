@@ -1,0 +1,12 @@
+;; clj-kondo 配置 —— CI 以 `bb lint` 运行,warning 即失败(见 bb.edn / .github/workflows/ci.yml)
+{:linters
+ {;; 解构参数里未用到的 key、:as 别名在 handler / Integrant init-key 里很常见,不视为问题
+  :unused-binding {:exclude-destructured-keys-in-fn-args true
+                   :exclude-destructured-as true}
+  ;; 测试里允许 (:require [clojure.test :refer :all])
+  :refer-all {:exclude [clojure.test]}
+  ;; 这些 lint 默认关闭,模板里打开,越早发现越便宜
+  :redundant-fn-wrapper {:level :warning}
+  :used-underscored-binding {:level :warning}}
+
+ :output {:exclude-files ["resources/public/js" "\\.shadow-cljs" "node_modules" "target"]}}

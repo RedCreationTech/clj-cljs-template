@@ -1,16 +1,17 @@
 (ns com.ruoyi.web.controllers.system.config-test
   "参数设置控制器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.controllers.system.config :as config]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.controllers.system.config :as config]))
 
 (def mock-config-service
-  {:query-fn (fn [q p] (case q
-                         :list-configs [{:config_id 1 :config_name "test"}]
-                         :find-config-by-id {:config_id 1 :config_name "test"}
-                         :create-config! [{:config_id 2}]
-                         :update-config! nil
-                         :delete-config! nil
-                         []))})
+  {:query-fn (fn [q _p] (case q
+                          :list-configs [{:config_id 1 :config_name "test"}]
+                          :find-config-by-id {:config_id 1 :config_name "test"}
+                          :create-config! [{:config_id 2}]
+                          :update-config! nil
+                          :delete-config! nil
+                          []))})
 
 (deftest test-list-configs
   (testing "查询参数列表"

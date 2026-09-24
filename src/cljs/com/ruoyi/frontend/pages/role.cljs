@@ -1,14 +1,16 @@
 (ns com.ruoyi.frontend.pages.role
   "角色管理页面 — 搜索、CRUD、菜单/数据/用户权限分配。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [DownloadOutlined SearchOutlined ReloadOutlined PlusOutlined EditOutlined DeleteOutlined]]
+   ["@ant-design/icons" :refer [DeleteOutlined DownloadOutlined EditOutlined PlusOutlined
+                                ReloadOutlined SearchOutlined]]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api :as api]
    [com.ruoyi.frontend.components.page-search :as page-search]
-   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]))
+   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [re-frame.core :as rf]
+   [re-frame.db]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 ;; ─── 辅助函数 ──────────────────────────────────────────────────────
 
@@ -272,7 +274,7 @@
                                   (rf/dispatch [dispatch-fetch]))}
       "重置"]]))
 
-(defn- user-alloc-table [items-sub total-sub loading?-sub selected-sub set-selected-event fetch-event action-label action-event]
+(defn- user-alloc-table [items-sub total-sub loading?-sub selected-sub set-selected-event _fetch-event action-label action-event]
   (let [items @(rf/subscribe (if (keyword? items-sub) [items-sub] items-sub))
         total @(rf/subscribe (if (keyword? total-sub) [total-sub] total-sub))
         loading? @(rf/subscribe (if (keyword? loading?-sub) [loading?-sub] loading?-sub))

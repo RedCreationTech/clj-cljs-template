@@ -25,7 +25,9 @@
    :swagger "monitor/swagger"
    :build "tool/build"
    :profile "system/user/profile"
-   :dashboard "dashboard"})
+   :dashboard "dashboard"
+   ;; [new-module] menu-keys
+   })
 
 (def page-breadcrumbs
   {:dashboard ["首页"]
@@ -47,7 +49,9 @@
    :build ["首页" "系统工具" "表单构建"]
    :gen ["首页" "系统工具" "代码生成"]
    :swagger ["首页" "系统工具" "系统接口"]
-   :profile ["首页" "个人中心"]})
+   :profile ["首页" "个人中心"]
+   ;; [new-module] breadcrumbs
+   })
 
 (def route-labels
   (into {} (map (fn [[k xs]] [k (last xs)]) page-breadcrumbs)))
@@ -72,4 +76,6 @@
    :build "build"
    :gen "code"
    :swagger "swagger"
-   :profile "profile"})
+   :profile "profile"
+   ;; [new-module] icons
+   })

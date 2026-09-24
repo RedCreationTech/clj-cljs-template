@@ -1,11 +1,10 @@
 (ns com.ruoyi.frontend.events.depts
   "部门管理事件。"
   (:require
-   [com.ruoyi.frontend.events.common :as ec]
+   [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api :as api]
-   [com.ruoyi.frontend.db :as db]
-   [com.ruoyi.frontend.router :as router]
+   [com.ruoyi.frontend.events.common :as ec]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :depts/set-list

@@ -1,7 +1,9 @@
 (ns com.ruoyi.web.middleware.operlog-test
   "操作日志中间件测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.middleware.operlog :as operlog]))
+  (:require
+   [clojure.string]
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.middleware.operlog :as operlog]))
 
 (defn- make-capturing-query-fn []
   (let [calls (atom [])]

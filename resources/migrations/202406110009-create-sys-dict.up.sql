@@ -32,4 +32,3 @@ CREATE TABLE sys_dict_data (
 CREATE INDEX idx_sys_dict_data_type ON sys_dict_data(dict_type);
 --;;
 CREATE INDEX idx_sys_dict_data_status ON sys_dict_data(status);
---;;

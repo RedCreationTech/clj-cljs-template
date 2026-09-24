@@ -1,6 +1,7 @@
 (ns com.ruoyi.domain.system.role-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.domain.system.role :as role]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.domain.system.role :as role]))
 
 (def mock-roles
   [{:role_id 1 :role_name "管理员" :role_key "admin" :role_sort 1 :status "0"}
@@ -10,7 +11,7 @@
   [{:menu_id 1 :menu_name "系统管理" :parent_id 0}
    {:menu_id 2 :menu_name "用户管理" :parent_id 1}])
 
-(defn- mock-query-fn [q p & rest]
+(defn- mock-query-fn [q _p & _rest]
   (case q
     :list-roles mock-roles
     :find-role-by-id (first mock-roles)

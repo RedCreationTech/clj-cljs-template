@@ -1,6 +1,6 @@
 #+TITLE: clojure-template — 架构设计 (C4 Model, 可执行 org 文档)
 #+AUTHOR: clojure-template maintainers
-#+DATE: 2026-09-23
+#+DATE: 2026-09-24
 #+LANGUAGE: zh-CN
 #+OPTIONS: toc:3 num:t ::t |:t ^:nil
 #+PROPERTY: header-args :results output :eval never-export
@@ -42,7 +42,7 @@ System Context(L1)→ Container(L2)→ Component(L3)→ Code(L4),再补充动态
 
 刷新一张图:光标放在 mermaid 块上 ~C-c C-c~ ,会覆盖 ~img/<名字>.svg~ 并更新 ~#+RESULTS:~ ;刷新全部:~M-x org-babel-execute-buffer~ (会连 sh 证据块一起跑,含约 3 分钟的后端测试)。
 
-不用 Emacs 也可以:把 ~sh~ 块的内容复制到终端执行;mermaid 块可贴到 https://mermaid.live 预览。要生成自包含的 HTML(图内联为 SVG、证据块附上生成时的实际输出),在仓库根目录执行 ~python3 docs/architecture/build-html.py~ (需要 pandoc 与 node,首次会通过 npx 拉取 mermaid-cli),它同时会重写 ~img/*.svg~ ,产物为 ~docs/architecture/c4-model.html~ 。
+不用 Emacs 也可以:把 ~sh~ 块的内容复制到终端执行;mermaid 块可贴到 https://mermaid.live 预览。要生成自包含的 HTML(图内联为 SVG、证据块附上生成时的实际输出),在仓库根目录执行 ~bb docs~ (即 ~python3 docs/architecture/build-html.py~ ;需要 pandoc 与 node,首次会通过 npx 拉取 mermaid-cli),它同时会重写 ~img/*.svg~ ,产物为 ~docs/architecture/c4-model.html~ 。
 
 * 1. 阅读指南
 
@@ -55,8 +55,8 @@ System Context(L1)→ Container(L2)→ Component(L3)→ Code(L4),再补充动态
 | Dynamic | 关键场景下组件如何协作(登录、CRUD、导航、启动) | §7 |
 | Deployment | 开发/生产环境下容器落在什么基础设施上 | §8 |
 | 横切关注点 | 认证授权、审计、双库兼容、配置、热重载、错误处理 | §9 |
-| 扩展指南 | 新增业务模块、从模板派生新项目 | §10 |
-| 质量保障 | 测试分层、规模约束、覆盖率 | §11 |
+| 扩展指南 | ~bb new-module~ 脚手架、手工清单、从模板派生新项目 | §10 |
+| 质量保障 | 测试分层、静态检查、规模约束、CI 流水线 | §11 |
 | ADR | 为什么这样设计、曾经放弃过什么 | §12 |
 | 设计债 | 已知与设计不一致之处、建议的接入方式 | §13 |
 
@@ -121,8 +121,8 @@ flowchart TB
 
 | 容器 | 技术 | 入口 / 配置 | 生命周期 |
 |------+------+-------------+----------|
-| 后端服务 | JDK 21, Clojure 1.12.6, Kit 1.0, Integrant, Undertow, Reitit 0.11, Ring 1.15, Muuntaja 0.6, Malli 0.20, Buddy 3, conman/HugSQL, Migratus, Quartz 2.5, HikariCP 7, sqlite-jdbc 3.53, MySQL Connector/J 26.7 | ~com.ruoyi.core/-main~;装配见 ~resources/system.edn~ | ~clojure -M:dev -m com.ruoyi.core~ 或 uberjar |
-| Web 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0(函数组件 + Hooks), re-frame 1.4, bidi, cljs-ajax, antd 6.6, React 19.3 | ~com.ruoyi.frontend.app/init~;构建见 ~shadow-cljs.edn~ | ~npx shadow-cljs watch/release app~ |
+| 后端服务 | JDK 21, Clojure 1.12.6, Kit 1.0, Integrant, Undertow, Reitit 0.11, Ring 1.15, Muuntaja 0.6, Malli 0.20, Buddy 3, conman/HugSQL, Migratus, Quartz 2.5, HikariCP 7, sqlite-jdbc 3.53, MySQL Connector/J 26.7 | ~com.ruoyi.core/-main~;装配见 ~resources/system.edn~ | 开发 ~bb dev~ / ~bb backend~ ;生产 ~bb uberjar~ 后 ~java -jar~ (prod 先校验密钥) |
+| Web 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0(函数组件 + Hooks), re-frame 1.4, bidi, cljs-ajax, antd 6.6, React 19.3 | ~com.ruoyi.frontend.app/init~;构建见 ~shadow-cljs.edn~ | 开发 ~bb dev~ (watch);生产 ~bb release~ (warning 即失败) |
 | nREPL | kit-nrepl(Integrant 组件 ~:nrepl/server~) | ~NREPL_PORT~ / ~NREPL_HOST~ | 随后端启动;生产可通过环境变量改端口/绑定 |
 | 数据库 | SQLite(开发默认)/ MySQL 8 | ~JDBC_URL~ + ~MIGRATION_DIR~ | 启动时 ~migrate-on-init?~ 自动迁移 |
 
@@ -301,7 +301,7 @@ flowchart TB
 ** 5.1 关键设计点
 
 - *菜单不写死*:侧边栏由 ~/api/auth/getInfo~ 返回的菜单树(按角色过滤)经 ~layout/menu-build~ 转成 antd items;前端只维护 ~page->menu-key~ 、面包屑、图标这类"路由关键词 → 展示"映射(~layout/menu_data.cljs~)。 ~getInfo~ 同时返回 ~permissions~,目前前端只存不用(按钮显隐未接入,§13)。
-- *多 Tab*: ~:navigate~ 事件同时更新 ~:page~ 、激活/新增 Tab(~events/common~ 的 ~activate-page-tab~)、按页面预取数据(~events/core~ 里的 ~fetch~ 表)。
+- *多 Tab*: ~:navigate~ 事件同时更新 ~:page~ 、激活/新增 Tab(~events/common~ 的 ~activate-page-tab~)、按页面预取数据(~events/core~ 里的 ~fetch~ 表,系统模块用;脚手架生成的业务页面改在组件挂载时 ~use-effect~ 自行加载,不需要登记预取)。
 - *局部状态用 Hooks,全局状态用 re-frame*,禁止 ~reagent/atom~ (AGENTS.md 有完整的 antd 6 适配清单)。
 - *主题与布局设置* 持久化在 localStorage(键前缀 ~rouyi-~ / ~ruoyi_~,改名脚本会一并替换)。
 
@@ -334,6 +334,9 @@ echo "routes:     $(grep -c '" :' src/cljs/com/ruoyi/frontend/router.cljs)"
 | ~src/cljs/com/ruoyi/frontend/*~ | 见 §5 | 每个领域: ~api/x.cljs~ + ~events/x.cljs~ + ~pages/x.cljs~ (+ ~subs/~) |
 | ~test/clj/com/ruoyi/**~ | clojure.test; ~test_utils.clj~ 提供启动测试系统、ring-mock 请求、登录 token 等 | 文件名 ~*_test.clj~ |
 | ~tests/e2e/*.spec.js~ | Playwright | 依赖已启动的后端(3000) |
+| ~bb.edn~ 、 ~bb/tasks/*~ | 工程任务(开发、测试、lint、改名、脚手架)与 ~scaffold/~ 代码模板 | 只依赖 babashka,跨平台;路径与命名空间从 ~kit.edn~ 读取 |
+| ~scripts/db.clj~ | 数据库重置与迁移往返(JVM 脚本,由 ~bb test:mysql~ / ~bb db:roundtrip~ 调用) | 与应用读取同样的 ~JDBC_URL~ / ~MIGRATION_DIR~ |
+| ~.github/~ | CI 工作流与公共 setup 动作 | 只调用 bb 任务 |
 
 ** 6.2 一个模块的垂直切片(以「岗位 post」为例)
 
@@ -610,10 +613,10 @@ Integrant 按 ~#ig/ref~ 依赖自动排序; ~:app.system/job-scheduler~ 显式�
 flowchart LR
   subgraph DEV["开发机(macOS / Linux / Windows)"]
     direction TB
-    subgraph JVM1["JVM:clojure -M:dev -m com.ruoyi.core"]
+    subgraph JVM1["JVM:bb dev → clojure -M:dev -m com.ruoyi.core"]
       be1["后端 + nREPL<br/>3000 / 7000<br/>静态文件直接读 resources/public"]:::container
     end
-    subgraph NODE["Node.js:npx shadow-cljs watch app"]
+    subgraph NODE["Node.js:bb dev → shadow-cljs watch app"]
       fe1["shadow-cljs 编译器<br/>增量编译 → resources/public/js"]:::container
     end
     sqlite[("rouyi.db<br/>SQLite 文件")]:::container
@@ -626,7 +629,7 @@ flowchart LR
       rp["reverse proxy<br/>TLS 终止 443 → 3000"]:::container
     end
     subgraph JVM2["JVM:java -jar rouyi-standalone.jar"]
-      be2["uberjar(含前端 release 产物)<br/>PORT / JDBC_URL / MIGRATION_DIR /<br/>COOKIE_SECRET / JWT_SECRET 由环境变量注入"]:::container
+      be2["uberjar(含前端 release 产物)<br/>PORT / JDBC_URL / MIGRATION_DIR 由环境变量注入<br/>JWT_SECRET / COOKIE_SECRET 必填(启动校验)"]:::container
     end
     rp -- HTTP --> be2
   end
@@ -648,16 +651,25 @@ flowchart LR
 | ~NREPL_PORT~ / ~NREPL_HOST~ | 7000 / 127.0.0.1 | nREPL |
 | ~JDBC_URL~ | ~jdbc:sqlite:rouyi.db~ | 换 MySQL 时填 ~jdbc:mysql://…~ |
 | ~MIGRATION_DIR~ | ~migrations-sqlite~ | MySQL 填 ~migrations~ |
-| ~COOKIE_SECRET~ | 内置示例值 | 生产必须覆盖(16 字节) |
-| ~JWT_SECRET~ | 内置示例值 | 生产必须覆盖(见 ~infra/security.clj~) |
+| ~JWT_SECRET~ | 内置开发值 | prod 必填:≥32 字符且不等于内置值,否则拒绝启动(~infra/secrets.clj~);生成: ~openssl rand -hex 32~ |
+| ~COOKIE_SECRET~ | 内置开发值 | prod 必填:恰好 16 字节(AES-128 cookie store)且不等于内置值;生成: ~openssl rand -hex 8~ |
+
+test profile 使用独立端口 3100 / 7100 与独立的 ~test.db~ ,所以 ~bb test~ 可以和正在运行的 ~bb dev~ 并存; ~bb test:mysql~ / ~bb db:roundtrip~ 读取同样的 ~JDBC_URL~ / ~MIGRATION_DIR~ (MySQL URL 时自动选 ~migrations~ 目录)。本地 MySQL 用仓库根目录的 ~docker-compose.yml~ (mysql:8.4,端口 3308)。
+
+可执行:prod 密钥校验的规则(不启动系统,直接调用校验函数)
+
+#+begin_src sh :exports both
+clojure -M:dev -e "(require '[com.ruoyi.infra.secrets :as secrets]) (run! println (secrets/problems {})) (println '---) (run! println (secrets/problems {\"JWT_SECRET\" \"short\" \"COOKIE_SECRET\" \"0123456789abcdef\"}))" 2>&1 | grep -v '^Picked up'
+#+end_src
 
 ** 8.2 可执行:构建生产包
 
 #+begin_src sh :exports code :eval never
-npx shadow-cljs release app        # 前端 → resources/public/js/app.js(压缩)
-clojure -T:build all               # clean → pom → 复制 src/resources/env/prod → 编译 → uberjar
+bb uberjar                          # = bb release(前端压缩,warning 即失败)+ clojure -T:build all(clean → pom → 复制 → 编译 → uberjar)
 ls -la target/*-standalone.jar
-docker build -t clojure-template .  # 多阶段:clojure:temurin-21-tools-deps 构建 → eclipse-temurin:21-jre-alpine 运行
+JWT_SECRET=$(openssl rand -hex 32) COOKIE_SECRET=$(openssl rand -hex 8) java -jar target/rouyi-standalone.jar
+docker build -t clojure-template .  # 先 bb release;多阶段:clojure:temurin-21-tools-deps 构建 → eclipse-temurin:21-jre-alpine 运行
+docker run -e JWT_SECRET=… -e COOKIE_SECRET=… -p 3000:3000 clojure-template
 #+end_src
 
 * 9. 横切关注点
@@ -695,7 +707,7 @@ diff <(ls resources/migrations-sqlite | sed 's/\.\(up\|down\)\.sql$//' | sort -u
 #+end_src
 
 ** 9.4 配置注入
-~system.edn~ 是唯一装配点: ~#profile~ 区分 dev/test/prod, ~#env~ 读环境变量, ~#or~ 给默认值, ~#ig/ref~ 声明依赖。业务代码里不直接读环境变量(仅 ~infra.security~ 读 ~JWT_SECRET~),测试通过 ~{:profile :test}~ 起一套独立系统(~test_utils.clj~)。
+~system.edn~ 是唯一装配点: ~#profile~ 区分 dev/test/prod, ~#env~ 读环境变量, ~#or~ 给默认值, ~#ig/ref~ 声明依赖。业务代码里不直接读环境变量(仅 ~infra.security~ 读 ~JWT_SECRET~ ; ~core/start-app~ 在创建任何组件之前调用 ~infra.secrets/verify!~ ,prod 下密钥不合格直接失败, ~-main~ 打印原因后以退出码 1 结束),测试通过 ~{:profile :test}~ 起一套独立系统(~test_utils.clj~)。
 
 ** 9.5 热重载
 ~env/dev/clj/user.clj~ 提供 ~rd~ (领域) ~rm~ (中间件) ~rroutes~ (路由,需 ~rr~ 生效) ~ra~ (全部) ~rr~ (Integrant halt → prep → go) ~reset-db~ ~migrate~;SQL 文件、 ~system.edn~ 、组件结构变更需要 ~rr~ 。前端由 shadow-cljs watch 增量编译并热加载(~:after-load app/reload~)。
@@ -708,57 +720,137 @@ diff <(ls resources/migrations-sqlite | sed 's/\.\(up\|down\)\.sql$//' | sort -u
 
 * 10. 扩展指南
 
-** 10.1 新增业务模块清单(以 ~example~ 为例)
+** 10.1 新增业务模块: ~bb new-module~
+
+一条命令生成可直接运行的 CRUD 模块,并在各登记点自动插入注册代码(实现: ~bb/tasks/new_module.clj~ 编排, ~bb/tasks/scaffold/{model,sql,backend,frontend}.clj~ 是模板):
+
+#+begin_src sh :exports code :eval never
+bb new-module customer --label 客户 \
+  --fields "name:string:required:名称,phone:string:电话,level:int:等级,vip:bool:VIP,remark:text:备注"
+bb test -n com.ruoyi.web.controllers.customer-test   # 生成的后端集成测试
+bb dev                                                 # 重启后:菜单「业务管理 / 客户」,页面 /biz/customer
+bb e2e tests/e2e/customer.spec.js                      # 生成的端到端用例
+#+end_src
+
+字段规格 ~name:type[:required][:标签]~ ;类型决定两库 DDL、Malli 校验、搜索方式与前端控件( ~id~ / ~create_by~ / ~create_time~ / ~update_by~ / ~update_time~ 自动生成):
+
+| 类型 | SQLite | MySQL | Malli | 列表搜索 | 表单控件 |
+|------+--------+-------+-------+----------+----------|
+| ~string~ | TEXT | VARCHAR(255) | ~:string~ | ~INSTR~ 模糊 | Input |
+| ~text~ | TEXT | TEXT | ~:string~ | —(列表不显示) | TextArea |
+| ~int~ | INTEGER | BIGINT | ~:int~ | 等值 | InputNumber(整数) |
+| ~decimal~ | REAL | DECIMAL(18,2) | ~number?~ | — | InputNumber |
+| ~date~ | TEXT | VARCHAR(10) | ~yyyy-MM-dd~ 正则 | 等值 | 日期输入 |
+| ~bool~ | CHAR(1) | CHAR(1) | ~[:enum "0" "1"]~ | 等值(是/否) | Switch |
+
+搜索条件取前 3 个可搜索字段。生成物与登记点:
+
+| # | 层 | 新建 / 修改 | 说明 |
+|---+----+-------------+------|
+| 1 | 迁移 | ~resources/migrations{-sqlite,}/<ts>-create-biz-<m>.{up,down}.sql~ | 建表 ~biz_<m>~ ;共享的「业务管理」目录菜单(不存在才建,派生表代替 ~DUAL~ )+ 模块菜单,授权 admin 角色;down 删除菜单(目录空了一并删除)与表 |
+| 2 | SQL | ~resources/sql/<m>.sql~ | 分页列表 / 计数 / 详情 / 新增 / 全量更新 / 删除,只用两库交集语法 |
+| 3 | 领域 | ~domain/<m>.clj~ | 纯函数 + ~defmethod ig/init-key :app.<m>/service~ ;新增走 ~infra.db/insert-and-get-id!~ |
+| 4 | 控制器 / 路由 | ~web/controllers/<m>.clj~ 、 ~web/routes/<m>.clj~ | ~/api/biz/<m>~ 与 ~/:id~ ;要求登录;Malli 校验 query/body/path 并生成 Swagger |
+| 5 | 测试 | ~test/clj/.../web/controllers/<m>_test.clj~ 、 ~tests/e2e/<m>.spec.js~ | 未登录 401、增删改查、参数校验 400;E2E 新增 → 修改 → 删除 |
+| 6 | 前端 | ~api/<m>.cljs~ 、 ~events/<m>.cljs~ 、 ~pages/<m>.cljs~ | 状态在 ~app-db~ 的 ~:<m>~ 下;搜索、分页表格、新增/编辑弹窗(Form.useForm)、删除确认 |
+| 7 | 登记 | ~system.edn~ (组件、路由注入、SQL 文件)、 ~routes/api.clj~ 、 ~core.clj~ 、 ~user.clj~ ( ~reload-domain~ )、 ~router.cljs~ (路由、页面名)、 ~menu_data.cljs~ (menu-key、面包屑、图标)、 ~page_view.cljs~ 、 ~events.cljs~ 、 ~events/common.cljs~ (Tab 元数据) | 插在 ~;; [new-module] <tag>~ 标记行之前(保持缩进),require 按字母序插入;标记行保留,可反复生成 |
+
+生成是"全有或全无"的:所有修改先在内存里算好;目标文件已存在、前端已使用同名关键字(路由 / ~app-db~ 键 / 事件前缀)、HugSQL 查询名冲突、缺少标记行、字段名是保留列或 SQL 保留字时报错且不写任何文件;同一秒内生成多个模块时迁移时间戳自动顺延。生成物满足模板的全部约束(clj-kondo 零 warning、cljfmt、函数 ≤50 行、迁移可往返、前端零 warning),CI 的 ~scaffold~ 任务每次都会验证(§11)。
+
+可执行:试运行,只列出将要新建与修改的文件,不写盘
+
+#+begin_src sh :exports both
+bb new-module demo-order --label 演示订单 --fields "title:string:required:标题,qty:int:数量" --dry-run
+#+end_src
+
+可执行:登记点都在(缺任何一个 ~bb new-module~ 都会拒绝生成)
+
+#+begin_src sh :exports both
+grep -rn --include='*.clj' --include='*.cljs' --include='*.edn' ';; \[new-module\]' src env resources | sed 's/:[[:space:]]*;; / → /' | sort
+#+end_src
+
+** 10.2 手工清单(脚手架做了什么;也适用于结构特殊、不走脚手架的模块)
+
+以 ~example~ 为例:
 
 | # | 层 | 文件 / 位置 | 动作 |
 |---+----+-------------+------|
-| 1 | 迁移 | ~resources/migrations-sqlite/<ts>-create-example.{up,down}.sql~ 与 ~resources/migrations/~ | 建表;菜单用 ~INSERT INTO sys_menu~ 并给 admin 角色 ~sys_role_menu~ |
+| 1 | 迁移 | ~resources/migrations-sqlite/<ts>-create-example.{up,down}.sql~ 与 ~resources/migrations/~ | 建表;菜单用 ~INSERT INTO sys_menu~ 并给 admin 角色 ~sys_role_menu~ ;多条语句用 ~--;;~ 分隔; ~bb lint:migrations~ 、 ~bb db:roundtrip~ 验证 |
 | 2 | SQL | ~resources/sql/example.sql~ | HugSQL;加入 ~system.edn~ ~:db.sql/query-fn :filenames~ |
 | 3 | 领域 | ~src/clj/com/ruoyi/domain/example.clj~ | 纯函数 + ~defmethod ig/init-key :app.example/service~ |
-| 4 | 装配 | ~resources/system.edn~ | 登记 ~:app.example/service~;在 ~:reitit.routes/api~ 注入 ~:example-service~ |
+| 4 | 装配 | ~resources/system.edn~ | 登记 ~:app.example/service~ ;在 ~:reitit.routes/api~ 注入 ~:example-service~ |
 | 5 | 控制器 | ~src/clj/com/ruoyi/web/controllers/example.clj~ | 请求 → 服务 → 响应 |
-| 6 | 路由 | ~src/clj/com/ruoyi/web/routes/example.clj~; ~routes/api.clj~ 的 ~api-routes~ 追加 | 声明 ~auth-middleware~ 与 ~:perms~ 、Malli 参数、Swagger tag |
-| 7 | 入口 | ~src/clj/com/ruoyi/core.clj~; ~env/dev/clj/user.clj~ ~reload-domain~ | require 新命名空间 |
-| 8 | 前端 API | ~src/cljs/com/ruoyi/frontend/api/example.cljs~ (可在 ~api.cljs~ 重导出) | 基于 ~api.transport/request~ |
-| 9 | 前端事件 | ~events/example.cljs~ + 在 ~events.cljs~ require; ~db.cljs~ 加初始状态 | ~reg-event-fx~ + ~reg-fx :api/*~ |
-| 10 | 页面 | ~pages/example/ *.cljs~ | 复用 ~components/* ~;函数组件 + Hooks |
-| 11 | 登记 | ~router.cljs~ (路由 + page-names)、 ~layout/menu_data.cljs~ (menu-key/面包屑/图标)、 ~layout/page_view.cljs~ (分发)、 ~events/common.cljs~ (Tab 元数据)、 ~events/core.cljs~ (预取表,可选) | 各加一行 |
-| 12 | 测试 | ~test/clj/com/ruoyi/.../example_test.clj~ 、 ~tests/e2e/example.spec.js~ | 后端用 ~test_utils~ 起系统 + ring-mock;E2E 走真实页面 |
+| 6 | 路由 | ~src/clj/com/ruoyi/web/routes/example.clj~ ; ~routes/api.clj~ 的 ~api-routes~ 追加 | 声明 ~auth-middleware~ (需要按钮权限时加 ~:perms~ ,见 §13 #1)、Malli 参数、Swagger tag |
+| 7 | 入口 | ~src/clj/com/ruoyi/core.clj~ ; ~env/dev/clj/user.clj~ ~reload-domain~ | require 新命名空间 |
+| 8 | 前端 API | ~src/cljs/com/ruoyi/frontend/api/example.cljs~ | 基于 ~api.transport/request~ |
+| 9 | 前端事件 | ~events/example.cljs~ + 在 ~events.cljs~ require | ~reg-event-fx~ + ~reg-fx~ ;状态放 ~app-db~ 的模块键下 |
+| 10 | 页面 | ~pages/example.cljs~ (复杂页面拆成 ~pages/example/*.cljs~ ) | 复用 ~components/*~ ;函数组件 + Hooks;首屏数据在页面的 ~use-effect~ 里 dispatch |
+| 11 | 登记 | ~router.cljs~ (路由 + page-names)、 ~layout/menu_data.cljs~ (menu-key/面包屑/图标)、 ~layout/page_view.cljs~ (分发)、 ~events/common.cljs~ (Tab 元数据) | 各加一行 |
+| 12 | 测试 | ~test/clj/com/ruoyi/.../example_test.clj~ 、 ~tests/e2e/example.spec.js~ | 后端用 ~test_utils/system-fixture~ 起系统 + peridot;E2E 走真实页面 |
 | 13 | 文档 | 本文 §2/§3/§4/§5 对应图追加组件;README API 概览 | |
 
-也可用「系统工具 → 代码生成」按表结构自动产出第 2、3、5、6、8、9、10 步的骨架再手工调整。
+页面内的「系统工具 → 代码生成」按 *已有表结构* 产出第 2、3、5、6、8、9、10 步的骨架,适合给存量表做参考;新建模块优先 ~bb new-module~ 。
 
-** 10.2 从模板派生新项目
+** 10.3 从模板派生新项目
 
 #+begin_src sh :exports code :eval never
 git clone <template> my-app && cd my-app
-./scripts/rename-project.sh com.acme.myapp myapp   # 命名空间 + 项目名 + 目录移动
+bb rename com.acme.myapp myapp   # 命名空间 + 项目名 + 目录移动 + localStorage 前缀(读取 kit.edn 中的旧值,可重复执行)
 # 改品牌:src/cljs/<ns>/frontend/config.cljs(app-name / repo-url)
-rm -f *.db && clojure -M:test && npm install && npx shadow-cljs compile app
 rm -rf .git && git init && git add -A && git commit -m "init from clojure-template"
+bb ci                            # lint + fmt:check + test,确认改名后一切正常
 #+end_src
+
+改名后 ~bb new-module~ 、 ~bb dev~ 等任务都从 ~kit.edn~ 读取新的命名空间与路径,无需其它调整。
 
 * 11. 质量保障
 
+所有检查都是 bb 任务,本地与 CI 执行同一条命令:
+
 | 层 | 工具 | 命令 | 说明 |
 |----+------+------+------|
-| 单元 / 集成 | clojure.test + ring-mock + test_utils | ~clojure -M:test~ | 起一套 :test profile 的 Integrant 系统(SQLite),控制器测试走真实路由与中间件 |
-| 覆盖率 | cloverage | ~clojure -M:coverage~ | ~target/coverage/index.html~ |
-| 端到端 | Playwright | ~npm run test:e2e~ | 需后端已在 3000 运行;串行(共享 SQLite) |
-| 规模约束 | ~scripts/check_constraints.py~ | ~python3 scripts/check_constraints.py~ | 命名空间 ≤500 行、函数 ≤50 行 |
-| 静态检查 | clj-kondo / clojure-lsp | ~clj-kondo --lint src test~ | 未使用 var、arity 等 |
-| 依赖新鲜度 | maven-metadata.xml / ~npm outdated~ | 见 ADR-007 的做法 | 升级后必须重跑上面四层 |
+| 单元 / 集成 | clojure.test + peridot + ~test_utils~ | ~bb test~ | 起一套 :test profile 的 Integrant 系统(独立 ~test.db~ 、端口 3100/7100),控制器测试走真实路由与中间件 |
+| 双库 | MySQL 8.4 | ~bb test:mysql~ | docker compose(3308)或 ~JDBC_URL~ ;每次先清空库 |
+| 迁移 | Migratus | ~bb db:roundtrip~ 、 ~bb lint:migrations~ | up → down → up 后表数一致、无待执行迁移;两目录成对、有 down、 ~--;;~ 分隔、无对方方言 |
+| 端到端 | Playwright | ~bb e2e~ | 需后端已在 3000 运行;串行(共享 SQLite) |
+| 静态检查 | clj-kondo 2026.08 | ~bb lint:kondo~ | warning 即失败(配置 ~.clj-kondo/config.edn~ );没装二进制时自动用 pod |
+| 格式 | cljfmt 0.16 | ~bb fmt:check~ / ~bb fmt~ | 配置 ~.cljfmt.edn~ ;编辑器用 ~.editorconfig~ / clojure-lsp 同一套规则 |
+| 规模约束 | edamame 解析 | ~bb check~ | ~src~ / ~env~ / ~test~ / ~bb~ / ~scripts~ :命名空间 ≤500 行、 ~defn~ 等 ≤50 行 |
+| 前端编译 | shadow-cljs | ~bb release~ / ~bb cljs:check~ | 编译 warning 视为错误 |
+| 覆盖率 | cloverage | ~bb coverage~ | ~target/coverage/index.html~ |
+| 依赖新鲜度 | maven-metadata.xml / ~npm outdated~ | 见 ADR-007 的做法 | 升级后必须重跑上面各层 |
+
+** 11.1 CI(GitHub Actions)
+
+#+begin_src mermaid :file img/ci-pipeline.svg :exports results
+flowchart LR
+  ev(["push / pull_request"]):::person --> setup["公共环境 .github/actions/setup<br/>JDK 21 · Clojure CLI · bb · clj-kondo<br/>Node 22 + npm ci(按需)· Maven/gitlibs 缓存"]:::system
+  setup --> lint["lint<br/>bb lint · bb fmt:check"]:::container
+  setup --> sq["test-sqlite<br/>bb test · bb db:roundtrip"]:::container
+  setup --> my["test-mysql<br/>service mysql:8.4<br/>bb test:mysql · bb db:roundtrip"]:::container
+  setup --> e2e["e2e<br/>bb release → bb backend → bb e2e<br/>失败时上传报告与后端日志"]:::container
+  setup --> sc["scaffold<br/>bb new-module ci-demo(6 种字段类型)<br/>→ lint · fmt · 生成的测试 · roundtrip<br/>→ bb cljs:check → 生成的 E2E"]:::container
+  classDef person fill:#08427b,stroke:#052e56,color:#fff
+  classDef system fill:#1168bd,stroke:#0b4884,color:#fff
+  classDef container fill:#438dd5,stroke:#2e6295,color:#fff
+#+end_src
+
+#+RESULTS:
+[[file:img/ci-pipeline.svg]]
+
+5 个任务并行,互不依赖; ~concurrency~ 让同一分支的新提交取消旧的运行。 ~bb ci~ 在本地跑其中最快的部分(lint + fmt:check + test)。 ~scaffold~ 任务保证脚手架模板与主干代码同步演进:任何让生成代码失效的改动(改了登记点、组件接口、antd 封装等)都会在这里失败。
 
 可执行:跑后端测试并只看汇总行
 
 #+begin_src sh :exports both
-rm -f rouyi.db && clojure -M:test 2>&1 | grep -E "^Ran |failures"
+bb test 2>&1 | grep -E "^Ran |failures"
 #+end_src
 
-可执行:规模约束
+可执行:规模约束与迁移检查
 
 #+begin_src sh :exports both
-python3 scripts/check_constraints.py 2>&1 | tail -5
+bb check 2>&1 | tail -2
+bb lint:migrations 2>&1 | tail -1
 #+end_src
 
 * 12. 架构决策记录(ADR)
@@ -783,10 +875,10 @@ python3 scripts/check_constraints.py 2>&1 | tail -5
 - *理由*:与 React 19 / antd 6 生态一致(Form.useForm、App.useApp 等都是 Hooks);避免 ratom 与 Hooks 混用的重渲染陷阱。
 - *后果*:AGENTS.md 维护一份 antd 6 适配清单;所有页面必须走 ~re-frame~ 事件而不是直接调 api。
 
-** ADR-005 保留 ~com.ruoyi~ 命名空间,用脚本改名
-- *决策*:模板源码保持 ~com.ruoyi~ / ~rouyi~ 命名,派生项目执行 ~scripts/rename-project.sh~ 一次性改名。
+** ADR-005 保留 ~com.ruoyi~ 命名空间,用 ~bb rename~ 改名
+- *决策*:模板源码保持 ~com.ruoyi~ / ~rouyi~ 命名,派生项目执行 ~bb rename <ns> <name>~ 一次性改名(最初是 ~scripts/rename-project.sh~ ,ADR-008 起改为 bb 任务)。
 - *理由*:模板自身可持续演进并被上游同步;改名是确定性文本替换 + 目录移动,脚本比手工可靠。
-- *后果*:培训教材 ~docs/training~ 与 RuoYi-Vue 对照文档保持原名;脚本需在两个平台(macOS/Linux)可用(用 perl 而非 sed -i)。
+- *后果*:培训教材 ~docs/training~ 与 RuoYi-Vue 对照文档保持原名;旧值从 ~kit.edn~ 读取,所以可重复执行;所有 bb 任务同样从 ~kit.edn~ 取命名空间与路径,改名后无需调整。
 
 ** ADR-006 从 quicktracking-demo/admin 剥离「合成流量」模块形成模板
 - *决策*:删除 synthetic / formal-backend 两个业务域(后端 domain/routes/controllers/scheduler、前端 api/pages、迁移、SQL、E2E、 ~../tools/clj~ 外部路径与 chime 依赖),以及早期已废弃的「方案智能编制」业务迁移;新增 ~frontend/config.cljs~ 集中品牌信息、 ~scripts/rename-project.sh~ 、本文档。
@@ -794,7 +886,7 @@ python3 scripts/check_constraints.py 2>&1 | tail -5
 - *验证*:剥离后 ~clojure -M:test~ 350 tests / 860 assertions 全部通过; ~npx shadow-cljs compile app~ 0 warnings;Playwright ~auth~ / ~navigation~ (19 页)/ ~post-crud~ 全部通过; ~grep -rni "synthetic|formal|流量" src resources test tests~ 为空。
 - *附带修复*:
   - MySQL 迁移补上 ~20260613215630-add-notice-content~ (此前只有 SQLite 有该列,MySQL 下新建公告会失败);
-  - ~routes/system.clj~ 的 274 行 ~system-routes~ 拆成 19 个路由组函数(路由集合经 Reitit 展开比对完全一致), ~scripts/check_constraints.py~ 的函数上限改为与 AGENTS.md 一致的 50 行,现全部通过;
+  - ~routes/system.clj~ 的 274 行 ~system-routes~ 拆成 19 个路由组函数(路由集合经 Reitit 展开比对完全一致), ~scripts/check_constraints.py~ (后由 ~bb check~ 取代)的函数上限改为与 AGENTS.md 一致的 50 行,现全部通过;
   - E2E: ~navigation.spec.js~ 去掉指向已删除业务模块的 3 条路由并加入 ~/monitor/integrant~; ~post-crud.spec.js~ 的弹窗按钮匹配 zh_CN 文案「确 定」;
   - ~middleware.operlog~ 挂在路由器外层拿不到 ~:identity~,此前所有操作日志的操作人都是 ~anonymous~;现改为自行解析 Bearer(实测新增岗位后 ~oper_name = admin~)。
 
@@ -807,13 +899,15 @@ python3 scripts/check_constraints.py 2>&1 | tail -5
 | 1 | 按钮级权限校验 | ~require-perms~ 无人使用;JWT 无 perms;前端不按 ~permissions~ 控制按钮 | ~wrap-jwt-auth~ 里按 ~:roles~ 查 ~role-service/get-role-perms~ 写入 ~(:identity :perms)~ (或签发时放进 claims);路由声明 ~(auth-middleware {:required? true :perms "system:user:add"})~;前端加 ~:auth/has-perm?~ 订阅包住工具栏按钮 | ~middleware/auth.clj~ ~infra/security.clj~ ~routes/system.clj~ ~subs/core.cljs~ |
 | 2 | 数据权限接入 SQL | ~data-perm-filter~ 只算不用;按 ~role-key~ 匹配但 identity 只有角色 id | ~getInfo~ /登录时把角色 map(~role-key data-scope dept-id~)放进 identity;HugSQL 用 =--~= 片段(snip)或 ~:sql:data-perm-sql~ 把 ~:sql~ 片段拼进 ~list-users~ 等查询 | ~infra/data_perm.clj~ ~resources/sql/system.sql~ ~controllers/system/{user,config,dict}.clj~ |
 | 3 | 前端统一错误处理 | ~:api/*~ 失败回调为空;401 不跳登录 | ~api.transport/request~ 的 ~on-error~ 统一 dispatch ~[:common/api-error resp]~:401 → ~:auth/logout~,其余 → ~antd/error!~ | ~api/transport.cljs~ ~events/common.cljs~ |
-| 4 | 生产安全默认值 | ~JWT_SECRET~ / ~COOKIE_SECRET~ 有内置默认;CORS ~*~ + credentials | 启动时若 ~:prod~ 且未设置则拒绝启动;CORS 回显白名单 Origin | ~infra/security.clj~ ~system.edn~ ~middleware/core.clj~ |
+| 4 | 生产安全默认值 | *密钥部分已解决*(ADR-008):prod 下 ~JWT_SECRET~ / ~COOKIE_SECRET~ 缺失、为默认值或长度不合格时拒绝启动。*仍待处理*:CORS ~*~ + credentials | CORS 改为回显白名单 Origin(如 ~CORS_ORIGINS~ 环境变量) | ~middleware/core.clj~ ~system.edn~ |
 | 5 | 多实例部署 | token 黑名单、在线心跳、验证码、缓存监控都在进程内存 | 引入 Redis(或改短 token + refresh)时把 ~infra.online~ / ~captcha-store~ / ~infra.cache~ 抽成协议 + 两个实现 | ~infra/online.clj~ ~controllers/captcha.clj~ ~infra/cache.clj~ |
 | 6 | 未使用的 edge | ~:templating/selmer~ 已装配但无模板; ~:cronut/scheduler~ 的 ~:schedule []~ 由 ~infra.scheduler~ 动态填充 | 不做服务端渲染可删 selmer 依赖与组件 | ~core.clj~ ~system.edn~ ~deps.edn~ |
 | 7 | 代码生成器落盘路径 | ~controllers/gen.clj~ 硬编码 ~src/clj/com/ruoyi/...~ (改名脚本会一起替换) | 从 ~kit.edn~ 的 ~:sanitized~ 读取路径前缀 | ~controllers/gen.clj~ |
-| 8 | 静态检查遗留 | clj-kondo 0 error / 212 warning(未用 require、未用绑定等,源项目遗留) | 逐文件清理;CI 里把 warning 数设为上限 | 全部 |
+| 8 | 静态检查遗留 | *已解决*(ADR-008):212 个 warning 已清零(顺带修复 2 处真实 bug),CI 以 ~--fail-level warning~ 强制 | 保持零 warning;新增例外写进 ~.clj-kondo/config.edn~ 并注明原因 | ~.clj-kondo/config.edn~ |
 | 9 | 文档站 | ~docs/index.html~ 标题与目录仍是源项目文案 | 与 README 同步或生成 | ~docs/index.html~ |
 | 10 | 验证码可绕过 | ~controllers/auth.clj~ 在 ~captcha~ 为空时直接放行(E2E 依赖这一点) | 加 ~CAPTCHA_ENABLED~ 开关(prod 默认开、test profile 关),空验证码在开启时判失败 | ~controllers/auth.clj~ ~system.edn~ ~tests/e2e/auth-helper.js~ |
+| 12 | 脚手架生成的路由只校验登录 | ~bb new-module~ 生成的菜单带 ~perms~ ( ~biz:<m>:list~ ),但路由只要求登录 | 完成 #1 后在 ~scaffold/backend.clj~ 的路由模板里为各方法声明 ~:perms~ ,并生成对应的按钮权限菜单(F 类型) | ~bb/tasks/scaffold/{backend,sql}.clj~ |
+| 13 | MySQL 需要手动设 ~MIGRATION_DIR~ | 应用启动时 ~JDBC_URL~ 为 MySQL 但 ~MIGRATION_DIR~ 未设置,会用 SQLite 迁移而失败(bb 的 ~test:mysql~ / ~db:roundtrip~ 已自动处理) | 在 ~config.clj~ 按 ~JDBC_URL~ 前缀推导默认迁移目录 | ~config.clj~ ~system.edn~ |
 | 11 | 时间戳时区 | SQLite ~CURRENT_TIMESTAMP~ 写的是 UTC,前端按本地时间解析 → 仪表盘"最近操作"显示"8 小时前" | 统一用 Clojure 层生成 ~yyyy-MM-dd HH:mm:ss~ 本地时间传参(两库一致),或前端按 UTC 解析 | ~resources/sql/*.sql~ ~middleware/operlog.clj~ ~pages/dashboard.cljs~ |
 
 可执行:设计债 1/2/3 的现状指标(全 0 表示尚未接入;接入后应变为非 0)
@@ -829,6 +923,22 @@ printf "统一错误事件      %s\n" "$(grep -rn 'api-error' src/cljs | wc -l)"
 - *验证*: ~clojure -M:test~ 350/860 全过; ~shadow-cljs compile/release~ 0 warnings;Playwright auth / navigation(19)/ post-crud 全过;登录后遍历 6 个页面浏览器控制台 0 warning/error。
 - *注意*:HikariCP 7 与 Quartz 2.5 是通过顶层坐标覆盖 kit-sql-conman(hikari-cp 3.0.1 → HikariCP 5)与 cronut(Quartz 2.3)的传递依赖, ~clojure -Stree~ 可见 ~:use-top~;若 Kit 后续升级请以 Kit 的版本为准。顺手修正 SQLite ~create-sys-notice~ 迁移缺少 ~--;;~ 分隔符导致的 Migratus 警告。
 
+** ADR-008 统一 babashka 任务入口、CI、业务模块脚手架与生产密钥校验
+- *决策*:
+  - *任务入口*:删除 ~Makefile~ 、 ~start_dev.sh~ 、 ~scripts/{rename-project.sh,check_constraints.py}~ ,全部改为 ~bb.edn~ 任务(实现放 ~bb/tasks/*.clj~ ):跨平台(Windows 可用)、只依赖 babashka(没装 Clojure CLI 时退回 ~bb clojure~ );进程管理用 ~babashka.process~ (子进程树随 bb 退出一起结束),启动前检查端口并给出可操作的提示。
+  - *质量门禁*:clj-kondo 212 个 warning 清零并以 warning 为失败线;引入 cljfmt( ~.cljfmt.edn~ )与 ~.editorconfig~ ;规模约束改用 edamame 解析并覆盖 ~bb/~ 与 ~scripts/~ ;新增迁移检查(成对、down 存在、 ~--;;~ 分隔、方言);前端 release 编译 warning 即失败。
+  - *CI*: ~.github/workflows/ci.yml~ 五个并行任务只调用 bb 任务(§11.1),MySQL 用 GitHub service;本地 ~bb ci~ / ~bb test:mysql~ (docker compose)可复现。
+  - *脚手架*: ~bb new-module~ 生成完整 CRUD 模块并在 ~;; [new-module] <tag>~ 登记点自动登记(§10.1),CI 每次生成一个模块做全套检查。
+  - *生产密钥*: ~infra.secrets/verify!~ 在创建任何组件之前校验 prod 密钥,不合格时打印原因与生成命令并以退出码 1 结束。
+  - *许可*:补 MIT ~LICENSE~ 。
+- *理由*:模板的价值在于"克隆后立刻得到一套有纪律的工程";命令分散在 Makefile / shell / python / README 里容易漂移,CI 只调用 bb 任务保证文档里写的命令就是被验证的命令;脚手架把 §10.2 的 13 步手工清单变成一条命令,并由 CI 防止它随主干演进而失效。
+- *验证*:SQLite ~bb test~ 352 tests / 874 assertions 全过;MySQL 同样全过(本机 8.0 实例与 docker compose 起的 8.4 两种方式);两库 ~bb db:roundtrip~ 通过;clj-kondo 0 warning、cljfmt 无差异、规模约束通过;release 构建 0 warning;Playwright 21 个用例对 release 产物全过;在干净副本上按 CI 步骤逐一执行 5 个任务全部通过;脚手架在改名后的项目、只有非字符串字段、没有可搜索字段、同一秒连续生成多个模块等情况下均通过 lint 与生成的测试;actionlint 校验工作流无误。
+- *附带修复*:
+  - MySQL 迁移此前从未在真实 MySQL 上跑通:多语句 down 缺 ~--;;~ 、 ~DROP INDEX IF EXISTS~ 、 ~TRUNCATE … CASCADE~ 、纯注释分段(MySQL 报 ~Query was empty~ )等已全部修正;
+  - ~core/stop-app~ halt 之后不清空 ~system~ 原子,第二个使用 ~system-fixture~ 的测试命名空间会拿到已关闭的连接池;现在 halt 后置空;
+  - 测试 profile 改用独立端口与 ~test.db~ ,可与 ~bb dev~ 同时运行;
+  - ~form_builder.cljs~ 生成必填规则时的字符串拼接错误、 ~menu_test.clj~ 嵌套 ~is~ 等 kondo 发现的真实问题。
+
 * 附录 A:模板与源项目的差异清单
 
 | 类别 | 已删除 | 已新增 / 修改 |
@@ -838,7 +948,7 @@ printf "统一错误事件      %s\n" "$(grep -rn 'api-error' src/cljs | wc -l)"
 | 数据 | ~sql/synthetic.sql~ 、 ~2026092*~ 迁移、 ~2024061300[1-4]~ / ~202606150002~ / ~202606150010~ 业务迁移 | MySQL ~20260613215630-add-notice-content~ |
 | 配置 | ~deps.edn~ 外部 ~:paths~ 、 ~jarohen/chime~ 、未使用的 ~h2~; ~deps-cov.edn~; ~formal-backend.edn(.example)~; ~deploy.sh~ (含固定主机) | ~.gitignore~ 重写 |
 | 文档 | ~GAP_ANALYSIS.md~ ~REMAINING.md~ ~ROADMAP.md~ ~test/coverage-report.md~ ~docs/pic-field-checklist.md~;README 合成流量章节 | README 重写为模板说明; ~CLAUDE.md~ 指向本文;本文 |
-| 工具 | ~.beads/~ ~.agents/~ ~.claude/settings.json~ (issue 跟踪钩子)、 ~test-frontend.mjs~ | ~scripts/rename-project.sh~; ~check_constraints.py~ 函数上限 50 |
+| 工具 | ~.beads/~ ~.agents/~ ~.claude/settings.json~ (issue 跟踪钩子)、 ~test-frontend.mjs~ 、 ~Makefile~ 、 ~start_dev.sh~ 、 ~scripts/*.sh~ / ~*.py~ (由 bb 任务取代) | ~bb.edn~ + ~bb/tasks/~ ( ~dev~ / ~lint~ / ~rename~ / ~new-module~ )、 ~.github/workflows/ci.yml~ 、 ~docker-compose.yml~ 、 ~scripts/db.clj~ 、 ~LICENSE~ 、 ~.editorconfig~ 、 ~.cljfmt.edn~ 、 ~.clj-kondo/config.edn~ |
 | 测试 | ~synthetic_profile_test.clj~ 、 ~synthetic-profile.spec.js~ 、 ~formal-pages.spec.js~ | ~navigation.spec.js~ / ~post-crud.spec.js~ 修正 |
 | 修复 | | ~middleware/operlog.clj~ 操作人解析;MySQL notice_content 迁移; ~routes/system.clj~ 拆分 |
 

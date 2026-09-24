@@ -8,19 +8,25 @@
      clj-nrepl-eval -p 7000 '(user/reload-all)'          ;; Reload everything
      clj-nrepl-eval -p 7000 '(user/reset-system)'        ;; Full Integrant reset
      clj-nrepl-eval -p 7000 '(user/rr)'                  ;; Short alias for reset-system"
+  ;; user 命名空间里的 require 大多是给 REPL 手敲用的(go/halt/reset、kit/…、c/bench),
+  ;; 并确保 core 里注册的 Integrant 组件被加载,所以关闭"未使用"检查,防止被 clean-ns 删掉。
+  {:clj-kondo/config '{:linters {:unused-namespace {:level :off}
+                                 :unused-referred-var {:level :off}}}}
   (:require
    [clojure.pprint]
    [clojure.spec.alpha :as s]
    [clojure.tools.logging :as log]
    [clojure.tools.namespace.repl :as repl]
+   [com.ruoyi.config]
+   [com.ruoyi.core :refer [start-app]]
    [criterium.core :as c]
    [expound.alpha :as expound]
    [integrant.core :as ig]
-   [integrant.repl :refer [clear go halt prep init reset reset-all]]
+   [integrant.repl :refer [clear go halt init prep reset reset-all]]
    [integrant.repl.state :as state]
    [kit.api :as kit]
    [lambdaisland.classpath :as licp]
-   [com.ruoyi.core :refer [start-app]]))
+   [migratus.core]))
 
 (alter-var-root #'s/*explain-out* (constantly expound/printer))
 (add-tap (bound-fn* clojure.pprint/pprint))
@@ -92,6 +98,7 @@
   (require 'com.ruoyi.domain.system.config :reload)
   (require 'com.ruoyi.domain.system.log :reload)
   (require 'com.ruoyi.domain.gen :reload)
+  ;; [new-module] reload-domain
   (log/info "Domain services reloaded."))
 
 (defn reload-middleware

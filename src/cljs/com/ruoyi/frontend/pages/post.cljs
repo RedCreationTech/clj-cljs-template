@@ -1,14 +1,16 @@
 (ns com.ruoyi.frontend.pages.post
   "岗位管理页面 — 搜索、CRUD。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [DownloadOutlined SearchOutlined ReloadOutlined PlusOutlined EditOutlined DeleteOutlined]]
+   ["@ant-design/icons" :refer [DeleteOutlined DownloadOutlined EditOutlined PlusOutlined
+                                ReloadOutlined SearchOutlined]]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api :as api]
    [com.ruoyi.frontend.components.page-search :as page-search]
-   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]))
+   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [re-frame.core :as rf]
+   [re-frame.db]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 ;; ─── 搜索表单 ──────────────────────────────────────────────────────
 

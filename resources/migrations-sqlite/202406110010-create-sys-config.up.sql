@@ -12,9 +12,3 @@ CREATE TABLE sys_config (
 );
 --;;
 CREATE UNIQUE INDEX idx_sys_config_key ON sys_config(config_key);
---;;
---;;
---;;
---;;
---;;
---;;

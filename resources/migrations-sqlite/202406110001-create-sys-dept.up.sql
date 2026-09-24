@@ -18,12 +18,3 @@ CREATE TABLE sys_dept (
 CREATE INDEX idx_sys_dept_parent_id ON sys_dept(parent_id);
 --;;
 CREATE INDEX idx_sys_dept_ancestors ON sys_dept(ancestors);
---;;
---;;
---;;
---;;
---;;
---;;
---;;
---;;
---;;

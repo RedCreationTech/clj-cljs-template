@@ -1,7 +1,6 @@
 (ns com.ruoyi.frontend.components.page-toolbar
   "页面工具栏容器。"
   (:require
-   [reagent.core :as r]
    [com.ruoyi.frontend.antd :as antd]))
 
 (defn page-toolbar [{:keys [left right style]}]
@@ -81,4 +80,4 @@
 
 (defn toolbar-right [& children]
   (into [:div {:style {:display "flex" :gap 12
-                         :alignItems "center"}}] children))
+                       :alignItems "center"}}] children))

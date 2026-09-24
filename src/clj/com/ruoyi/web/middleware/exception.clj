@@ -1,7 +1,7 @@
 (ns com.ruoyi.web.middleware.exception
   (:require
-   [clojure.tools.logging :as log]
    [cheshire.core :as json]
+   [clojure.tools.logging :as log]
    [reitit.ring.middleware.exception :as exception]))
 
 (defn handler [message status exception request]

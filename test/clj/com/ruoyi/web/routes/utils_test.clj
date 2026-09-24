@@ -1,7 +1,8 @@
 (ns com.ruoyi.web.routes.utils-test
   "路由工具函数测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.routes.utils :as route-utils]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.routes.utils :as route-utils]))
 
 (def sample-request
   {:reitit.core/match {:data {:handler :my-handler

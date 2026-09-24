@@ -3,9 +3,9 @@
   (:require
    [clojure.string :as str]
    [clojure.walk :as walk]
+   [com.ruoyi.infra.cron :as cron]
    [com.ruoyi.infra.db :as db]
    [com.ruoyi.infra.scheduler :as scheduler-core]
-   [com.ruoyi.infra.cron :as cron]
    [ring.util.response :as response]))
 
 (defn- ok

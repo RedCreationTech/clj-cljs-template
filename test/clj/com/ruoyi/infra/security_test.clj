@@ -1,7 +1,8 @@
 (ns com.ruoyi.infra.security-test
   "安全基础设施测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.infra.security :as security]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.infra.security :as security]))
 
 (deftest test-password-hashing
   (testing "密码哈希"

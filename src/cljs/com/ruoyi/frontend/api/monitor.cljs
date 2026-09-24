@@ -1,5 +1,5 @@
 (ns com.ruoyi.frontend.api.monitor
-  ""
+  "监控相关 API:在线用户、服务器、数据源、缓存、Integrant 依赖与追踪、首页统计。"
   (:require
    [com.ruoyi.frontend.api.transport :as t]))
 

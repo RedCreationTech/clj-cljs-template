@@ -3,12 +3,13 @@
            :test :test
            :prod :prod}
 
+ ;; test profile 用不同端口,测试时开着 bb dev 也不会冲突
  :nrepl/server
- {:port #long #or [#env NREPL_PORT 7000]
+ {:port #long #or [#env NREPL_PORT #profile {:dev 7000 :test 7100 :prod 7000}]
   :bind #or [#env NREPL_HOST "127.0.0.1"]}
 
  :server/http
- {:port    #long #or [#env PORT 3000]
+ {:port    #long #or [#env PORT #profile {:dev 3000 :test 3100 :prod 3000}]
   :host    #or [#env HTTP_HOST "0.0.0.0"]
   :handler #ig/ref :handler/ring}
 
@@ -16,6 +17,7 @@
  {:router                #ig/ref :router/core
   :api-path              "/api"
   :query-fn              #ig/ref :db.sql/query-fn
+  ;; 默认值仅供开发/测试;prod profile 下由 com.ruoyi.infra.secrets/verify! 强制要求 COOKIE_SECRET(16 字节)
   :cookie-secret         #or [#env COOKIE_SECRET "KWGRWFTDVZAHISQO"]
   :site-defaults-config  {:params    {:urlencoded true
                                       :multipart  true
@@ -81,10 +83,8 @@
  {:query-fn #ig/ref :db.sql/query-fn
   :db       #ig/ref :db.sql/connection}
 
- ;; 业务模块的 Integrant 组件在此登记,例如:
- ;; :app.example/service
- ;; {:query-fn #ig/ref :db.sql/query-fn
- ;;  :db       #ig/ref :db.sql/connection}
+ ;; 业务模块的 Integrant 组件登记在下面的标记之前(bb new-module 会自动插入;标记行请保留)
+ ;; [new-module] components
 
  :app.system/job-scheduler
  {:scheduler  #ig/ref :cronut/scheduler
@@ -108,7 +108,8 @@
   :log-service          #ig/ref :app.system/log-service
   :online-service       #ig/ref :app.system/online-service
   :gen-service    #ig/ref :app.system/gen-service
-  ;; 业务模块的 service 在此注入给路由,例如 :example-service #ig/ref :app.example/service
+  ;; 业务模块的 service 注入给路由(bb new-module 自动插入;标记行请保留)
+  ;; [new-module] route-services
   }
 
  :router/routes
@@ -132,7 +133,8 @@
                   :max-active 1
                   :connection-test-query "SELECT 1"
                   :validation-timeout 3000}
-           :test {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:rouyi.db"]
+           ;; 测试用独立的 test.db,不污染开发库(bb test 每次先删除它)
+           :test {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:test.db"]
                   :init-size  1
                   :min-idle   1
                   :max-idle   1
@@ -150,7 +152,9 @@
  :db.sql/query-fn
  {:conn      #ig/ref :db.sql/connection
   :options   {}
-  :filenames ["queries.sql" "sql/system.sql" "sql/log.sql" "sql/job.sql" "sql/gen.sql" "sql/generated.sql"]
+  :filenames ["queries.sql" "sql/system.sql" "sql/log.sql" "sql/job.sql" "sql/gen.sql" "sql/generated.sql"
+              ;; [new-module] sql-files
+              ]
   :env       #ig/ref :system/env}
 
  :db.sql/migrations

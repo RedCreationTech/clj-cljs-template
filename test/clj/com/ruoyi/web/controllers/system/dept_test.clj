@@ -1,20 +1,21 @@
 (ns com.ruoyi.web.controllers.system.dept-test
   "部门控制器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.controllers.system.dept :as dept]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.controllers.system.dept :as dept]))
 
 (def admin-identity
   {:user-id 1 :user-name "admin"})
 
 (def mock-dept-service
-  {:query-fn (fn [q p] (case q
-                         :list-depts [{:dept_id 1 :dept_name "test"}]
-                         :find-dept-by-id {:dept_id 1 :dept_name "test"}
-                         :create-dept! [{:dept_id 2}]
-                         :last-insert-rowid {:last_insert_rowid 2}
-                         :update-dept! nil
-                         :delete-dept! nil
-                         []))})
+  {:query-fn (fn [q _p] (case q
+                          :list-depts [{:dept_id 1 :dept_name "test"}]
+                          :find-dept-by-id {:dept_id 1 :dept_name "test"}
+                          :create-dept! [{:dept_id 2}]
+                          :last-insert-rowid {:last_insert_rowid 2}
+                          :update-dept! nil
+                          :delete-dept! nil
+                          []))})
 
 (deftest test-list-depts
   (testing "查询部门列表"
@@ -36,7 +37,7 @@
 
 (deftest test-get-dept-not-found
   (testing "获取不存在的部门"
-    (let [service {:query-fn (fn [q p] (case q :find-dept-by-id nil []))}
+    (let [service {:query-fn (fn [q _p] (case q :find-dept-by-id nil []))}
           request {:path-params {:id "999"}}
           response (dept/get-dept {:dept-service service} request)]
       (is (map? response))

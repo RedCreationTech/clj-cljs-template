@@ -3,12 +3,13 @@
   (:require
    [buddy.hashers :as hashers]
    [buddy.sign.jwt :as jwt]
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [com.ruoyi.infra.secrets :as secrets]))
 
 (def secret-key
-  "JWT 签名密钥，生产环境应通过环境变量注入。"
-  (or (System/getenv "JWT_SECRET")
-      "rouyi-default-jwt-secret-key-change-in-production"))
+  "JWT 签名密钥,从环境变量 JWT_SECRET 注入;开发/测试时退回默认值,prod 下由 secrets/verify! 拒绝默认值。"
+  (or (not-empty (System/getenv "JWT_SECRET"))
+      secrets/default-jwt-secret))
 
 (defn hash-password
   "使用 bcrypt 对明文密码进行哈希。"

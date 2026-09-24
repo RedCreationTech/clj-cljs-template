@@ -1,20 +1,21 @@
 (ns com.ruoyi.web.controllers.system.menu-test
   "菜单控制器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.controllers.system.menu :as menu]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.controllers.system.menu :as menu]))
 
 (def admin-identity
   {:user-id 1 :user-name "admin"})
 
 (def mock-menu-service
-  {:query-fn (fn [q p] (case q
-                         :list-menus [{:menu_id 1 :menu_name "test"}]
-                         :find-menu-by-id {:menu_id 1 :menu_name "test"}
-                         :create-menu! [{:menu_id 2}]
-                         :last-insert-rowid {:last_insert_rowid 2}
-                         :update-menu! nil
-                         :delete-menu! nil
-                         []))
+  {:query-fn (fn [q _p] (case q
+                          :list-menus [{:menu_id 1 :menu_name "test"}]
+                          :find-menu-by-id {:menu_id 1 :menu_name "test"}
+                          :create-menu! [{:menu_id 2}]
+                          :last-insert-rowid {:last_insert_rowid 2}
+                          :update-menu! nil
+                          :delete-menu! nil
+                          []))
    :menu-tree (fn [] [{:menu_id 1 :menu_name "test"}])})
 
 (deftest test-list-menus
@@ -37,7 +38,7 @@
 
 (deftest test-get-menu-not-found
   (testing "获取不存在的菜单"
-    (let [service {:query-fn (fn [q p] (case q :find-menu-by-id nil []))
+    (let [service {:query-fn (fn [q _p] (case q :find-menu-by-id nil []))
                    :menu-tree (fn [] [])}
           request {:path-params {:id "999"}}
           response (menu/get-menu {:menu-service service} request)]
@@ -72,5 +73,5 @@
                    :identity admin-identity}
           response (menu/change-status {:menu-service mock-menu-service} request)]
       (is (map? response))
-      (is (= 200 (:status response))
-      (is (= "状态修改成功" (:data (:body response))))))))
+      (is (= 200 (:status response)))
+      (is (= "状态修改成功" (:data (:body response)))))))

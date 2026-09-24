@@ -1,15 +1,14 @@
 (ns com.ruoyi.frontend.pages.notice
   "通知公告管理页面。"
   (:require
-   [reagent.core :as r]
-   [re-frame.core :as rf]
-   [reagent.hooks :as hooks]
-   [clojure.string :as str]
-   ["@ant-design/icons" :refer [PlusOutlined SearchOutlined ReloadOutlined]]
+   ["@ant-design/icons" :refer [PlusOutlined ReloadOutlined SearchOutlined]]
    ["react-quill-new" :default ReactQuill]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
-   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]))
+   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 (defn- notice-columns []
   #js [#js {:title "ID" :dataIndex "notice_id" :key "notice_id" :width 80}

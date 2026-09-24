@@ -4,11 +4,17 @@
   封装 Quartz 调度，支持从 sys_job 加载任务、新增、修改、删除、
   暂停/恢复以及立即执行一次。"
   (:require
-   [clojure.tools.logging :as log]
    [clojure.string :as str]
+   [clojure.tools.logging :as log]
    [com.ruoyi.infra.cron :as cron])
   (:import
-   [org.quartz Job JobExecutionContext JobBuilder TriggerBuilder JobKey TriggerKey]
+   [org.quartz
+    Job
+    JobBuilder
+    JobExecutionContext
+    JobKey
+    TriggerBuilder
+    TriggerKey]
    [org.quartz.spi JobFactory TriggerFiredBundle]))
 
 (defonce ^:private scheduler-atom (atom nil))
@@ -210,7 +216,7 @@
 
 (defn- make-job-factory []
   (reify JobFactory
-    (^Job newJob [_ ^TriggerFiredBundle bundle ^org.quartz.Scheduler scheduler]
+    (^Job newJob [_ ^TriggerFiredBundle _bundle ^org.quartz.Scheduler _scheduler]
       ruoyi-job)))
 
 (defn init!

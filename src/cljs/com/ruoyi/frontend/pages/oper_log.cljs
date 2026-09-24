@@ -1,15 +1,16 @@
 (ns com.ruoyi.frontend.pages.oper-log
   "操作日志页面。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   [clojure.string :as str]
+   ["@ant-design/icons" :refer [DeleteOutlined DownloadOutlined EyeOutlined ReloadOutlined
+                                SearchOutlined]]
    ["antd" :refer [DatePicker]]
-   ["@ant-design/icons" :refer [DeleteOutlined DownloadOutlined EyeOutlined ReloadOutlined SearchOutlined]]
+   [clojure.string :as str]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
-   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]))
+   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 (def range-picker (r/adapt-react-class (.-RangePicker DatePicker)))
 
@@ -134,7 +135,7 @@
                    :style page-search/select-style
                    :allowClear true
                    :value business-type
-                   :onChange #(set-business-type! %)}
+                   :onChange set-business-type!}
       (for [[value label] business-types]
         ^{:key value}
         [antd/select-option {:value value} label])]]
@@ -144,7 +145,7 @@
                    :style page-search/select-style
                    :allowClear true
                    :value status
-                   :onChange #(set-status! %)}
+                   :onChange set-status!}
       [antd/select-option {:value "0"} "成功"]
       [antd/select-option {:value "1"} "失败"]]]
     [page-search/search-item

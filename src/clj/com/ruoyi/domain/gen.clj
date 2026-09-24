@@ -2,9 +2,7 @@
   "代码生成器领域层 — 根据表结构生成 CRUD 代码模板。"
   (:require
    [clojure.string :as str]
-   [com.ruoyi.infra.db :as idb]
-   [next.jdbc :as jdbc]
-   [next.jdbc.result-set :as rs]))
+   [com.ruoyi.infra.db :as idb]))
 
 (defn list-tables
   "查询数据库中的所有表。"
@@ -52,8 +50,6 @@
       (str/replace #"^(sys_|gen_|t_)" "")
       (str/replace #"_" "-")
       str/lower-case))
-
-(defn- plural [s] s)
 
 ;; ─── SQL 生成 ──────────────────────────────────────────────────────────
 
@@ -119,7 +115,7 @@
 
 ;; ─── 后端 Domain 生成 ───────────────────────────────────────────────────
 
-(defn- generate-domain [table-name entity kebab columns]
+(defn- generate-domain [_table-name entity kebab columns]
   (let [pk-col (or (first (filter col-pk? columns)) (first columns))
         pk-name (col-name pk-col)
         list-fn (str "list-" kebab "s")

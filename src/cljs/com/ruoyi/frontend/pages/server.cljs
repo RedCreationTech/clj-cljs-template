@@ -1,12 +1,13 @@
 (ns com.ruoyi.frontend.pages.server
   "服务器监控页面，按 RuoYi-Vue 服务监控布局展示 CPU、内存、JVM 与磁盘状态。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [CloudServerOutlined DatabaseOutlined DesktopOutlined HddOutlined LaptopOutlined ReloadOutlined]]
+   ["@ant-design/icons" :refer [CloudServerOutlined DatabaseOutlined DesktopOutlined HddOutlined
+                                LaptopOutlined ReloadOutlined]]
    ["antd" :refer [Spin Table]]
-   [com.ruoyi.frontend.antd :as antd]))
+   [com.ruoyi.frontend.antd :as antd]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 (def card-style
   {:background "#fff"

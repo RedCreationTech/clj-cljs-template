@@ -1,21 +1,22 @@
 (ns com.ruoyi.web.controllers.monitor
   "系统监控控制器，提供服务器信息、数据源监控等。"
   (:require
-   [ring.util.response :as response]
    [clojure.string :as str]
-   [integrant.core :as ig]
    [com.ruoyi.config :as config]
    [com.ruoyi.integrant.state :as integrant-state]
    [com.ruoyi.integrant.trace :as trace]
+   [integrant.core :as ig]
+   [ring.util.response :as response]
    [weavejester.dependency :as dep])
-  (:import [java.lang.management ManagementFactory]
-           [com.sun.management OperatingSystemMXBean]
-           [java.io File]
-           [java.net InetAddress NetworkInterface Inet4Address]
-           [java.nio.file Files FileStore]
-           [java.time Instant ZoneId LocalDateTime]
-           [java.time.format DateTimeFormatter]
-           [com.zaxxer.hikari HikariDataSource HikariPoolMXBean]))
+  (:import
+   [com.sun.management OperatingSystemMXBean]
+   [com.zaxxer.hikari HikariDataSource]
+   [java.io File]
+   [java.lang.management ManagementFactory]
+   [java.net Inet4Address InetAddress NetworkInterface]
+   [java.nio.file FileStore Files]
+   [java.time Instant LocalDateTime ZoneId]
+   [java.time.format DateTimeFormatter]))
 
 (defn- ok
   ([data] (ok 200 "操作成功" data))
@@ -206,14 +207,16 @@
 
 ;; ─── Integrant config → system 监控 ─────────────────────────────────
 
-(defn- ^:private sanitize-key [k]
+(defn- sanitize-key
   "把 Integrant key 统一转成无冒号的字符串，方便前端匹配。"
+  [k]
   (if (keyword? k)
     (subs (str k) 1)
     (str k)))
 
-(defn- sanitize-value [v]
+(defn- sanitize-value
   "把 #ig/ref 等不可 JSON 序列化的值转成可序列化结构。"
+  [v]
   (cond
     (ig/ref? v) {:__ig_ref true :key (str (:key v))}
     (map? v) (into {} (map (fn [[k v]] [k (sanitize-value v)])) v)
@@ -221,8 +224,9 @@
     (set? v) (into #{} (map sanitize-value v))
     :else v))
 
-(defn- summarize-system-value [v]
+(defn- summarize-system-value
   "对运行时组件做摘要，避免直接序列化连接池等对象。"
+  [v]
   (cond
     (map? v) {:type (str (class v)) :kind "map" :keys (mapv sanitize-key (keys v))}
     (sequential? v) {:type (str (class v)) :kind "seq" :count (count v)}
@@ -240,10 +244,10 @@
         sys @integrant-state/system
         system-summary (into {} (map (fn [k] [(sanitize-key k) (summarize-system-value (get sys k))])) order)]
     (ok {:config (sanitize-value cfg)
-        :order (mapv sanitize-key order)
-        :dependencies deps
-        :dependents dents
-        :system system-summary})))
+         :order (mapv sanitize-key order)
+         :dependencies deps
+         :dependents dents
+         :system system-summary})))
 
 (defn- format-trace-log [idx log]
   (let [error? (contains? log :error)

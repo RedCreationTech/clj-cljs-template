@@ -9,27 +9,22 @@
 
 ## Build & Test(快速命令)
 
+所有任务走 babashka,`bb tasks` 查看全部。
+
 ```bash
-# 后端(port 3000 / nREPL 7000,SQLite 自动迁移)
-clojure -M:dev -m com.ruoyi.core
-
-# 前端 watch(增量编译到 resources/public/js/)
-npx shadow-cljs watch app
-
-# 后端单元测试(cognitect test-runner;用 -n 指定命名空间,勿用 -X :ns-regexes)
-clojure -M:test
-clojure -M:test -n com.ruoyi.web.handler-test
-
-# 前端 E2E(Playwright;需后端已在 3000 运行)
-npx playwright test
-
-# 规模约束(命名空间 ≤500 行 / 函数 ≤50 行)
-python3 scripts/check_constraints.py
+bb dev                    # 后端 3000 / nREPL 7000 + 前端 watch(--reset-db 清空本地库)
+bb test                   # 后端测试(独立 test.db);单个命名空间:bb test -n com.ruoyi.web.handler-test
+bb test:mysql             # MySQL 上跑测试(docker compose 或 JDBC_URL)
+bb e2e                    # Playwright(需后端已在 3000 运行)
+bb ci                     # 提交前:lint(clj-kondo + 迁移 + 规模约束)+ fmt:check + test
+bb fmt                    # cljfmt 自动格式化
+bb new-module <名称> --label 中文名 --fields "title:string:required:标题,..."   # 生成 CRUD 模块
 ```
 
 ## Clojure 编辑约定
 - 编辑任意 `.clj/.cljs/.cljc/.cljd/.edn` 时保证括号平衡;若环境提供 `clojure-bracket-guard` 之类的 `safe-edit` / `validate` 工具,优先使用。
-- 提交前用 `clojure-lsp format --filenames <files>` 统一格式。
+- 提交前 `bb fmt` 统一格式、`bb lint` 保持 clj-kondo 零 warning。
+- 源码中的 `;; [new-module] <tag>` 注释是 `bb new-module` 的登记点,不要删除。
 
 ## Git 策略
 - 未获明确指示不擅自 commit / push;收到指示后按常规流程提交并推送(不强制推送到 main)。

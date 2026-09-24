@@ -1,26 +1,24 @@
 (ns com.ruoyi.web.routes.system
   "系统管理路由聚合。"
   (:require
-   [com.ruoyi.web.controllers.system.user :as user]
-   [com.ruoyi.web.controllers.system.role :as role]
-   [com.ruoyi.web.controllers.system.menu :as menu]
-   [com.ruoyi.web.controllers.system.dept :as dept]
-   [com.ruoyi.web.controllers.system.post :as post]
-   [com.ruoyi.web.controllers.system.dict :as dict]
-   [com.ruoyi.web.controllers.system.config :as config]
-   [com.ruoyi.web.controllers.system.log :as log]
-   [com.ruoyi.web.controllers.system.online :as online]
-   [com.ruoyi.web.controllers.system.notice :as notice]
    [com.ruoyi.web.controllers.job :as job]
-   [com.ruoyi.web.controllers.system.profile :as profile]
    [com.ruoyi.web.controllers.monitor :as monitor]
    [com.ruoyi.web.controllers.system.cache :as cache]
-   [com.ruoyi.web.controllers.system.import-export :as im]
+   [com.ruoyi.web.controllers.system.config :as config]
+   [com.ruoyi.web.controllers.system.dept :as dept]
+   [com.ruoyi.web.controllers.system.dict :as dict]
    [com.ruoyi.web.controllers.system.file :as file]
    [com.ruoyi.web.controllers.system.form-template :as form-template]
-   [com.ruoyi.web.middleware.auth :as auth-mw]
-
-   [malli.util :as mu]))
+   [com.ruoyi.web.controllers.system.import-export :as im]
+   [com.ruoyi.web.controllers.system.log :as log]
+   [com.ruoyi.web.controllers.system.menu :as menu]
+   [com.ruoyi.web.controllers.system.notice :as notice]
+   [com.ruoyi.web.controllers.system.online :as online]
+   [com.ruoyi.web.controllers.system.post :as post]
+   [com.ruoyi.web.controllers.system.profile :as profile]
+   [com.ruoyi.web.controllers.system.role :as role]
+   [com.ruoyi.web.controllers.system.user :as user]
+   [com.ruoyi.web.middleware.auth :as auth-mw]))
 
 ;; ── Shared Swagger schemas ──────────────────────────────────────────
 (def PagingQuery [:map {:closed true}

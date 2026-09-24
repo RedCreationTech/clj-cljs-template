@@ -1,25 +1,26 @@
 (ns com.ruoyi.web.controllers.system.role-test
   "角色控制器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.controllers.system.role :as role]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.controllers.system.role :as role]))
 
 (def mock-role-service
-  {:query-fn (fn [q p]
-                (case q
-                  :list-roles [{:role_id 1 :role_name "admin" :role_key "admin"}]
-                  :find-role-by-id {:role_id 1 :role_name "admin" :role_key "admin" :dept_ids "1,2"}
-                  :list-menus-by-role-id [{:menu_id 1}]
-                  :create-role! [{:role_id 2}]
-                  :update-role! nil
-                  :delete-role! nil
-                  :list-users-by-role [{:user_id 1 :user_name "user"}]
-                  :list-users-not-in-role [{:user_id 2 :user_name "other"}]
-                  :delete-user-role! nil
-                  :insert-user-role! nil
-                  []))})
+  {:query-fn (fn [q _p]
+               (case q
+                 :list-roles [{:role_id 1 :role_name "admin" :role_key "admin"}]
+                 :find-role-by-id {:role_id 1 :role_name "admin" :role_key "admin" :dept_ids "1,2"}
+                 :list-menus-by-role-id [{:menu_id 1}]
+                 :create-role! [{:role_id 2}]
+                 :update-role! nil
+                 :delete-role! nil
+                 :list-users-by-role [{:user_id 1 :user_name "user"}]
+                 :list-users-not-in-role [{:user_id 2 :user_name "other"}]
+                 :delete-user-role! nil
+                 :insert-user-role! nil
+                 []))})
 
 (def mock-dept-service
-  {:query-fn (fn [q p]
+  {:query-fn (fn [q _p]
                (case q
                  :list-depts [{:dept_id 1 :dept_name "总部"}]
                  []))})

@@ -18,8 +18,9 @@
 (defn- current-user-name [request]
   (get-in request [:identity :user-name] ""))
 
-(defn- ->snake [params]
+(defn- ->snake
   "将查询参数键统一转为 snake_case。"
+  [params]
   (reduce-kv (fn [m k v]
                (assoc m
                       (keyword (str/replace (name k) #"([a-z])([A-Z])" "$1_$2"))

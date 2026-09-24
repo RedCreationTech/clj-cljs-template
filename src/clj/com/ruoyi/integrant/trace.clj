@@ -1,12 +1,12 @@
 (ns com.ruoyi.integrant.trace
   "Integrant 函数组件的运行时调用追踪。"
   (:require
-   [integrant.core :as ig]
-   [com.ruoyi.integrant.state :as state]
+   [clojure.string :as str]
    [com.ruoyi.infra.datasource :as ds]
+   [com.ruoyi.integrant.state :as state]
    [com.ruoyi.web.handler :as handler]
-   [kit.edge.db.sql.conman]
-   [clojure.string :as str]))
+   [integrant.core :as ig]
+   [kit.edge.db.sql.conman]))
 
 (defonce ^:private registry (atom {}))
 ;; registry: {key-str {:original fn :active? boolean :logs [...]}}
@@ -45,8 +45,8 @@
   (get-method ig/init-key :db.sql/connection))
 
 (defmethod ig/init-key :db.sql/connection
-  [_ pool-spec]
-  (let [real-ds (original-conn-init _ pool-spec)]
+  [k pool-spec]
+  (let [real-ds (original-conn-init k pool-spec)]
     (ds/delegating-datasource real-ds)))
 
 ;; 覆盖 halt-key! 以正确关闭 DelegatingDataSource（conman 只认 HikariDataSource）
@@ -54,14 +54,14 @@
   (get-method ig/halt-key! :db.sql/connection))
 
 (defmethod ig/halt-key! :db.sql/connection
-  [_ conn]
+  [k conn]
   (if (com.ruoyi.infra.datasource/swappable? conn)
     (do (when-let [delegate (com.ruoyi.infra.datasource/get-delegate conn)]
           (when (instance? com.zaxxer.hikari.HikariDataSource delegate)
             (when-not (.isClosed ^com.zaxxer.hikari.HikariDataSource delegate)
               (.close ^com.zaxxer.hikari.HikariDataSource delegate))))
         nil)
-    (original-conn-halt _ conn)))
+    (original-conn-halt k conn)))
 
 ;; ─── db.sql/query-fn: 动态代理 ─────────────────────────────────────
 
@@ -69,8 +69,8 @@
   (get-method ig/init-key :db.sql/query-fn))
 
 (defmethod ig/init-key :db.sql/query-fn
-  [_ opts]
-  (let [actual (original-query-fn-init _ opts)]
+  [k opts]
+  (let [actual (original-query-fn-init k opts)]
     (register-dynamic! :db.sql/query-fn actual)))
 
 (def ^:private max-log-entries 200)
@@ -80,8 +80,9 @@
     (boolean (some #(str/includes? s %)
                    ["authorization" "cookie" "token" "password" "passwd" "secret"]))))
 
-(defn- safe-snapshot [v]
+(defn- safe-snapshot
   "把任意值转成可 JSON 序列化的简短摘要。"
+  [v]
   (cond
     (nil? v) nil
     (map? v) (into {} (map (fn [[k v]] [(str k) (if (sensitive-key? k) "<redacted>" (safe-snapshot v))])) v)
@@ -132,14 +133,6 @@
 (defn- kw [key-str]
   (if (keyword? key-str) key-str (keyword key-str)))
 
-(def ^:private dynamic-keys
-  "支持运行时动态替换的函数组件。对这些 key 的追踪不会修改系统 map，
-   而是替换它们内部的代理 atom，从而让已持有引用的调用方也能看到新实现。"
-  #{:handler/ring :db.sql/query-fn})
-
-(defn- dynamic-key? [k]
-  (contains? dynamic-keys k))
-
 (defn- current-actual [k]
   (case k
     :handler/ring (handler/current-ring-handler)
@@ -152,8 +145,9 @@
     :db.sql/query-fn (set-dynamic! :db.sql/query-fn f)
     (swap! state/system assoc k f)))
 
-(defn start! [key-str]
+(defn start!
   "开始对某个 Integrant key 对应的函数进行调用追踪。"
+  [key-str]
   (let [k (kw key-str)
         f (current-actual k)]
     (when (fn? f)
@@ -167,8 +161,9 @@
         (set-actual! k wrapper))
       true)))
 
-(defn stop! [key-str]
+(defn stop!
   "停止追踪并清空日志，恢复原始函数。"
+  [key-str]
   (let [k (kw key-str)
         rec (get @registry key-str)]
     (when rec

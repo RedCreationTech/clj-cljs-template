@@ -22,7 +22,6 @@ CREATE INDEX idx_sys_oper_log_oper_time ON sys_oper_log(oper_time);
 --;;
 CREATE INDEX idx_sys_oper_log_oper_name ON sys_oper_log(oper_name);
 --;;
---;;
 CREATE TABLE sys_login_log (
   info_id INTEGER PRIMARY KEY,
   user_name VARCHAR(50) DEFAULT '',
@@ -38,4 +37,3 @@ CREATE TABLE sys_login_log (
 CREATE INDEX idx_sys_login_log_login_time ON sys_login_log(login_time);
 --;;
 CREATE INDEX idx_sys_login_log_user_name ON sys_login_log(user_name);
---;;

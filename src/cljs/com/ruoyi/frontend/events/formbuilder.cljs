@@ -1,11 +1,8 @@
 (ns com.ruoyi.frontend.events.formbuilder
   "表单构建器与模板事件。"
   (:require
-   [com.ruoyi.frontend.events.common :as ec]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api :as api]
-   [com.ruoyi.frontend.db :as db]
-   [com.ruoyi.frontend.router :as router]
    [re-frame.core :as rf]))
 
 (let [counter (atom 0)]

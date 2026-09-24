@@ -1,11 +1,8 @@
 (ns com.ruoyi.frontend.events.monitor
   "仪表盘、服务器、缓存、数据源与 Integrant 监控事件。"
   (:require
-   [com.ruoyi.frontend.events.common :as ec]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api :as api]
-   [com.ruoyi.frontend.db :as db]
-   [com.ruoyi.frontend.router :as router]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :dashboard/set-stats
@@ -23,7 +20,7 @@
            (fn [_]
              (api/get-dashboard-stats
               (fn [r] (when (= 200 (:code r))
-                       (rf/dispatch [:dashboard/set-stats (:data r)])))
+                        (rf/dispatch [:dashboard/set-stats (:data r)])))
               (fn [_] (rf/dispatch [:dashboard/set-stats nil])))))
 
 (rf/reg-event-db :server/set-data

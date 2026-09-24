@@ -1,7 +1,6 @@
 (ns com.ruoyi.domain.system.dept
   "部门领域服务。"
   (:require
-   [clojure.string :as str]
    [com.ruoyi.infra.db :as db]))
 
 (defn list-depts

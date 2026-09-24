@@ -1,10 +1,8 @@
 (ns com.ruoyi.domain.system.user
   "用户领域服务，处理用户 CRUD、密码管理与角色关联。"
   (:require
-   [com.ruoyi.infra.security :as security]
-   [clojure.string :as str]
-   [clojure.tools.logging :as log]
-   [com.ruoyi.infra.db :as db]))
+   [com.ruoyi.infra.db :as db]
+   [com.ruoyi.infra.security :as security]))
 
 (defn list-users
   "查询用户列表，支持分页和条件筛选。"
@@ -45,18 +43,18 @@
   "创建新用户，自动加密密码。"
   [{:keys [query-fn db]} {:keys [password roles posts] :as params}]
   (ensure-unique-user-name! {:query-fn query-fn} (:user_name params) nil)
-  (let [hashed (security/hash-password password)]
-    (let [user-id (db/insert-and-get-id! query-fn db :create-user!
-                                         (-> params
-                                             (assoc :password hashed)
-                                             (dissoc :roles :posts)))]
-      ;; 关联角色
-      (doseq [role-id roles]
-        (query-fn :insert-user-role! {:user_id user-id :role_id role-id}))
-      ;; 关联岗位
-      (doseq [post-id posts]
-        (query-fn :insert-user-post! {:user_id user-id :post_id post-id}))
-      user-id)))
+  (let [hashed (security/hash-password password)
+        user-id (db/insert-and-get-id! query-fn db :create-user!
+                                       (-> params
+                                           (assoc :password hashed)
+                                           (dissoc :roles :posts)))]
+    ;; 关联角色
+    (doseq [role-id roles]
+      (query-fn :insert-user-role! {:user_id user-id :role_id role-id}))
+    ;; 关联岗位
+    (doseq [post-id posts]
+      (query-fn :insert-user-post! {:user_id user-id :post_id post-id}))
+    user-id))
 
 (defn update-user!
   "更新用户信息，可选更新密码。"

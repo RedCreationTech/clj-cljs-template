@@ -1,7 +1,8 @@
 (ns com.ruoyi.domain.system.dict-test
   "字典领域服务测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.domain.system.dict :as dict]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.domain.system.dict :as dict]))
 
 (def mock-dict-types
   [{:dict_id 1 :dict_name "用户性别" :dict_type "sys_user_sex" :status "0"}
@@ -11,7 +12,7 @@
   [{:dict_code 1 :dict_sort 1 :dict_label "男" :dict_value "0" :dict_type "sys_user_sex"}
    {:dict_code 2 :dict_sort 2 :dict_label "女" :dict_value "1" :dict_type "sys_user_sex"}])
 
-(defn- mock-query-fn [query-name params]
+(defn- mock-query-fn [query-name _params]
   (case query-name
     :list-dict-types mock-dict-types
     :find-dict-type-by-id (first mock-dict-types)

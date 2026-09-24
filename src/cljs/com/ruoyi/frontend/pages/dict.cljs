@@ -1,14 +1,14 @@
 (ns com.ruoyi.frontend.pages.dict
   "字典管理页面 — 完整 CRUD。两级联动：类型列表 → 数据列表。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [PlusOutlined DownloadOutlined EditOutlined DeleteOutlined SearchOutlined ReloadOutlined]]
+   ["@ant-design/icons" :refer [DownloadOutlined PlusOutlined ReloadOutlined SearchOutlined]]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api :as api]
    [com.ruoyi.frontend.components.page-search :as page-search]
-   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]))
+   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 ;; ─── 字典类型 ─────────────────────────────────────────────────────────────────
 

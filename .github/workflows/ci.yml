@@ -1,0 +1,145 @@
+# 持续集成:所有步骤只调用 bb 任务(本地可原样复现,见 `bb tasks`)。
+#   lint        clj-kondo / 迁移文件 / 规模约束 / cljfmt
+#   test-sqlite 后端测试 + 迁移往返(SQLite)
+#   test-mysql  后端测试 + 迁移往返(MySQL 8.4 service)
+#   e2e         前端生产构建(warning 即失败)+ Playwright
+#   scaffold    bb new-module 生成一个模块后,整套检查、测试与生成的 E2E 都要通过
+name: CI
+
+on:
+  push:
+    branches: [main, master, template]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+
+jobs:
+  lint:
+    name: 静态检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - name: clj-kondo + 迁移检查 + 规模约束
+        run: bb lint
+      - name: cljfmt
+        run: bb fmt:check
+
+  test-sqlite:
+    name: 后端测试(SQLite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: bb test
+      - name: 迁移往返 up → down → up
+        run: bb db:roundtrip
+
+  test-mysql:
+    name: 后端测试(MySQL 8.4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: ruoyi
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h127.0.0.1 -uroot -ppassword --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      JDBC_URL: jdbc:mysql://127.0.0.1:3306/ruoyi?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - name: 清空库后跑全部测试
+        run: bb test:mysql
+      - name: 迁移往返 up → down → up
+        run: bb db:roundtrip
+
+  e2e:
+    name: 前端构建 + E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          node: "true"
+      - name: 前端生产构建
+        run: bb release
+      - name: 启动后端并等待就绪
+        run: |
+          nohup bb backend > backend.log 2>&1 &
+          timeout 300 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 2; done'
+      - name: 安装 Chromium
+        run: npx playwright install --with-deps chromium
+      - run: bb e2e
+      - name: 上传失败现场
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report
+          path: |
+            playwright-report/
+            test-results/
+            backend.log
+          retention-days: 7
+
+  scaffold:
+    name: 脚手架冒烟(bb new-module)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          node: "true"
+      - name: 生成覆盖全部字段类型的示例模块
+        run: >-
+          bb new-module ci-demo --label 冒烟模块
+          --fields "title:string:required:标题,qty:int:数量,price:decimal:单价,due_on:date:到期日,active:bool:启用,remark:text:备注"
+      - name: 生成的代码通过静态检查与格式检查
+        run: |
+          bb lint
+          bb fmt:check
+      - name: 生成的后端测试
+        run: bb test -r '.*\.ci-demo-test$'
+      - name: 生成的迁移可往返
+        run: bb db:roundtrip
+      - name: 前端编译零 warning
+        run: bb cljs:check
+      - name: 启动后端并等待就绪
+        run: |
+          nohup bb backend > backend.log 2>&1 &
+          timeout 300 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 2; done'
+      - name: 安装 Chromium
+        run: npx playwright install --with-deps chromium
+      - name: 生成的 E2E 用例
+        run: bb e2e tests/e2e/ci-demo.spec.js
+      - name: 上传失败现场
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: scaffold-report
+          path: |
+            playwright-report/
+            test-results/
+            backend.log
+          retention-days: 7

@@ -1,10 +1,10 @@
 (ns com.ruoyi.web.request-test
   "集成测试 — 启动完整系统并通过 HTTP 请求测试 API。"
-  (:require [clojure.test :refer [deftest testing is use-fixtures]]
-            [com.ruoyi.test-utils :refer [system-state system-fixture GET PUT]]
-            [peridot.core :as p]
-            [clojure.data.json :as json]
-            [clojure.java.io :as io]))
+  (:require
+   [clojure.data.json :as json]
+   [clojure.test :refer [deftest is testing use-fixtures]]
+   [com.ruoyi.test-utils :refer [GET PUT system-fixture system-state]]
+   [peridot.core :as p]))
 
 (use-fixtures :once (system-fixture))
 
@@ -57,7 +57,7 @@
 (deftest user-list-test
   (testing "用户列表 API"
     (let [resp (GET (handler) "/api/system/user" {} (auth-headers (login-token)))
-          body (parse-json resp)]
+          _body (parse-json resp)]
       (is (= 200 (:status resp))))))
 
 (deftest role-list-test
@@ -153,7 +153,7 @@
           run-resp (PUT (handler) (str "/api/system/job/" job-id "/run") {} (auth-headers token))
           _ (Thread/sleep 1200)
           all-log-resp (GET (handler) "/api/system/job-log?page-num=1&page-size=10" {} (auth-headers token))
-          log-resp (GET (handler) (str "/api/system/job-log?page-num=1&page-size=10&job_name=test-job") {} (auth-headers token))
+          log-resp (GET (handler) "/api/system/job-log?page-num=1&page-size=10&job_name=test-job" {} (auth-headers token))
           log-body (parse-json log-resp)
           all-log-body (parse-json all-log-resp)]
       (is (some? job-id))

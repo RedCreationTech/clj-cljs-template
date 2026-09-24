@@ -1,12 +1,12 @@
 (ns com.ruoyi.frontend.pages.user.search
   "用户页搜索表单与工具栏（presentational，接收查询字段/列配置与回调）。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
+   ["@ant-design/icons" :refer [AppstoreOutlined DeleteOutlined DownloadOutlined EditOutlined
+                                PlusOutlined ReloadOutlined SearchOutlined UploadOutlined]]
    ["antd" :refer [DatePicker]]
-   ["@ant-design/icons" :refer [SearchOutlined ReloadOutlined PlusOutlined EditOutlined
-                                DeleteOutlined UploadOutlined DownloadOutlined AppstoreOutlined]]
-   [com.ruoyi.frontend.antd :as antd]))
+   [com.ruoyi.frontend.antd :as antd]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 (def range-picker (r/adapt-react-class (.-RangePicker DatePicker)))
 
@@ -72,11 +72,11 @@
            (js/setTimeout
             (fn [] (set-height! "auto"))
             320))
-         (do (when-let [el (.-current form-ref)]
-               (set-height! (str (.-scrollHeight el) "px"))
-               (js/setTimeout
-                (fn [] (set-height! "0px"))
-                10)))))
+         (when-let [el (.-current form-ref)]
+           (set-height! (str (.-scrollHeight el) "px"))
+           (js/setTimeout
+            (fn [] (set-height! "0px"))
+            10))))
      [show-search?])
     [:div {:ref form-ref
            :style {:overflow "hidden"
@@ -97,8 +97,8 @@
                                                    [:span label]
                                                    [antd/switch {:size "small" :checked visible?}]])})
                                        columns))
-                         :onClick (fn [e]
-                                    (on-toggle-column (keyword (.-key e))))}
+                          :onClick (fn [e]
+                                     (on-toggle-column (keyword (.-key e))))}
                    :trigger #js ["click"]}
     [antd/button {:shape "circle"
                   :icon (r/as-element [:> AppstoreOutlined])

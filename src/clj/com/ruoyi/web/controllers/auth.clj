@@ -1,15 +1,15 @@
 (ns com.ruoyi.web.controllers.auth
   "认证控制器，处理登录、登出及当前用户信息获取。"
   (:require
-   [com.ruoyi.domain.system.user :as user-service]
-   [com.ruoyi.domain.system.role :as role-service]
-   [com.ruoyi.domain.system.menu :as menu-service]
-   [com.ruoyi.infra.security :as security]
-   [com.ruoyi.infra.online :as online]
-   [com.ruoyi.web.controllers.captcha :as captcha]
+   [clojure.string :as str]
    [com.ruoyi.domain.system.log :as log-domain]
-   [ring.util.response :as response]
-   [clojure.string :as str]))
+   [com.ruoyi.domain.system.menu :as menu-service]
+   [com.ruoyi.domain.system.role :as role-service]
+   [com.ruoyi.domain.system.user :as user-service]
+   [com.ruoyi.infra.online :as online]
+   [com.ruoyi.infra.security :as security]
+   [com.ruoyi.web.controllers.captcha :as captcha]
+   [ring.util.response :as response]))
 
 (defn- success
   "构造成功响应。"

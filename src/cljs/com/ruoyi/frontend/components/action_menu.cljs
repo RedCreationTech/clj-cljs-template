@@ -1,8 +1,8 @@
 (ns com.ruoyi.frontend.components.action-menu
   "表格操作菜单。"
   (:require
-   [reagent.core :as r]
-   [com.ruoyi.frontend.antd :as antd]))
+   [com.ruoyi.frontend.antd :as antd]
+   [reagent.core :as r]))
 
 (defn action-menu [{:keys [on-edit on-delete more-items]}]
   [antd/space

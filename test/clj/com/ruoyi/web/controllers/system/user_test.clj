@@ -1,13 +1,14 @@
 (ns com.ruoyi.web.controllers.system.user-test
   "用户管理控制器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.controllers.system.user :as user]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.controllers.system.user :as user]))
 
 (def admin-identity
   {:user-id 1 :user-name "admin" :roles [{:role-key "admin" :data-scope 1}]})
 
 (def mock-user-service
-  {:query-fn (fn [q p]
+  {:query-fn (fn [q _p]
                (case q
                  :list-users [{:user_id 1 :user_name "admin" :nick_name "管理员"
                                :email "admin@ruoyi.vip" :phonenumber "13800138000"
@@ -45,11 +46,11 @@
 
 (deftest test-get-user-not-found
   (testing "获取用户详情不存在"
-    (let [service {:query-fn (fn [q p] (case q
-                                        :find-user-by-id nil
-                                        :list-roles-by-user-id []
-                                        :list-posts-by-user-id []
-                                        nil))}
+    (let [service {:query-fn (fn [q _p] (case q
+                                          :find-user-by-id nil
+                                          :list-roles-by-user-id []
+                                          :list-posts-by-user-id []
+                                          nil))}
           request {:path-params {:id "999"} :identity admin-identity}
           response (user/get-user {:user-service service} request)]
       (is (map? response))

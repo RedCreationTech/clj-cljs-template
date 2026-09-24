@@ -3,4 +3,3 @@ CREATE TABLE sys_user_role (
   role_id BIGINT NOT NULL,
   PRIMARY KEY (user_id, role_id)
 );
---;;

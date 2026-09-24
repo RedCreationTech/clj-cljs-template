@@ -16,4 +16,3 @@ CREATE TABLE sys_role (
 );
 --;;
 CREATE INDEX idx_sys_role_role_key ON sys_role(role_key);
---;;

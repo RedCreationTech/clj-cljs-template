@@ -1,8 +1,9 @@
 (ns com.ruoyi.web.controllers.job-test
   "定时任务控制器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.controllers.job :as job]
-            [com.ruoyi.infra.scheduler :as scheduler-core]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.infra.scheduler :as scheduler-core]
+   [com.ruoyi.web.controllers.job :as job]))
 
 (def ^:private test-job
   {:job_id 1
@@ -17,7 +18,7 @@
 
 (defn mock-query-fn
   "根据查询关键字返回固定响应的 mock query-fn。"
-  [q p]
+  [q _p]
   (case q
     :list-jobs [test-job]
     :find-job-by-id test-job

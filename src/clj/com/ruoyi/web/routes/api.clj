@@ -1,13 +1,13 @@
 (ns com.ruoyi.web.routes.api
   (:require
    [com.ruoyi.web.controllers.health :as health]
-   [com.ruoyi.web.routes.auth :as auth]
-   [com.ruoyi.web.routes.system :as system]
-   [com.ruoyi.web.routes.gen :as gen]
-   [com.ruoyi.web.routes.captcha :as captcha]
-   [com.ruoyi.web.routes.common :as common]
    [com.ruoyi.web.middleware.exception :as exception]
    [com.ruoyi.web.middleware.formats :as formats]
+   [com.ruoyi.web.routes.auth :as auth]
+   [com.ruoyi.web.routes.captcha :as captcha]
+   [com.ruoyi.web.routes.common :as common]
+   [com.ruoyi.web.routes.gen :as gen]
+   [com.ruoyi.web.routes.system :as system]
    [integrant.core :as ig]
    [reitit.coercion.malli :as malli]
    [reitit.ring.coercion :as coercion]
@@ -40,7 +40,8 @@
    (common/common-routes opts)
    (gen/gen-routes opts)
    (captcha/captcha-routes opts)
-   ;; 业务模块在此追加自己的路由组,例如 (example/example-routes opts)
+   ;; 业务模块的路由组追加在标记之前(bb new-module 自动插入;标记行请保留)
+   ;; [new-module] routes
    ])
 
 (derive :reitit.routes/api :reitit/routes)

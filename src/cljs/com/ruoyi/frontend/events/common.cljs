@@ -24,7 +24,9 @@
    :build {:label "表单构建" :icon "build"}
    :gen {:label "代码生成" :icon "code"}
    :swagger {:label "系统接口" :icon "swagger"}
-   :profile {:label "个人中心" :icon "profile"}})
+   :profile {:label "个人中心" :icon "profile"}
+   ;; [new-module] tab-meta
+   })
 
 (defn activate-page-tab [db page]
   (let [meta (merge {:label (get router/page-names page "页面")}

@@ -1,7 +1,5 @@
 (ns com.ruoyi.frontend.components.search-input
-  "搜索表单项布局。"
-  (:require
-   [com.ruoyi.frontend.antd :as antd]))
+  "搜索表单项布局。")
 
 (defn search-input [{:keys [label]} child]
   [:div {:style {:display "flex" :alignItems "center" :gap 8}}

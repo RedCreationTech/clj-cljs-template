@@ -1,12 +1,12 @@
 (ns com.ruoyi.frontend.pages.datasource
   "连接池监视页面，按 RuoYi 数据监控入口展示 HikariCP 连接池状态。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
    ["@ant-design/icons" :refer [DatabaseOutlined ReloadOutlined]]
    ["antd" :refer [Spin Table]]
-   [com.ruoyi.frontend.antd :as antd]))
+   [com.ruoyi.frontend.antd :as antd]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 (def card-style
   {:background "#fff"

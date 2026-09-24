@@ -3,9 +3,9 @@
   本中间件挂在路由器外层(wrap-base),看不到路由级 auth 中间件写入的 :identity,
   因此操作人从 Authorization 头自行解析(无效/缺失则记为 anonymous)。"
   (:require
-   [clojure.tools.logging :as log]
-   [clojure.string :as str]
    [cheshire.core :as json]
+   [clojure.string :as str]
+   [clojure.tools.logging :as log]
    [com.ruoyi.infra.security :as security]))
 
 (def ^:private skip-paths

@@ -12,4 +12,3 @@ CREATE TABLE sys_post (
 );
 --;;
 CREATE INDEX idx_sys_post_status ON sys_post(status);
---;;

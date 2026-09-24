@@ -2,7 +2,7 @@
 
 一个可直接复用的 **Clojure 后端 + ClojureScript 前端** 管理后台起步模板。后端基于 **Kit 框架**（Integrant + Reitit + Ring + Undertow），前端基于 **shadow-cljs + Reagent + re-frame + Ant Design 6**，内置 RuoYi 风格的用户/角色/菜单/部门/字典/日志/定时任务/代码生成等通用能力。
 
-克隆后只需三步就能得到一个新项目：改名（`scripts/rename-project.sh`）→ 加业务模块 → 启动。架构说明见 [`docs/architecture/c4-model.org`](docs/architecture/c4-model.org)（C4 模型，org-mode 可执行文档）。
+克隆后三条命令就能得到一个带业务模块、可运行的新项目：`bb rename` 改名 → `bb new-module` 生成业务模块 → `bb dev` 启动。所有日常任务都通过 babashka 统一入口（`bb tasks` 查看），macOS / Linux / Windows 通用，CI 也只调用这些任务。架构说明见 [`docs/architecture/c4-model.org`](docs/architecture/c4-model.org)（C4 模型，org-mode 可执行文档；[HTML 版](docs/architecture/c4-model.html)）。
 
 ---
 
@@ -11,11 +11,11 @@
 | 层级 | 技术 |
 |------|------|
 | 后端 | Clojure 1.12.6, Kit 1.0.x, Integrant, Reitit 0.11, Ring 1.15, Undertow, next.jdbc / conman (HugSQL), Migratus, Malli 0.20, HikariCP 7 |
-| 数据库 | SQLite 3.53（默认，零配置）；MySQL（Connector/J 26.7，切换环境变量即可） |
-| 安全 | Buddy（JWT + bcrypt），图片验证码，XSS/Frame 防护 |
+| 数据库 | SQLite 3.53（默认，零配置）；MySQL 8.4（Connector/J 26.7，切换环境变量即可；`docker-compose.yml` 提供本地实例） |
+| 安全 | Buddy（JWT + bcrypt），图片验证码，XSS/Frame 防护；prod 下强制校验 `JWT_SECRET` / `COOKIE_SECRET` |
 | 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0 (函数组件 + Hooks), re-frame 1.4, React 19.3, Ant Design 6.6 |
 | 任务调度 | Quartz 2.5（`sys_job` 表驱动，支持暂停/恢复/立即执行） |
-| 工具链 | Clojure CLI (`deps.edn`), tools.build 0.10, babashka (`bb.edn`), Playwright 1.63 (E2E), cloverage, clj-kondo |
+| 工具链 | babashka（`bb.edn` 统一任务入口 + `bb new-module` 脚手架）, Clojure CLI (`deps.edn`), tools.build 0.10, clj-kondo 2026.08, cljfmt 0.16, Playwright 1.63 (E2E), cloverage, GitHub Actions |
 
 ---
 
@@ -29,7 +29,7 @@
 
 **系统监控**：服务器（CPU / 内存 / JVM / 磁盘）、HikariCP 连接池、内存缓存、Integrant 组件依赖图与函数调用追踪、定时任务。
 
-**开发工具**：代码生成器（按表结构生成 SQL + 后端 controller + 前端页面）、Swagger UI、表单构建器。
+**开发工具**：`bb new-module` 业务模块脚手架（命令行，生成即可运行并自动登记）、页面内代码生成器（按已有表结构生成骨架）、Swagger UI、表单构建器。
 
 ---
 
@@ -37,12 +37,17 @@
 
 ```
 .
-├── deps.edn                     # Clojure 依赖与别名 (:dev :test :build :coverage :nrepl :cider)
+├── bb.edn                       # 统一任务入口(bb tasks 查看);实现在 bb/tasks/
+├── bb/tasks/                    # dev / lint / rename / new_module 及 scaffold/ 模板
+├── deps.edn                     # Clojure 依赖与别名 (:dev :test :build :coverage :nrepl :cider :fmt)
 ├── shadow-cljs.edn              # ClojureScript 构建 (:app -> resources/public/js)
 ├── package.json                 # NPM 依赖 (React 19, antd 6, Playwright)
-├── bb.edn / Makefile            # 常用任务入口
 ├── build.clj                    # tools.build: uberjar
-├── kit.edn                      # Kit 生成器配置
+├── docker-compose.yml           # 本地 MySQL 8.4(端口 3308),bb test:mysql 自动使用
+├── Dockerfile                   # 多阶段镜像
+├── .github/workflows/ci.yml     # CI:lint / SQLite / MySQL / E2E / 脚手架冒烟
+├── .clj-kondo/ .cljfmt.edn .lsp/ .editorconfig   # 静态检查与格式化配置
+├── kit.edn                      # 项目命名空间与路径(bb 任务与改名工具从这里读取)
 ├── resources/
 │   ├── system.edn               # Integrant 系统配置（唯一的组件装配点）
 │   ├── migrations-sqlite/       # SQLite 迁移（Migratus）
@@ -50,9 +55,9 @@
 │   ├── sql/*.sql                # HugSQL 查询
 │   └── public/index.html        # SPA 入口（js/ 由 shadow-cljs 生成）
 ├── src/clj/com/ruoyi/           # 后端
-│   ├── core.clj                 # 入口：加载 edge / domain / routes 并启动 Integrant
+│   ├── core.clj                 # 入口：密钥校验 → 加载 edge / domain / routes → 启动 Integrant
 │   ├── config.clj               # 读取 system.edn（aero）
-│   ├── infra/                   # 基础设施：db 抽象、security(JWT)、online、data-perm、cache、scheduler
+│   ├── infra/                   # 基础设施：db 抽象、security(JWT)、secrets、online、data-perm、cache、scheduler
 │   ├── domain/                  # 领域服务（system/*：user, role, menu, dept, ...；gen）
 │   ├── web/handler.clj          # Ring handler / 路由器 / SPA fallback
 │   ├── web/middleware/          # auth、operlog、exception、formats、core
@@ -72,10 +77,10 @@
 ├── env/{dev,test,prod}          # 环境差异：dev 中间件、user.clj REPL 助手、logback
 ├── test/clj                     # 后端单元/集成测试（clojure.test）
 ├── tests/e2e                    # Playwright 端到端测试
-├── scripts/                     # rename-project.sh、check_constraints.py
+├── scripts/db.clj               # 数据库重置 / 迁移往返检查(bb test:mysql、bb db:roundtrip 调用)
 └── docs/
     ├── architecture/c4-model.org  # C4 架构文档（Context/Container/Component/Code + 动态/部署视图）
-    ├── architecture/c4-model.html # 上面 org 的自包含 HTML 版（图内联 SVG + 证据块实际输出），由 build-html.py 生成
+    ├── architecture/c4-model.html # 上面 org 的自包含 HTML 版（bb docs 生成）
     ├── index.html                 # 项目文档站
     └── training/                  # 5 节入门课程（Clojure 基础 -> 前端状态 -> 后端请求流 -> 基础设施）
 ```
@@ -87,85 +92,133 @@
 ### 环境要求
 
 - JDK 21（Dockerfile 与 CI 以 21 为准；17 也能跑）
-- [Clojure CLI](https://clojure.org/guides/install_clojure)
-- Node.js 18+
-- 可选：babashka（`bb` 任务）、clj-kondo、clojure-lsp
+- [babashka](https://github.com/babashka/babashka#installation) 1.12.200+（所有任务的入口）
+- Node.js 18+（CI 用 22）
+- 推荐安装 [Clojure CLI](https://clojure.org/guides/install_clojure)；没装时 bb 会自动退回内置的 `bb clojure`
+- 可选：Docker（`bb test:mysql` 起本地 MySQL）、clj-kondo（没装时 `bb lint` 自动下载 pod）、clojure-lsp
 
 ### 1. 用模板创建新项目
 
 ```bash
 git clone <this-repo> my-app && cd my-app
-# 把 com.ruoyi / rouyi 改成你的命名空间与项目名（会移动目录、改 deps/kit/build/package 等）
-./scripts/rename-project.sh com.acme.myapp myapp
+bb rename com.acme.myapp myapp   # 改命名空间与项目名:移动目录、改 deps/kit/build/package/localStorage 前缀等
 rm -rf .git && git init && git add -A && git commit -m "init from clojure-template"
+bb ci                            # lint + 格式检查 + 后端测试,确认改名后一切正常
 ```
 
-`scripts/rename-project.sh` 只做确定性的文本替换与目录移动；执行后请跑一遍 `clojure -M:test` 与 `npx shadow-cljs compile app` 确认。
+`bb rename` 只做确定性的文本替换与目录移动，可重复执行；之后再改 `src/cljs/<ns>/frontend/config.cljs` 里的应用名与仓库链接。
 
-### 2. 启动后端
+### 2. 启动开发环境
 
 ```bash
-clojure -M:dev -m com.ruoyi.core      # 改名后为 -m <your-ns>.core
+bb dev                 # 后端 3000 / nREPL 7000 + 前端 shadow-cljs watch(9630)
+bb dev --reset-db      # 先删除本地 SQLite 库(rouyi.db)再启动
+bb dev --backend-only  # 只起后端
+PORT=3200 NREPL_PORT=7200 bb dev   # 端口被占用时换端口
 ```
 
-默认监听 http://localhost:3000，nREPL 7000；首次启动自动执行 SQLite 迁移并写入种子数据（`admin / admin123`）。
+首次启动自动执行迁移并写入种子数据（`admin / admin123`），打开 http://localhost:3000 即可；端口被占用会提示占用的端口与查进程的命令。`Ctrl-C` 同时停止前后端。
 
 切换 MySQL：
 
 ```bash
-JDBC_URL="jdbc:mysql://user:pass@host:3306/myapp?useSSL=false&allowPublicKeyRetrieval=true" \
-MIGRATION_DIR=migrations \
-clojure -M:dev -m com.ruoyi.core
+docker compose up -d mysql       # 或使用已有实例
+JDBC_URL="jdbc:mysql://127.0.0.1:3308/ruoyi?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true" \
+MIGRATION_DIR=migrations bb dev
 ```
 
-### 3. 启动前端
+### 3. 生成第一个业务模块
 
 ```bash
-npm install
-npx shadow-cljs watch app             # 增量编译到 resources/public/js/
+bb new-module customer --label 客户 \
+  --fields "name:string:required:名称,phone:string:电话,level:int:等级,vip:bool:VIP,remark:text:备注"
+bb test -n com.acme.myapp.web.controllers.customer-test   # 生成的集成测试
+bb dev                                                      # 重启后菜单「业务管理 / 客户」即可用
 ```
 
-前端由后端同一端口提供，打开 http://localhost:3000 即可。`./start_dev.sh` 可一键拉起前后端。
+详见下文「新增业务模块」。
 
-### 4. 生产构建
+### 4. 生产构建与部署
 
 ```bash
-npx shadow-cljs release app           # 前端发布包
-clojure -T:build all                  # uberjar（含前端静态文件）
-java -jar target/rouyi-standalone.jar # PORT / JDBC_URL / MIGRATION_DIR 等由环境变量注入
+bb uberjar                                   # 前端 release(warning 即失败)+ target/rouyi-standalone.jar
+JWT_SECRET=$(openssl rand -hex 32) \
+COOKIE_SECRET=$(openssl rand -hex 8) \
+java -jar target/rouyi-standalone.jar        # PORT / JDBC_URL / MIGRATION_DIR 等同样由环境变量注入
 ```
 
-`Dockerfile` 提供多阶段镜像构建（`clojure:temurin-21-tools-deps` 构建 → `eclipse-temurin:21-jre-alpine` 运行）；`bb uberjar` / `make uberjar` 等价。
+**生产密钥是强制的**：prod profile（uberjar / Docker 镜像）下，`JWT_SECRET` 缺失、等于内置默认值或短于 32 字符，或 `COOKIE_SECRET` 缺失、等于默认值或不是 16 字节时，应用拒绝启动并打印原因与生成命令（`com.ruoyi.infra.secrets`）。dev / test 继续使用内置默认值，无需配置。
+
+`Dockerfile` 提供多阶段镜像构建（`clojure:temurin-21-tools-deps` 构建 → `eclipse-temurin:21-jre-alpine` 运行）；构建镜像前先执行 `bb release`，运行时用 `-e JWT_SECRET=… -e COOKIE_SECRET=…` 注入密钥。
 
 ---
 
 ## 常用命令
 
+`bb tasks` 列出全部任务，下面是最常用的：
+
 | 任务 | 命令 |
 |------|------|
-| 后端测试 | `clojure -M:test`（单个命名空间：`clojure -M:test -n com.ruoyi.web.handler-test`） |
-| 覆盖率 | `clojure -M:coverage` → `target/coverage/index.html` |
-| E2E | `npx playwright install chromium && npm run test:e2e`（需后端已在 3000 运行） |
-| 规模约束检查 | `python3 scripts/check_constraints.py`（命名空间 ≤500 行、函数 ≤50 行） |
-| 格式化 | `clojure-lsp format` 或 `bb format` |
-| nREPL / CIDER | `clojure -M:dev:nrepl` / `clojure -M:dev:cider` |
+| 开发 | `bb dev`（前后端）、`bb backend` / `bb frontend`（单独起）、`bb nrepl` / `bb cider`（只起 REPL，在 REPL 里 `(user/go)`） |
+| 后端测试 | `bb test`（独立的 `test.db`、端口 3100/7100，不影响正在运行的 `bb dev`）；单个命名空间 `bb test -n com.ruoyi.web.handler-test`，按正则 `bb test -r '.*user.*'` |
+| MySQL 测试 | `bb test:mysql`（自动 `docker compose up -d mysql`；设置 `JDBC_URL` 则用已有实例，每次先清空库） |
+| 迁移往返 | `bb db:roundtrip`（up → down → up；默认临时 SQLite，设 `JDBC_URL` 则检查该库） |
+| E2E | `bb e2e`（需后端已在 3000 运行；首次运行先 `npx playwright install chromium`）；单个用例 `bb e2e tests/e2e/post-crud.spec.js` |
+| 覆盖率 | `bb coverage` → `target/coverage/index.html` |
+| 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束） |
+| 格式化 | `bb fmt`（cljfmt 修改）/ `bb fmt:check`（只检查） |
+| 构建 | `bb release`（前端）、`bb uberjar`（前端 + 后端 jar）、`bb cljs:check`（快速编译检查） |
+| 与 CI 相同的快速检查 | `bb ci`（lint + fmt:check + test） |
+| 其它 | `bb new-module`、`bb rename`、`bb docs`（重新生成架构文档 HTML）、`bb clean` |
 
 REPL 热重载助手在 `env/dev/clj/user.clj`：`(user/rd)` 重载领域层，`(user/rroutes)` 重载路由，`(user/rr)` 重启 Integrant 系统，`(user/reset-db)` 重建数据库。详见 `AGENTS.md`。
 
 ---
 
-## 如何新增一个业务模块
+## 新增业务模块
 
-以 `example` 模块为例（完整清单也写在 C4 文档「扩展指南」一节）：
+### 用脚手架（推荐）
 
-1. **迁移**：`resources/migrations-sqlite/<ts>-create-example.up/down.sql` 与 `resources/migrations/` 各一份；菜单通过 `INSERT INTO sys_menu` 写入。
+```bash
+bb new-module <模块名> [--label 中文名] [--fields "字段规格,..."] [--dry-run]
+```
+
+- **模块名**：小写 kebab-case，如 `notice-board` → 表 `biz_notice_board`、接口 `/api/biz/notice-board`、页面 `/biz/notice-board`。
+- **字段规格**：`name:type[:required][:标签]`，逗号分隔；`type` 可选 `string`（前 3 个可搜索字段做模糊查询）、`text`、`int`、`decimal`、`date`（`yyyy-MM-dd`）、`bool`（存 `"0"`/`"1"`）。`id`、`create_by/time`、`update_by/time` 自动生成。
+- `--dry-run` 只列出将要新建和修改的文件。
+
+一条命令生成可直接运行的完整模块：两套迁移（建表 + 共享的「业务管理」目录菜单并授权 admin 角色）、HugSQL 查询、领域服务（Integrant 组件）、控制器、路由（登录校验 + Malli 参数校验 + Swagger）、后端集成测试、前端 api / re-frame 事件 / 页面（搜索、分页表格、新增编辑弹窗、删除）、Playwright 用例；并在 `system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs` 的 `;; [new-module] <tag>` 标记处自动登记（标记行请保留，可反复生成多个模块）。生成前会检查文件、前端关键字与 HugSQL 查询名冲突，有冲突一个文件都不写。撤销：`git checkout . && git clean -fd`。
+
+CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模块，并要求 lint、格式、后端测试、迁移往返、前端零 warning 编译与生成的 E2E 全部通过，保证脚手架与模板同步演进。
+
+### 手工步骤（理解脚手架做了什么）
+
+以 `example` 模块为例（完整清单见 C4 文档「扩展指南」一节）：
+
+1. **迁移**：`resources/migrations-sqlite/<ts>-create-example.up/down.sql` 与 `resources/migrations/` 各一份（多条语句用 `--;;` 分隔）；菜单通过 `INSERT INTO sys_menu` 写入。
 2. **SQL**：`resources/sql/example.sql`（HugSQL），并加入 `system.edn` 的 `:db.sql/query-fn :filenames`。
 3. **领域层**：`src/clj/com/ruoyi/domain/example.clj`，用 `defmethod ig/init-key :app.example/service` 暴露服务；在 `system.edn` 登记组件并注入到 `:reitit.routes/api`。
-4. **控制器 + 路由**：`web/controllers/example.clj`、`web/routes/example.clj`，在 `web/routes/api.clj` 的 `api-routes` 追加 `(example/example-routes opts)`；在 `core.clj` require 新命名空间。
-5. **前端**：`api/example.cljs` → `events/example.cljs` → `subs/`（如需）→ `pages/example/*.cljs`；在 `router.cljs`、`pages/layout/menu_data.cljs`、`pages/layout/page_view.cljs`、`events/common.cljs` 各登记一行。
+4. **控制器 + 路由**：`web/controllers/example.clj`、`web/routes/example.clj`，在 `web/routes/api.clj` 的 `api-routes` 追加路由组；在 `core.clj` require 新命名空间。
+5. **前端**：`api/example.cljs` → `events/example.cljs` → `pages/example.cljs`；在 `router.cljs`、`pages/layout/menu_data.cljs`、`pages/layout/page_view.cljs`、`events.cljs`、`events/common.cljs` 各登记一行。
 6. **测试**：`test/clj/.../example_test.clj` + `tests/e2e/example.spec.js`。
 
-也可以用内置代码生成器（系统工具 → 代码生成）从表结构一键生成第 2~5 步的骨架。
+页面内的代码生成器（系统工具 → 代码生成）适合从**已有表结构**生成骨架供复制参考；新建模块优先用 `bb new-module`。
+
+---
+
+## 持续集成
+
+`.github/workflows/ci.yml` 在 push / PR 时并行运行 5 个任务，全部只调用 bb 任务，本地可原样复现：
+
+| 任务 | 内容 |
+|------|------|
+| lint | `bb lint`（clj-kondo、迁移检查、规模约束）+ `bb fmt:check` |
+| test-sqlite | `bb test` + `bb db:roundtrip` |
+| test-mysql | MySQL 8.4 service 上 `bb test:mysql` + `bb db:roundtrip` |
+| e2e | `bb release`（warning 即失败）→ 启动后端 → `bb e2e`，失败时上传报告与后端日志 |
+| scaffold | `bb new-module` 生成示例模块后跑 lint、格式、生成的测试、迁移往返、`bb cljs:check`、生成的 E2E |
+
+公共环境（JDK 21、Clojure CLI、bb、clj-kondo、Node、依赖缓存）封装在 `.github/actions/setup`。
 
 ---
 
@@ -190,6 +243,7 @@ REPL 热重载助手在 `env/dev/clj/user.clj`：`(user/rd)` 重载领域层，`
 | GET /api/system/{server,datasource,cache,integrant} | 监控 |
 | GET /api/system/dashboard/stats | 首页统计 |
 | GET /api/tool/gen/{tables,preview} | 代码生成 |
+| GET/POST/PUT/DELETE /api/biz/&lt;module&gt; | `bb new-module` 生成的业务模块 |
 | GET /api/health | 健康检查 |
 
 Swagger UI：http://localhost:3000/api
@@ -200,12 +254,13 @@ Swagger UI：http://localhost:3000/api
 
 - 后端分层：`route -> controller -> domain(service) -> HugSQL query -> db`；组件全部在 `system.edn` 装配。
 - API 契约：响应信封 `{:code :msg :data}`，分页 `{:total :rows}`，参数 `page`/`size`，字段 snake_case（详见 C4 文档 §6.6）。
-- 每个 namespace ≤ 500 行、函数 ≤ 50 行（`scripts/check_constraints.py` 检查）；超限时拆分。
-- SQL 统一放 `resources/sql/*.sql`；两套迁移目录必须同步；共用 SQL 只写两库都支持的语法（如 `INSTR` 代替 `||`）。
+- 每个 namespace ≤ 500 行、函数 ≤ 50 行（`bb check` 检查 src / env / test / bb / scripts）；超限时拆分。
+- clj-kondo 零 warning、cljfmt 格式一致（`bb lint`、`bb fmt:check`，CI 强制）。
+- SQL 统一放 `resources/sql/*.sql`；两套迁移目录必须同步（`bb lint:migrations` 检查）；共用 SQL 只写两库都支持的语法（如 `INSTR` 代替 `||`、派生表代替 `DUAL`）。
 - 前端状态统一 re-frame；组件局部状态用 Hooks，不用 `reagent/atom`；分页参数固定 `page` / `size`。
 - 中文 docstring 描述职责、参数与返回值。
 - 更多 antd 6 适配与坑位清单见 `AGENTS.md`。
 
 ## 许可
 
-模板本身按仓库根目录 LICENSE（若无则视为 MIT）发布；RuoYi 相关设计参考 [RuoYi-Vue](https://gitee.com/y_project/RuoYi-Vue)。
+[MIT](LICENSE)。RuoYi 相关设计参考 [RuoYi-Vue](https://gitee.com/y_project/RuoYi-Vue)。

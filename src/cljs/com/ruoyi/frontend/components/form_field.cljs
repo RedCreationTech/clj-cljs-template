@@ -1,7 +1,6 @@
 (ns com.ruoyi.frontend.components.form-field
   "统一表单字段渲染组件。"
   (:require
-   [reagent.core :as r]
    [com.ruoyi.frontend.antd :as antd]))
 
 (defn- form-input [{:keys [name label rules placeholder disabled full?]}]

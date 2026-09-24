@@ -1,9 +1,14 @@
 (ns com.ruoyi.frontend.antd
   "Ant Design 组件 Reagent 封装。"
   (:require
-   [reagent.core :as r]
-   ["antd" :refer [Alert App Button Card ConfigProvider DatePicker Descriptions Divider Drawer Dropdown Empty Form Input Layout Menu Modal Pagination Popconfirm Popover Progress Radio Select Space Spin Switch Table Tabs Tag Tooltip Tree TreeSelect Upload message]]
-   ["@ant-design/icons" :refer [LockOutlined UserOutlined DashboardOutlined TeamOutlined SettingOutlined SafetyOutlined FileTextOutlined EditOutlined DeleteOutlined PlusOutlined DownloadOutlined EyeOutlined SearchOutlined ReloadOutlined UploadOutlined MoreOutlined]]))
+   ["@ant-design/icons" :refer [DashboardOutlined DeleteOutlined DownloadOutlined EditOutlined
+                                EyeOutlined FileTextOutlined LockOutlined MoreOutlined
+                                PlusOutlined ReloadOutlined SafetyOutlined SearchOutlined
+                                SettingOutlined TeamOutlined UploadOutlined UserOutlined]]
+   ["antd" :refer [Alert App Button Card DatePicker Descriptions Divider Drawer Dropdown Empty
+                   Form Input Layout Menu message Modal Pagination Popconfirm Popover Progress
+                   Radio Select Space Spin Switch Table Tabs Tag Tooltip Tree TreeSelect Upload]]
+   [reagent.core :as r]))
 
 (def app (r/adapt-react-class App))
 (def button (r/adapt-react-class Button))
@@ -51,8 +56,9 @@
 
 (defonce message-api (atom nil))
 
-(defn use-app-message []
+(defn use-app-message
   "在 App 组件内部调用，获取 message 实例。"
+  []
   (let [api (.useApp App)]
     (reset! message-api (.-message api))))
 

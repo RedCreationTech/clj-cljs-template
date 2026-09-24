@@ -1,22 +1,22 @@
 (ns com.ruoyi.frontend.components.icon-picker
   "图标选择器与图标解析组件。"
   (:require
+   ["@ant-design/icons" :refer [ApartmentOutlined AppstoreOutlined BarChartOutlined BellOutlined
+                                BookOutlined BugOutlined CloudOutlined CodeOutlined
+                                ContainerOutlined DashboardOutlined DatabaseOutlined
+                                ExperimentOutlined FileTextOutlined FireOutlined
+                                FolderOpenOutlined FormOutlined FunctionOutlined HeartOutlined
+                                HistoryOutlined HomeOutlined KeyOutlined LineChartOutlined
+                                LinkOutlined LockOutlined MailOutlined MenuOutlined MobileOutlined
+                                MonitorOutlined PictureOutlined PieChartOutlined
+                                PlayCircleOutlined ProfileOutlined ProjectOutlined PushpinOutlined
+                                SafetyOutlined ScheduleOutlined SettingOutlined ShopOutlined
+                                ShoppingOutlined StarOutlined TableOutlined TagOutlined
+                                TeamOutlined ThunderboltOutlined ToolOutlined TrophyOutlined
+                                UnlockOutlined UserOutlined]]
    [clojure.string :as str]
-   [reagent.core :as r]
-   ["@ant-design/icons" :refer [AppstoreOutlined MenuOutlined FunctionOutlined
-                                DashboardOutlined SettingOutlined UserOutlined TeamOutlined
-                                SafetyOutlined ApartmentOutlined TagOutlined BookOutlined
-                                ToolOutlined MonitorOutlined ScheduleOutlined DatabaseOutlined
-                                CloudOutlined CodeOutlined FormOutlined ProfileOutlined
-                                BellOutlined ContainerOutlined KeyOutlined FileTextOutlined
-                                HomeOutlined MailOutlined LinkOutlined PushpinOutlined
-                                StarOutlined HeartOutlined LockOutlined UnlockOutlined
-                                ShopOutlined ShoppingOutlined TrophyOutlined BugOutlined
-                                ThunderboltOutlined FireOutlined ExperimentOutlined
-                                PieChartOutlined BarChartOutlined LineChartOutlined
-                                TableOutlined ProjectOutlined FolderOpenOutlined
-                                PlayCircleOutlined HistoryOutlined MobileOutlined
-                                PictureOutlined]]))
+   [com.ruoyi.frontend.antd]
+   [reagent.core :as r]))
 
 ;; ─── 图标映射 ──────────────────────────────────────────────────────
 

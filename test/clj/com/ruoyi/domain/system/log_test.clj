@@ -1,7 +1,8 @@
 (ns com.ruoyi.domain.system.log-test
   "日志领域服务测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.domain.system.log :as log]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.domain.system.log :as log]))
 
 (def mock-oper-logs
   [{:oper_id 1 :title "用户管理" :oper_name "管理员" :status 0}
@@ -11,7 +12,7 @@
   [{:info_id 1 :user_name "admin" :ipaddr "127.0.0.1" :status 0 :msg "登录成功"}
    {:info_id 2 :user_name "user1" :ipaddr "192.168.1.1" :status 0 :msg "登录成功"}])
 
-(defn- mock-query-fn [query-name params]
+(defn- mock-query-fn [query-name _params]
   (case query-name
     :list-oper-logs mock-oper-logs
     :count-oper-logs {:total 2}

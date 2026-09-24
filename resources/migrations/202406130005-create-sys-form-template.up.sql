@@ -10,6 +10,4 @@ CREATE TABLE IF NOT EXISTS sys_form_template (
   update_by   VARCHAR(64),
   update_time TIMESTAMP
 );
---;;
--- Index already created by UNIQUE constraint on form_key
---;;
+-- form_key 上的 UNIQUE 约束已自带唯一索引,无需单独建

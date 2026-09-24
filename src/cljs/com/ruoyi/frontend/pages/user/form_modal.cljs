@@ -1,9 +1,9 @@
 (ns com.ruoyi.frontend.pages.user.form-modal
   "用户新增/编辑弹窗（presentational：数据与回调由 user-page 传入，内部保留 Form hook）。"
   (:require
-   [reagent.hooks :as hooks]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.components.dept-tree-select :refer [dept-tree-select]]))
+   [com.ruoyi.frontend.components.dept-tree-select :refer [dept-tree-select]]
+   [reagent.hooks :as hooks]))
 
 (defn- form-basic-items [form editing]
   [[antd/form-item {:style {:marginBottom 0} :label "用户昵称" :name "nick_name"

@@ -1,7 +1,8 @@
 (ns com.ruoyi.web.controllers.system.log-test
   "日志审计控制器测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.controllers.system.log :as log]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.controllers.system.log :as log]))
 
 (def mock-log-service
   {:query-fn (fn [q _p]

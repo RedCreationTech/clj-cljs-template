@@ -1,14 +1,15 @@
 (ns com.ruoyi.web.controllers.gen
   "代码生成器控制器。"
   (:require
-   [com.ruoyi.domain.gen :as gen-service]
-   [ring.util.response :as response]
    [clojure.java.io :as io]
-   [clojure.string :as str])
-  (:import [java.io File FileOutputStream]
-           [java.time LocalDateTime]
-           [java.time.format DateTimeFormatter]
-           [java.util.zip ZipOutputStream ZipEntry]))
+   [clojure.string :as str]
+   [com.ruoyi.domain.gen :as gen-service]
+   [ring.util.response :as response])
+  (:import
+   [java.io File FileOutputStream]
+   [java.time LocalDateTime]
+   [java.time.format DateTimeFormatter]
+   [java.util.zip ZipEntry ZipOutputStream]))
 
 (defn- ok
   ([data] (ok 200 "操作成功" data))
@@ -48,8 +49,9 @@
       (spit file content)
       path)))
 
-(defn- upsert-generated-sql! [table-name hugsql]
+(defn- upsert-generated-sql!
   "将 HugSQL 写入 generated.sql，按表名替换旧块，避免重复定义。"
+  [table-name hugsql]
   (let [file (io/file "resources/sql/generated.sql")
         marker (str "-- == generated " table-name " ==")
         existing (if (.exists file) (slurp file) "")
@@ -94,8 +96,9 @@
              :routes (:backend-routes code)}))
       (ok 500 "生成失败" {:error "无法生成代码"}))))
 
-(defn- zip-directory! [src-dir ^File zip-file]
+(defn- zip-directory!
   "将目录打包成 zip 文件。"
+  [src-dir ^File zip-file]
   (with-open [zos (ZipOutputStream. (FileOutputStream. zip-file))]
     (doseq [file (file-seq (io/file src-dir))
             :when (.isFile file)]
@@ -105,8 +108,9 @@
         (.closeEntry zos))))
   zip-file)
 
-(defn- write-generated-to-dir! [base-dir code]
+(defn- write-generated-to-dir!
   "将单个表的生成代码写入临时目录。"
+  [base-dir code]
   (let [kebab (:kebab-name code)
         ts (timestamp)
         table-name (:table-name code)]

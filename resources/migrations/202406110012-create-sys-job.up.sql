@@ -28,4 +28,3 @@ CREATE TABLE sys_job_log (
 CREATE INDEX idx_sys_job_status ON sys_job(status);
 --;;
 CREATE INDEX idx_sys_job_log_create_time ON sys_job_log(create_time);
---;;

@@ -3,4 +3,3 @@ CREATE TABLE sys_role_menu (
   menu_id INTEGER NOT NULL,
   PRIMARY KEY (role_id, menu_id)
 );
---;;

@@ -31,7 +31,8 @@
         "monitor/swagger" :swagger
         "tool/build" :build
         "system/user/profile" :profile
-        ;; 业务模块在此登记路由,例如 "example/list" :example-list
+        ;; 业务模块的路由登记在标记之前(bb new-module 自动插入;标记行请保留)
+        ;; [new-module] routes
         }])
 
 ;; 路由匹配
@@ -65,7 +66,9 @@
    :gen "代码生成"
    :swagger "系统接口"
    :build "表单构建"
-   :profile "个人中心"})
+   :profile "个人中心"
+   ;; [new-module] page-names
+   })
 
 ;; 状态标记
 (defonce initialized? (volatile! false))

@@ -1,7 +1,6 @@
 (ns com.ruoyi.domain.system.role
   "角色领域服务，处理角色 CRUD、菜单授权与数据权限。"
   (:require
-   [clojure.set :as set]
    [com.ruoyi.infra.db :as db]))
 
 (defn list-roles

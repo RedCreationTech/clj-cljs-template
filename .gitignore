@@ -14,6 +14,7 @@ resources/public/js/
 
 # ─── 本地数据库 / 日志 ─────────────────────────────────────────
 *.db
+*.db-journal
 *.log
 /log/
 /logs/
@@ -29,8 +30,6 @@ CLAUDE.local.md
 .runtime/
 /.codex/
 
-# Python 缓存(scripts/check_constraints.py)
-__pycache__/
 
 # Emacs 导出产物(build-html.py 生成的 c4-model.html 才是提交版本)
 docs/architecture/c4-model-emacs.html

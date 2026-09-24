@@ -1,15 +1,16 @@
 (ns com.ruoyi.frontend.pages.gen
   "代码生成器页面 — 数据库表选择、代码预览与生成。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   [clojure.string :as str]
-   ["@ant-design/icons" :refer [ReloadOutlined CodeOutlined EyeOutlined DownloadOutlined SettingOutlined CloudUploadOutlined]]
+   ["@ant-design/icons" :refer [CloudUploadOutlined CodeOutlined DownloadOutlined EyeOutlined
+                                ReloadOutlined SettingOutlined]]
    ["react-syntax-highlighter" :default SyntaxHighlighter]
    ["react-syntax-highlighter/dist/esm/styles/hljs/atom-one-dark" :default atom-one-dark]
+   [clojure.string :as str]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]))
+   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 ;; ─── 工具函数 ──────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@
         lang (if (clojure.string/ends-with? active-tab "-sql") "sql" "clojure")]
     [:div
      [antd/tabs {:activeKey active-tab
-                 :onChange #(set-active-tab! %)
+                 :onChange set-active-tab!
                  :items tab-items
                  :size "small"}]
      (let [current-file (get files (keyword active-tab))]

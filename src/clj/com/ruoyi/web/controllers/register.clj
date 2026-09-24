@@ -16,7 +16,7 @@
   (try
     (let [params (:body-params request)
           username (:username params)]
-      (if-let [existing (user-service/find-user-by-name user-service username)]
+      (if-let [_existing (user-service/find-user-by-name user-service username)]
         (ok 500 "注册账号已存在")
         (do (user-service/create-user! user-service (assoc params :user_name username))
             (ok "注册成功"))))

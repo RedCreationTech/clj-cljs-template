@@ -1,9 +1,9 @@
 (ns com.ruoyi.frontend.pages.user.columns
   "用户表格列定义（presentational，接收列显隐配置与回调）。"
   (:require
-   [reagent.core :as r]
-   ["@ant-design/icons" :refer [EditOutlined DeleteOutlined]]
-   [com.ruoyi.frontend.antd :as antd]))
+   ["@ant-design/icons" :refer [DeleteOutlined EditOutlined]]
+   [com.ruoyi.frontend.antd :as antd]
+   [reagent.core :as r]))
 
 (defn- protected?
   "内置管理员（user_id 1 或 user_name admin）不可删除。"

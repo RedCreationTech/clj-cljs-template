@@ -11,4 +11,3 @@ CREATE TABLE sys_online (
   last_access_time INTEGER,
   expire_time INT DEFAULT 1800000
 );
---;;

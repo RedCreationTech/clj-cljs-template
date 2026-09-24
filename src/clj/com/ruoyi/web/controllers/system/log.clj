@@ -1,8 +1,8 @@
 (ns com.ruoyi.web.controllers.system.log
   "日志审计控制器。"
   (:require
-   [com.ruoyi.domain.system.log :as log-service]
    [clojure.string :as str]
+   [com.ruoyi.domain.system.log :as log-service]
    [ring.util.response :as response]))
 
 (defn- ok ([data] (ok 200 "操作成功" data))

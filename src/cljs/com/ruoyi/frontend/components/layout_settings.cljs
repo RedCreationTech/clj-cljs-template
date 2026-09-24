@@ -1,11 +1,11 @@
 (ns com.ruoyi.frontend.components.layout-settings
   "布局设置抽屉，提供 RuoYi 风格的主题与系统布局配置。"
   (:require
-   [re-frame.core :as rf]
-   [reagent.core :as r]
-   [com.ruoyi.frontend.antd :as antd]
+   ["@ant-design/icons" :refer [CheckOutlined ReloadOutlined]]
    ["antd" :refer [Button ColorPicker Divider Segmented Space Switch Tooltip]]
-   ["@ant-design/icons" :refer [CheckOutlined ReloadOutlined]]))
+   [com.ruoyi.frontend.antd :as antd]
+   [re-frame.core :as rf]
+   [reagent.core :as r]))
 
 (def theme-colors
   ["#409eff" "#67c23a" "#e6a23c" "#f56c6c" "#909399" "#1890ff" "#13c2c2" "#722ed1"])

@@ -1,9 +1,8 @@
 (ns com.ruoyi.web.controllers.system.cache
   "缓存监控控制器 — 模拟多缓存空间，提供命令统计、键值浏览与清除。"
   (:require
-   [ring.util.response :as response]
-   [clojure.string :as str]
-   [clojure.data.json :as json]))
+   [clojure.data.json :as json]
+   [ring.util.response :as response]))
 
 ;; ─── 内存缓存存储 ──────────────────────────────────────────────────
 

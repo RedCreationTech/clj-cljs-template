@@ -17,11 +17,11 @@
            (js/setTimeout
             (fn [] (set-height! "auto"))
             320))
-         (do (when-let [el (.-current form-ref)]
-               (set-height! (str (.-scrollHeight el) "px"))
-               (js/setTimeout
-                (fn [] (set-height! "0px"))
-                10))))
+         (when-let [el (.-current form-ref)]
+           (set-height! (str (.-scrollHeight el) "px"))
+           (js/setTimeout
+            (fn [] (set-height! "0px"))
+            10)))
        js/undefined)
      [visible?])
     [:div {:ref form-ref

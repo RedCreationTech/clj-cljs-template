@@ -1,0 +1,42 @@
+name: 准备构建环境
+description: JDK 21 + Clojure CLI + babashka + clj-kondo,可选 Node.js 与 npm 依赖;缓存 Maven/gitlibs 依赖。
+
+inputs:
+  node:
+    description: 是否安装 Node.js 并执行 npm ci(前端构建、E2E 需要)
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@v6
+      with:
+        distribution: temurin
+        java-version: "21"
+
+    # clj-kondo 版本与 bb/tasks/lint.clj 里的 pod 版本保持一致
+    - uses: DeLaGuardo/setup-clojure@13.7.0
+      with:
+        cli: latest
+        bb: latest
+        clj-kondo: "2026.08.04"
+
+    - uses: actions/cache@v6
+      with:
+        path: |
+          ~/.m2/repository
+          ~/.gitlibs
+          ~/.deps.clj
+        key: clj-${{ runner.os }}-${{ hashFiles('deps.edn', 'shadow-cljs.edn', 'bb.edn') }}
+        restore-keys: clj-${{ runner.os }}-
+
+    - if: inputs.node == 'true'
+      uses: actions/setup-node@v7
+      with:
+        node-version: "22"
+        cache: npm
+
+    - if: inputs.node == 'true'
+      shell: bash
+      run: npm ci

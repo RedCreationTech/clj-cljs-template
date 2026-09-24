@@ -1,9 +1,9 @@
 (ns com.ruoyi.frontend.components.right-toolbar
   "右侧工具按钮组。"
   (:require
-   [reagent.core :as r]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.components.page-toolbar :as toolbar]))
+   [com.ruoyi.frontend.components.page-toolbar :as toolbar]
+   [reagent.core :as r]))
 
 (defn right-toolbar [{:keys [show-search? columns on-toggle-search on-refresh on-toggle-column]}]
   [toolbar/toolbar-right
@@ -27,9 +27,9 @@
                                                       [antd/switch {:size "small"
                                                                     :checked visible?}]])})
                                           columns))
-                            :onClick (fn [e]
-                                       (let [key (keyword (.-key e))]
-                                         (on-toggle-column key)))}
+                             :onClick (fn [e]
+                                        (let [key (keyword (.-key e))]
+                                          (on-toggle-column key)))}
                       :trigger #js ["click"]}
        [antd/button {:shape "circle"
                      :icon (r/as-element [antd/setting-icon])

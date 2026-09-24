@@ -1,7 +1,8 @@
 (ns com.ruoyi.domain.gen-test
   "代码生成器领域层测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.domain.gen :as gen]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.domain.gen :as gen]))
 
 ;; ─── 测试用 mock 数据 ──────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@
 
 (defn- mock-query-fn
   "模拟查询函数。"
-  [query-name params]
+  [query-name _params]
   (case query-name
     :gen-tables mock-tables
     :gen-columns mock-columns

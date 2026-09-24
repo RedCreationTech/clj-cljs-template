@@ -1,7 +1,7 @@
 (ns com.ruoyi.frontend.components.theme-switcher
   "主题切换组件，提供亮色/暗色主题切换及主题自定义选项"
   (:require
-   ["@ant-design/icons" :refer [BgColorsOutlined MoonOutlined SunOutlined SettingOutlined]]
+   ["@ant-design/icons" :refer [BgColorsOutlined MoonOutlined SettingOutlined SunOutlined]]
    ["antd" :refer [Button ColorPicker Divider Popover Segmented Space]]
    [re-frame.core :as rf]
    [reagent.core :as r]))
@@ -119,7 +119,7 @@
 
 ;; ─── 主题切换按钮（带 Popover）──────────────────────────────────────
 (defn theme-switcher-button []
-  (let [theme-mode @(rf/subscribe [:theme/mode])]
+  (let [_theme-mode @(rf/subscribe [:theme/mode])]
     [:> Popover
      {:content (r/as-element [theme-settings-panel])
       :title nil

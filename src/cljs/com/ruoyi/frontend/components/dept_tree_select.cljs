@@ -1,9 +1,9 @@
 (ns com.ruoyi.frontend.components.dept-tree-select
   "可复用部门树选择器组件。"
   (:require
-   [reagent.hooks :as hooks]
+   [com.ruoyi.frontend.antd :as antd]
    [re-frame.core :as rf]
-   [com.ruoyi.frontend.antd :as antd]))
+   [reagent.hooks :as hooks]))
 
 (defn- build-tree-data
   "将部门列表转换为 TreeSelect 使用的树形数据。"

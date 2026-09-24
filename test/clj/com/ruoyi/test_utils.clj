@@ -1,10 +1,10 @@
 (ns com.ruoyi.test-utils
   (:require
-   [com.ruoyi.core :as core]
-   [peridot.core :as p]
    [byte-streams :as bs]
    [clojure.data.json :as json]
-   [integrant.repl.state :as state]))
+   [com.ruoyi.core :as core]
+   [integrant.repl.state :as state]
+   [peridot.core :as p]))
 
 (defn system-state
   []

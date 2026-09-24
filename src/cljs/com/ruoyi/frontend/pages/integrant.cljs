@@ -1,12 +1,11 @@
 (ns com.ruoyi.frontend.pages.integrant
   "Integrant config -> system 依赖可视化页面。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   [clojure.string :as str]
    ["@ant-design/icons" :refer [ReloadOutlined]]
-   [com.ruoyi.frontend.antd :as antd]))
+   [com.ruoyi.frontend.antd :as antd]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 ;; ─── 数据 → Tree ─────────────────────────────────────────────────────
 
@@ -248,7 +247,7 @@
                :size "small"
                :styles {:body {:padding 12 :overflow "auto"}}}
     [dep-graph data selected trace-by-key
-     #(set-selected! %)
+     set-selected!
      #(rf/dispatch [:integrant/toggle-trace %1 %2])]]])
 
 ;; ─── 主页面 ─────────────────────────────────────────────────────────

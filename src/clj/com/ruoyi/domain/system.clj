@@ -1,10 +1,10 @@
 (ns com.ruoyi.domain.system
   "系统管理 Integrant 组件注册。"
   (:require
-   [integrant.core :as ig]
    [com.ruoyi.domain.gen :as gen]
    [com.ruoyi.infra.online :as online]
-   [com.ruoyi.infra.scheduler :as scheduler]))
+   [com.ruoyi.infra.scheduler :as scheduler]
+   [integrant.core :as ig]))
 
 (defmethod ig/init-key :app.system/user-service
   [_ {:keys [query-fn db]}]

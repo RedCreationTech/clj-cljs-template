@@ -1,11 +1,8 @@
 (ns com.ruoyi.frontend.events.configs
   "参数配置事件。"
   (:require
-   [com.ruoyi.frontend.events.common :as ec]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api :as api]
-   [com.ruoyi.frontend.db :as db]
-   [com.ruoyi.frontend.router :as router]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :configs/set-list

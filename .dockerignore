@@ -1,0 +1,16 @@
+# 构建上下文只需要源码、资源与已构建的前端产物(resources/public/js 需要保留)
+.git
+.github
+node_modules
+target
+.cpcache
+.shadow-cljs
+.clj-kondo/.cache
+.lsp/.cache
+*.db
+*.db-journal
+log
+logs
+test-results
+playwright-report
+docs

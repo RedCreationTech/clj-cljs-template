@@ -1,12 +1,13 @@
 (ns com.ruoyi.domain.system.user-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.domain.system.user :as user]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.domain.system.user :as user]))
 
 (def mock-users
   [{:user_id 1 :user_name "admin" :nick_name "管理员" :status "0" :dept_id 1}
    {:user_id 2 :user_name "user1" :nick_name "用户1" :status "0" :dept_id 2}])
 
-(defn- mock-query-fn [q p & rest]
+(defn- mock-query-fn [q p & _rest]
   (case q
     :list-users {:rows mock-users :total 2}
     :find-user-by-id (first (filter #(= (:user_id %) (:user_id p)) mock-users))

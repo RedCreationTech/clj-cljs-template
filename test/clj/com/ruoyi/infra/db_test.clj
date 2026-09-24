@@ -1,18 +1,19 @@
 (ns com.ruoyi.infra.db-test
   "数据库抽象层测试。"
-  (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.infra.db :as db]
-            [next.jdbc :as jdbc]
-            [next.jdbc.result-set :as rs]))
+  (:require
+   [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.infra.db :as db]
+   [next.jdbc :as jdbc]
+   [next.jdbc.result-set :as rs]))
 
 (defn- fake-db
   "构造一个带有伪数据库元数据的 db 规格。"
   ([product-name]
    {:connectable (reify java.sql.Connection
-                    (getMetaData [_]
-                      (reify java.sql.DatabaseMetaData
-                        (getDatabaseProductName [_] product-name))))})
+                   (getMetaData [_]
+                     (reify java.sql.DatabaseMetaData
+                       (getDatabaseProductName [_] product-name))))})
   ([]
    {:connectable nil}))
 
@@ -25,9 +26,9 @@
     (is (= :unknown (db/detect-db-type (fake-db "PostgreSQL"))))
     (is (= :unknown (db/detect-db-type (fake-db ""))))
     (is (= :unknown (db/detect-db-type
-                      {:connectable (reify java.sql.Connection
-                                      (getMetaData [_]
-                                        (throw (Exception. "no metadata"))))})))
+                     {:connectable (reify java.sql.Connection
+                                     (getMetaData [_]
+                                       (throw (Exception. "no metadata"))))})))
     (is (= :unknown (db/detect-db-type (fake-db))))))
 
 (deftest test-sqlite->mysql

@@ -1,7 +1,6 @@
 (ns com.ruoyi.domain.system.menu
   "菜单领域服务，处理菜单树构建与 CRUD。"
   (:require
-   [clojure.walk :as walk]
    [com.ruoyi.infra.db :as db]))
 
 (defn list-menus

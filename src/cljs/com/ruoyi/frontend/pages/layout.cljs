@@ -1,19 +1,18 @@
 (ns com.ruoyi.frontend.pages.layout
   "主布局页面，包含多Tab支持。Tab 栏 / Header / 菜单构建 / 页面分发 / 路由数据均拆到子命名空间。"
   (:require
-   [reagent.core :as r]
-   [re-frame.core :as rf]
-   [reagent.hooks :as hooks]
    ["antd" :refer [Layout Menu]]
-   [com.ruoyi.frontend.config :as config]
-   [com.ruoyi.frontend.router :as router]
-   [com.ruoyi.frontend.components.layout-settings :as layout-settings]
    [com.ruoyi.frontend.components.error-boundary :as error-boundary]
-   [com.ruoyi.frontend.pages.layout.tabs :as layout-tabs]
-   [com.ruoyi.frontend.pages.layout.menu-data :as menu-data]
+   [com.ruoyi.frontend.components.layout-settings :as layout-settings]
+   [com.ruoyi.frontend.config :as config]
+   [com.ruoyi.frontend.pages.layout.header :as layout-header]
    [com.ruoyi.frontend.pages.layout.menu-build :as menu-build]
+   [com.ruoyi.frontend.pages.layout.menu-data :as menu-data]
    [com.ruoyi.frontend.pages.layout.page-view :as page-view]
-   [com.ruoyi.frontend.pages.layout.header :as layout-header]))
+   [com.ruoyi.frontend.pages.layout.tabs :as layout-tabs]
+   [com.ruoyi.frontend.router :as router]
+   [re-frame.core :as rf]
+   [reagent.hooks :as hooks]))
 
 ;; ─── Tab 动画样式 ──────────────────────────────────────────────────────
 

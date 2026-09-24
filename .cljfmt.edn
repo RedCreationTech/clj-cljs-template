@@ -1,0 +1,3 @@
+;; cljfmt 规则:bb fmt(修复)/ bb fmt:check(CI 检查);编辑器里的 clojure-lsp 也读取本文件。
+;; 采用 cljfmt 默认规则(参数对齐到第一个参数),与现有代码风格一致;需要特殊缩进的宏在 :extra-indents 里补。
+{:extra-indents {}}

@@ -1,12 +1,12 @@
 (ns com.ruoyi.frontend.pages.cache
   "缓存监控页面，按 RuoYi-Vue 缓存监控布局展示 Redis 基本信息、命令统计和内存信息。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
    ["@ant-design/icons" :refer [DashboardOutlined DeleteOutlined PieChartOutlined ReloadOutlined]]
    ["antd" :refer [Modal Spin]]
-   [com.ruoyi.frontend.antd :as antd]))
+   [com.ruoyi.frontend.antd :as antd]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 (def card-style
   {:background "#fff"

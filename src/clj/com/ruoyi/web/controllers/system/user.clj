@@ -1,6 +1,7 @@
 (ns com.ruoyi.web.controllers.system.user
   "用户管理控制器，支持数据权限过滤。"
   (:require
+   [clojure.string]
    [com.ruoyi.domain.system.user :as user-service]
    [com.ruoyi.infra.data-perm :as data-perm]
    [ring.util.response :as response]))
@@ -13,15 +14,6 @@
 
 (defn- parse-int [v]
   (when v (Integer/parseInt v)))
-
-(defn- page-params [request]
-  (let [q (:query-params request)]
-    {:page-num (or (parse-int (get q "page")) 1)
-     :page-size (or (parse-int (get q "size")) 10)
-     :user_name (get q "user_name")
-     :phonenumber (get q "phonenumber")
-     :status (get q "status")
-     :dept_id (get q "dept_id")}))
 
 (defn- fail [msg]
   (-> (response/response {:code 500 :msg msg})

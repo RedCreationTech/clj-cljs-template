@@ -1,8 +1,9 @@
 (ns com.ruoyi.infra.online-test
   "在线用户管理测试。"
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [com.ruoyi.infra.online :as online]
-            [com.ruoyi.infra.security :as security]))
+  (:require
+   [clojure.test :refer [deftest is testing use-fixtures]]
+   [com.ruoyi.infra.online :as online]
+   [com.ruoyi.infra.security :as security]))
 
 (use-fixtures :each
   (fn [f]
@@ -140,14 +141,14 @@
                :start_timestamp 1000
                :last_access_time 2000}
           [mock-fn calls] (make-mock-query-fn
-                            :list-return [row]
-                            :count-return {:total 1})]
+                           :list-return [row]
+                           :count-return {:total 1})]
       (online/set-query-fn! mock-fn)
       (let [result (online/list-online
-                     :login-name "admin"
-                     :ipaddr "127"
-                     :page-num 1
-                     :page-size 10)]
+                    :login-name "admin"
+                    :ipaddr "127"
+                    :page-num 1
+                    :page-size 10)]
         (is (= 1 (:total result)))
         (is (= 1 (count (:rows result))))
         (let [mapped (first (:rows result))]

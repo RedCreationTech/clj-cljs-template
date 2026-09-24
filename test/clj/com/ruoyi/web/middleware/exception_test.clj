@@ -1,8 +1,9 @@
 (ns com.ruoyi.web.middleware.exception-test
   "异常处理中间件测试。"
-  (:require [cheshire.core :as json]
-            [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.web.middleware.exception :as exception]))
+  (:require
+   [cheshire.core :as json]
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.middleware.exception :as exception]))
 
 (defn- parse-json-body [response]
   (json/parse-string (:body response) true))

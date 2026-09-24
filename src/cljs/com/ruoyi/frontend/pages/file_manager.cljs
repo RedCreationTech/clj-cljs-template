@@ -1,12 +1,13 @@
 (ns com.ruoyi.frontend.pages.file-manager
   "文件管理页面 — 文件上传、列表、下载、删除。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [UploadOutlined DownloadOutlined DeleteOutlined ReloadOutlined FileTextOutlined]]
+   ["@ant-design/icons" :refer [DeleteOutlined DownloadOutlined FileTextOutlined ReloadOutlined
+                                UploadOutlined]]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]))
+   [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.hooks :as hooks]))
 
 ;; ─── 工具函数 ──────────────────────────────────────────────────────
 

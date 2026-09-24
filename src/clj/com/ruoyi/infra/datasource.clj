@@ -1,7 +1,7 @@
 (ns com.ruoyi.infra.datasource
   "代理 DataSource — 支持运行时热切换底层连接池（SQLite ↔ MySQL）。"
-  (:import [javax.sql DataSource]
-           [java.sql Connection]))
+  (:import
+   [javax.sql DataSource]))
 
 ;; 全局注册表: {object-id -> atom-of-datasource}
 ;; 用于在 classloader reload 后仍能通过对象身份找到对应的 delegate
@@ -29,8 +29,8 @@
   "检查 ds 是否为可热切换的代理 DataSource。通过类名检测。"
   [ds]
   (boolean
-    (when ds
-      (.containsKey registry (System/identityHashCode ds)))))
+   (when ds
+     (.containsKey registry (System/identityHashCode ds)))))
 
 (defn- get-delegate-atom
   "获取代理 DataSource 内部的 delegate atom。"

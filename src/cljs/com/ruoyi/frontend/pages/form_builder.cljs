@@ -1,13 +1,12 @@
 (ns com.ruoyi.frontend.pages.form-builder
   "在线表单构建器 — 拖拽式表单设计，参考 RuoYi-Vue 在线构建器。"
   (:require
-   [reagent.core :as r]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
-   ["@ant-design/icons" :refer [PlusOutlined DeleteOutlined DragOutlined EyeOutlined CodeOutlined
-                                CopyOutlined ClearOutlined SaveOutlined FolderOpenOutlined]]
+   ["@ant-design/icons" :refer [ClearOutlined CodeOutlined CopyOutlined DeleteOutlined
+                                DragOutlined EyeOutlined FolderOpenOutlined SaveOutlined]]
    [clojure.string :as str]
-   [com.ruoyi.frontend.antd :as antd]))
+   [com.ruoyi.frontend.antd :as antd]
+   [re-frame.core :as rf]
+   [reagent.core :as r]))
 
 ;; ─── 组件面板定义 ──────────────────────────────────────────────────
 
@@ -44,7 +43,7 @@
                          label (or (:label props) "Label")]
                      (case typ
                        :input (str "   [antd/form-item {:label \"" label "\" :name \"" field "\""
-                                   (when (:required props) " :rules #js [#js {:required true :message \"请输入" label "\"}]")
+                                   (when (:required props) (str " :rules #js [#js {:required true :message \"请输入" label "\"}]"))
                                    "}\n    [antd/input {:placeholder \"" (or (:placeholder props) "") "\"}]]")
                        :textarea (str "   [antd/form-item {:label \"" label "\" :name \"" field "\""
                                       (when (:required props) " :rules #js [#js {:required true}]")
@@ -173,7 +172,6 @@
      [:pre {:style {:background "#1e1e1e" :color "#d4d4d4" :padding 16 :borderRadius 4
                     :maxHeight 500 :overflow "auto" :fontSize 13 :lineHeight 1.6}}
       (if code code "请先添加表单组件")]]))
-
 
 (defn- save-template-modal []
   (let [visible? @(rf/subscribe [:form-template/modal-visible?])

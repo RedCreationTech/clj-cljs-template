@@ -1,8 +1,8 @@
 (ns com.ruoyi.web.middleware.auth
   "认证与授权中间件，提供 JWT 校验、在线心跳和权限拦截。"
   (:require
-   [com.ruoyi.infra.security :as security]
    [com.ruoyi.infra.online :as online]
+   [com.ruoyi.infra.security :as security]
    [ring.util.response :as response]))
 
 (defn wrap-jwt-auth

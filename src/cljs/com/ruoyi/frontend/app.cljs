@@ -1,10 +1,6 @@
 (ns com.ruoyi.frontend.app
   "前端应用入口。"
   (:require
-   [reagent.core :as r]
-   [reagent.dom.client :as rdc]
-   [reagent.hooks :as hooks]
-   [re-frame.core :as rf]
    ["antd" :refer [ConfigProvider]]
    ["antd/locale/zh_CN" :default zh-CN]
    ["dayjs" :as dayjs]
@@ -12,11 +8,15 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.error-boundary :as error-boundary]
    [com.ruoyi.frontend.events]
+   [com.ruoyi.frontend.pages.layout :as layout]
+   [com.ruoyi.frontend.pages.login :as login]
+   [com.ruoyi.frontend.router :as router]
    [com.ruoyi.frontend.subs]
    [com.ruoyi.frontend.theme :as theme]
-   [com.ruoyi.frontend.router :as router]
-   [com.ruoyi.frontend.pages.login :as login]
-   [com.ruoyi.frontend.pages.layout :as layout]))
+   [re-frame.core :as rf]
+   [reagent.core :as r]
+   [reagent.dom.client :as rdc]
+   [reagent.hooks :as hooks]))
 
 (defonce root (atom nil))
 
@@ -25,7 +25,7 @@
   nil)
 
 (defn- current-page []
-  (let [page @(rf/subscribe [:page])
+  (let [_page @(rf/subscribe [:page])
         logged-in? @(rf/subscribe [:auth/logged-in?])
         theme-mode @(rf/subscribe [:theme/mode])
         primary-color @(rf/subscribe [:theme/primary-color])
@@ -70,7 +70,7 @@
   ;; 先在渲染前初始化路由（只 configure，不 dispatch）
   (router/init-routes!)
   ;; 如果 localStorage 中有 token，获取用户信息
-  (when-let [token (try (.getItem js/localStorage "ruoyi_token") (catch js/Error _ nil))]
+  (when-let [_token (try (.getItem js/localStorage "ruoyi_token") (catch js/Error _ nil))]
     (rf/dispatch [:auth/fetch-info]))
   (r/set-default-compiler! (r/create-compiler {:function-components true}))
   (let [container (.getElementById js/document "app")]

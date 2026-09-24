@@ -1,7 +1,8 @@
 (ns com.ruoyi.domain.system.menu-test
   "菜单领域服务测试。"
-  (:require [clojure.test :refer [deftest is testing]]
-            [com.ruoyi.domain.system.menu :as menu]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.domain.system.menu :as menu]))
 
 (def mock-menus
   [{:menu_id 1 :menu_name "系统管理" :parent_id 0 :menu_type "M" :order_num 1}
@@ -10,7 +11,7 @@
    {:menu_id 4 :menu_name "角色管理" :parent_id 1 :menu_type "C" :order_num 2}
    {:menu_id 100 :menu_name "用户查询" :parent_id 3 :menu_type "F" :order_num 1}])
 
-(defn- mock-query-fn [query-name params]
+(defn- mock-query-fn [query-name _params]
   (case query-name
     :list-menus mock-menus
     :find-menu-by-id (first mock-menus)
