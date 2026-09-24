@@ -3,10 +3,12 @@
 #+DATE: 2026-09-23
 #+LANGUAGE: zh-CN
 #+OPTIONS: toc:3 num:t ::t |:t ^:nil
-#+PROPERTY: header-args :results output :eval query
+#+PROPERTY: header-args :results output :eval never-export
 #+PROPERTY: header-args:sh :dir ../..
 #+PROPERTY: header-args:clojure :dir ../..
 #+STARTUP: showall content
+#+EXPORT_FILE_NAME: c4-model-emacs
+# ↑ Emacs 的 C-c C-e h h 会导出成 c4-model-emacs.html,不覆盖 build-html.py 生成的 c4-model.html
 
 #+BEGIN_QUOTE
 本文是模板项目的架构规范载体(org-mode + org-babel),按 C4 模型自顶向下描述:
@@ -15,24 +17,32 @@ System Context(L1)→ Container(L2)→ Component(L3)→ Code(L4),再补充动态
 所有 ~#+begin_src~ 代码块都可以执行:
 - ~mermaid~ 块由 ob-mermaid 渲染成图(用 flowchart / sequence / ER 记 C4 元素:方框标 ~[Container: 技术]~ ,深蓝=人,蓝=系统/容器,浅蓝=组件,灰=外部;不用 mermaid 实验性的 C4 语法,它在组件数较多时布局会互相压盖),导出 HTML/PDF 时自动生成;
 - ~sh~ / ~clojure~ 块是"论断即测试":在仓库根目录 ~C-c C-c~ 直接运行,输出即证据,用来保证文档与代码不脱节。
-所有块默认 ~:eval query~ (执行前询问),没有会产生副作用的块。
+所有块默认 ~:eval never-export~ :导出 HTML/PDF 时*不*执行任何块(用已缓存的 ~#+RESULTS:~ 图片与代码原文),避免导出时弹出十几次确认、跑几分钟测试;需要刷新证据时在块上 ~C-c C-c~ 手动执行。没有会产生副作用的块(除标 ~:eval never~ 的部署命令)。
 
 *维护约定*:新增业务模块、改动 ~system.edn~ 装配、改动中间件链或路由聚合时,必须同步更新本文对应小节(见第 10 节的清单)。
 #+END_QUOTE
 
 * 0. 环境准备(babel 语言)
 
-在 Emacs 中配置一次即可:
+*直接导出*:本文所有图已预渲染在 ~img/*.svg~ 并以 ~#+RESULTS:~ 链接挂在各 mermaid 块下,文件头设了 ~:eval never-export~ ,所以 ~C-c C-e h h~ 不需要任何 babel 语言、不执行任何代码就能得到带图的 HTML(pandoc 也一样)。
+
+*重新生成图 / 执行证据块* 才需要下面的配置(在 Emacs 里配置一次即可):
 
 #+begin_src emacs-lisp :eval never
+;; 1. mermaid-cli:npm i -g @mermaid-js/mermaid-cli,然后 which mmdc 得到路径
+(setq ob-mermaid-cli-path "/opt/homebrew/bin/mmdc")   ; 按 `which mmdc` 的结果改;GUI Emacs 的 PATH 常不含 npm 全局目录
+;; 2. 让 org-babel 认识 mermaid:装了 ob-mermaid 包还不够,必须 require 或加进 load-languages,
+;;    否则导出时报 "No org-babel-execute function for mermaid!",图就不会生成
+(require 'ob-mermaid)
 (org-babel-do-load-languages 'org-babel-load-languages
                              '((shell . t) (clojure . t) (mermaid . t) (python . t)))
-;; mermaid 渲染需要 mermaid-cli:npm i -g @mermaid-js/mermaid-cli
-;; clojure 块通过 CIDER(先 cider-jack-in 到本项目的 :dev 别名)或 babashka 执行
+;; 3. clojure 块通过 CIDER(先 cider-jack-in 到本项目的 :dev 别名)或 babashka 执行
 (setq org-babel-clojure-backend 'cider)
 #+end_src
 
-不用 Emacs 也可以:把 ~sh~ 块的内容复制到终端执行;mermaid 块可贴到 https://mermaid.live 预览。要生成自包含的 HTML(图内联为 SVG、证据块附上生成时的实际输出),在仓库根目录执行 ~python3 docs/architecture/build-html.py~ (需要 pandoc 与 node,首次会通过 npx 拉取 mermaid-cli),产物为 ~docs/architecture/c4-model.html~ 。
+刷新一张图:光标放在 mermaid 块上 ~C-c C-c~ ,会覆盖 ~img/<名字>.svg~ 并更新 ~#+RESULTS:~ ;刷新全部:~M-x org-babel-execute-buffer~ (会连 sh 证据块一起跑,含约 3 分钟的后端测试)。
+
+不用 Emacs 也可以:把 ~sh~ 块的内容复制到终端执行;mermaid 块可贴到 https://mermaid.live 预览。要生成自包含的 HTML(图内联为 SVG、证据块附上生成时的实际输出),在仓库根目录执行 ~python3 docs/architecture/build-html.py~ (需要 pandoc 与 node,首次会通过 npx 拉取 mermaid-cli),它同时会重写 ~img/*.svg~ ,产物为 ~docs/architecture/c4-model.html~ 。
 
 * 1. 阅读指南
 
@@ -54,7 +64,7 @@ System Context(L1)→ Container(L2)→ Component(L3)→ Code(L4),再补充动态
 
 模板本身是一个 *单体管理后台*:浏览器中的管理员通过 SPA 操作;后端只依赖一个关系数据库;开发者通过 nREPL 与运行中的系统交互。没有其它必需的外部系统——这正是模板"干净"的含义,业务外部依赖(短信、对象存储、第三方 API 等)由派生项目按需加入,并在此图追加 ~System_Ext~ 。
 
-#+begin_src mermaid :file c4-context.png :exports results
+#+begin_src mermaid :file img/c4-context.svg :exports results
 flowchart TB
   admin(["管理员 / 业务用户<br/>[Person]<br/>在浏览器中登录,管理用户、角色、菜单、字典、任务等"]):::person
   dev(["开发者<br/>[Person]<br/>本地运行、nREPL 热重载、代码生成、查看 Swagger"]):::person
@@ -72,13 +82,16 @@ flowchart TB
   classDef ext fill:#999999,stroke:#6b6b6b,color:#fff
 #+end_src
 
+#+RESULTS:
+[[file:img/c4-context.svg]]
+
 *边界说明*
 - 同一个 JVM 进程同时提供 API 与前端静态文件(同端口 3000),不需要独立的 Web 服务器;生产可在前面放 Nginx 做 TLS/反向代理(见 §8)。
 - 数据库是唯一的状态存储;在线用户、验证码、缓存监控用的是进程内存(见 §9),不引入 Redis。
 
 * 3. Containers(L2)
 
-#+begin_src mermaid :file c4-containers.png :exports results
+#+begin_src mermaid :file img/c4-containers.svg :exports results
 flowchart TB
   admin(["管理员<br/>[Person]<br/>浏览器"]):::person
   dev(["开发者<br/>[Person]<br/>REPL / 编辑器"]):::person
@@ -101,6 +114,9 @@ flowchart TB
   classDef container fill:#438dd5,stroke:#2e6295,color:#fff
 #+end_src
 
+#+RESULTS:
+[[file:img/c4-containers.svg]]
+
 ** 3.1 容器清单与技术选型
 
 | 容器 | 技术 | 入口 / 配置 | 生命周期 |
@@ -122,7 +138,7 @@ grep -E '^\s*:[a-z][a-z0-9.-]*/[a-z-]+' resources/system.edn | sed -E 's/^\s*(:[
 
 后端是一条固定的请求管线: ~Undertow → Ring handler → 基础中间件链 → Reitit 路由 → 路由级中间件(认证/权限/协商/异常)→ Controller → Domain Service(Integrant 组件)→ HugSQL query-fn → DB~ 。Controller 只做"请求 ↔ 领域服务"的翻译,领域服务不知道 HTTP。
 
-#+begin_src mermaid :file c4-backend-components.png :exports results
+#+begin_src mermaid :file img/c4-backend-components.svg :exports results
 flowchart TB
   DB[("数据库<br/>[Container: SQLite / MySQL]")]:::container
   subgraph WEB["web 层 (com.ruoyi.web)"]
@@ -179,11 +195,14 @@ flowchart TB
   classDef comp fill:#85bbf0,stroke:#5d82a8,color:#000
 #+end_src
 
+#+RESULTS:
+[[file:img/c4-backend-components.svg]]
+
 ** 4.1 请求管线:中间件顺序
 
 ~wrap-base~ 用 ~->~ 把中间件层层包裹, *最后包上的最先看到请求* 。按请求进入的顺序(自外向内):
 
-#+begin_src mermaid :file backend-pipeline.png :exports results
+#+begin_src mermaid :file img/backend-pipeline.svg :exports results
 flowchart LR
   U[Undertow] --> H["handler/ring<br/>(reitit ring-handler)"]
   H --> B["wrap-base(自外向内)<br/>1 wrap-json-body(响应 map→JSON)<br/>2 wrap-query-fn(注入 :components)<br/>3 operlog(计时;响应后写 sys_oper_log)<br/>4 handle-preflight(OPTIONS 直接 200)<br/>5 wrap-cors(响应加 CORS 头)<br/>6 ring-defaults(params/cookies/session/安全头)<br/>7 env middleware(env.clj,dev 下为空)"]
@@ -197,6 +216,9 @@ flowchart LR
   R -. 未匹配且非 /api .-> SPA["SPA fallback:<br/>返回 index.html"]
   R -. /api/* 未匹配 .-> N404[404]
 #+end_src
+
+#+RESULTS:
+[[file:img/backend-pipeline.svg]]
 
 要点:
 - ~operlog~ 在路由器 *外层*,看不到路由级 ~wrap-jwt-auth~ 写入的 ~:identity~,所以它自己从 ~Authorization~ 头解析 JWT 取操作人(缺失/无效记为 ~anonymous~);只记录 ~/api/*~ 下的非 GET 请求,跳过 ~/api/auth/login~ ~/api/health~;写日志失败只打 warn,不影响业务响应。
@@ -237,7 +259,7 @@ grep -n "defmethod ig/init-key" src/clj/com/ruoyi/domain/*.clj src/clj/com/ruoyi
 
 前端是标准的 re-frame 单向数据流: ~页面组件 → dispatch 事件 → 事件处理器(更新 app-db / 触发 :api/* 效果)→ api 层发 HTTP → 成功/失败事件写回 app-db → 订阅驱动重渲染~ 。路由用 bidi 匹配 URL,与 ~history.pushState~ 手动集成(不依赖 accountant)。
 
-#+begin_src mermaid :file c4-frontend-components.png :exports results
+#+begin_src mermaid :file img/c4-frontend-components.svg :exports results
 flowchart TB
   backend["后端 /api<br/>[Container: Reitit]"]:::container
   subgraph SPA["com.ruoyi.frontend"]
@@ -272,6 +294,9 @@ flowchart TB
   classDef container fill:#438dd5,stroke:#2e6295,color:#fff
   classDef comp fill:#85bbf0,stroke:#5d82a8,color:#000
 #+end_src
+
+#+RESULTS:
+[[file:img/c4-frontend-components.svg]]
 
 ** 5.1 关键设计点
 
@@ -314,7 +339,7 @@ echo "routes:     $(grep -c '" :' src/cljs/com/ruoyi/frontend/router.cljs)"
 
 从数据库到页面,一个功能横跨 8 个文件,这也是新增模块时要照抄的骨架:
 
-#+begin_src mermaid :file vertical-slice.png :exports results
+#+begin_src mermaid :file img/vertical-slice.svg :exports results
 flowchart TB
   subgraph DB["数据"]
     M["migrations*/…-create-sys-post.up.sql<br/>建表 sys_post"]
@@ -339,6 +364,9 @@ flowchart TB
   A --> E --> P --> RT
 #+end_src
 
+#+RESULTS:
+[[file:img/vertical-slice.svg]]
+
 ** 6.3 可执行:验证垂直切片的文件都在
 
 #+begin_src sh :exports both
@@ -358,7 +386,7 @@ grep -n ':post ' src/cljs/com/ruoyi/frontend/router.cljs src/cljs/com/ruoyi/fron
 
 ** 6.4 命名空间依赖方向(允许的箭头)
 
-#+begin_src mermaid :file ns-deps.png :exports results
+#+begin_src mermaid :file img/ns-deps.svg :exports results
 flowchart LR
   core --> web.routes --> web.controllers --> domain --> infra
   web.routes --> web.middleware --> infra
@@ -366,6 +394,9 @@ flowchart LR
   domain -. 禁止 .-> web.controllers
   infra -. 禁止 .-> domain
 #+end_src
+
+#+RESULTS:
+[[file:img/ns-deps.svg]]
 
 可执行检查: ~infra~ 与 ~domain~ 不得 require ~web~:
 
@@ -378,7 +409,7 @@ grep -rnE "\[com\.ruoyi\.web" src/clj/com/ruoyi/infra src/clj/com/ruoyi/domain &
 
 18 张 ~sys_ *~ 表,全部由 ~resources/migrations* /2024061100xx~ 与 ~202406130005~ 建立;通用审计列 ~create_by/create_time/update_by/update_time/remark~,逻辑删除用 ~del_flag~,状态用 ~status~ ('0' 正常 / '1' 停用)。
 
-#+begin_src mermaid :file data-model.png :exports results
+#+begin_src mermaid :file img/data-model.svg :exports results
 erDiagram
   sys_dept ||--o{ sys_user : "dept_id"
   sys_dept ||--o{ sys_dept : "parent_id / ancestors"
@@ -430,6 +461,9 @@ erDiagram
   sys_form_template { int id PK }
 #+end_src
 
+#+RESULTS:
+[[file:img/data-model.svg]]
+
 可执行:表清单与两库一致性
 
 #+begin_src sh :exports both
@@ -463,7 +497,7 @@ curl -s  localhost:3000/api/system/user            # 期望 {"code":401,"msg":"�
 
 ** 7.1 登录与 JWT
 
-#+begin_src mermaid :file dyn-login.png :exports results
+#+begin_src mermaid :file img/dyn-login.svg :exports results
 sequenceDiagram
   autonumber
   participant B as 浏览器(login 页)
@@ -491,11 +525,14 @@ sequenceDiagram
   E->>B: app-db :auth/user + 菜单树 → 渲染主布局
 #+end_src
 
+#+RESULTS:
+[[file:img/dyn-login.svg]]
+
 ** 7.2 一次受保护的写请求(含审计)
 
 以「新增岗位」为例。数据权限过滤器(~infra.data-perm~)此处 *不* 出现——它目前只在用户/参数/字典列表的 controller 里被计算,尚未拼进 SQL(§13)。
 
-#+begin_src mermaid :file dyn-crud.png :exports results
+#+begin_src mermaid :file img/dyn-crud.svg :exports results
 sequenceDiagram
   autonumber
   participant SPA as pages/post + events/posts
@@ -518,9 +555,12 @@ sequenceDiagram
   BASE-->>SPA: JSON 响应 → :posts/fetch 刷新列表 + antd message
 #+end_src
 
+#+RESULTS:
+[[file:img/dyn-crud.svg]]
+
 ** 7.3 前端导航(URL ↔ 页面 ↔ Tab)
 
-#+begin_src mermaid :file dyn-nav.png :exports results
+#+begin_src mermaid :file img/dyn-nav.svg :exports results
 sequenceDiagram
   participant U as 用户
   participant L as layout(菜单/Tab)
@@ -537,9 +577,12 @@ sequenceDiagram
   R->>EV: dispatch [:navigate <匹配到的页面>]
 #+end_src
 
+#+RESULTS:
+[[file:img/dyn-nav.svg]]
+
 ** 7.4 后端启动顺序(Integrant 拓扑)
 
-#+begin_src mermaid :file dyn-startup.png :exports results
+#+begin_src mermaid :file img/dyn-startup.svg :exports results
 flowchart LR
   env[":system/env<br/>(profile)"] --> conn[":db.sql/connection<br/>HikariCP"]
   conn --> mig[":db.sql/migrations<br/>migrate-on-init?"]
@@ -556,11 +599,14 @@ flowchart LR
   nrepl[":nrepl/server :7000"]
 #+end_src
 
+#+RESULTS:
+[[file:img/dyn-startup.svg]]
+
 Integrant 按 ~#ig/ref~ 依赖自动排序; ~:app.system/job-scheduler~ 显式依赖 ~:db.sql/migrations~ 是为了保证 ~sys_job~ 表已存在。停止顺序相反(~ig/halt!~)。
 
 * 8. Deployment(部署视图)
 
-#+begin_src mermaid :file c4-deployment.png :exports results
+#+begin_src mermaid :file img/c4-deployment.svg :exports results
 flowchart LR
   subgraph DEV["开发机(macOS / Linux / Windows)"]
     direction TB
@@ -590,6 +636,9 @@ flowchart LR
   be2 -- "JDBC / HikariCP" --> mysql
   classDef container fill:#438dd5,stroke:#2e6295,color:#fff
 #+end_src
+
+#+RESULTS:
+[[file:img/c4-deployment.svg]]
 
 ** 8.1 环境变量一览
 

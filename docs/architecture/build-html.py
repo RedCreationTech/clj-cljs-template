@@ -68,8 +68,10 @@ def run_block(lang, args, body, timeout):
 
 
 def pandoc_body(org_text):
-    """pandoc 会按 :exports results 把 mermaid 块整个丢掉,先把它们改成 :exports code 让源码进入 HTML,再由本脚本换成 SVG。"""
+    """pandoc 会按 :exports results 把 mermaid 块整个丢掉,先把它们改成 :exports code 让源码进入 HTML,再由本脚本换成 SVG;
+    紧跟其后的 #+RESULTS: 图片链接(给 Emacs 导出用的缓存)则去掉,避免图出现两次。"""
     pre = re.sub(r"^(#\+begin_src mermaid[^\n]*):exports results", r"\1:exports code", org_text, flags=re.M | re.I)
+    pre = re.sub(r"^#\+RESULTS:[^\n]*\n\[\[file:[^\]]+\]\]\n?", "", pre, flags=re.M)
     with tempfile.NamedTemporaryFile("w", suffix=".org", dir=HERE, delete=False, encoding="utf-8") as f:
         f.write(pre)
         tmp = Path(f.name)
@@ -207,6 +209,11 @@ def main():
             diag_n["i"] += 1
             svg_id = f"c4-diagram-{diag_n['i']}"
             svg, err = render_mermaid(mmdc, a.puppeteer_config or None, body, svg_id)
+            fm = re.search(r":file\s+(\S+)", args)
+            if svg and fm:  # 同步写出 :file 指向的 svg,供 Emacs/pandoc 直接导出时引用
+                target = (HERE / fm.group(1)).resolve()
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(svg, encoding="utf-8")
             src_html = f"<details><summary>mermaid 源码</summary><pre><code>{html.escape(body)}</code></pre></details>"
             if svg:
                 return f'<figure class="diagram">{svg}{src_html}</figure>'
