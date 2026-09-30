@@ -583,6 +583,8 @@ npm run test:e2e:report                  # 查看 HTML 报告
 - `post-crud.spec.js` — 岗位管理新增/修改/删除示例
 - `permission.spec.js` — 只读用户看不到增删改按钮、越权接口统一提示;角色自定义数据范围的勾选与回显
 - `search.spec.js` — 角色、岗位、参数列表的搜索条件生效
+- `user-import.spec.js` — 用户导入弹窗：打开、下载 CSV 模板、提交导入、列表出现导入的用户
+- `profile.spec.js` — 个人中心头像上传（换图后档案与顶栏同步）、缓存监控「清空」命中 `/system/cache/clear`
 - `header.spec.js` — 顶部菜单搜索跳转、通知铃铛未读数与已读（按用户记录，刷新后不再显示）
 - `auth-helper.js` — 登录/登出公共辅助
 - `<module>.spec.js` — `bb new-module` 为每个生成的模块写的新增/修改/删除用例

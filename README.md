@@ -192,7 +192,7 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | MySQL 测试 | `bb test:mysql`（自动 `docker compose up -d mysql`；设置 `JDBC_URL` 则用已有实例，每次先清空库） |
 | 迁移往返 | `bb db:roundtrip`（up → down → up；默认临时 SQLite，设 `JDBC_URL` 则检查该库） |
 | E2E | `bb e2e`（需后端已在 3000 运行；首次运行先 `npx playwright install chromium`）；单个用例 `bb e2e tests/e2e/post-crud.spec.js` |
-| 功能导览录像 | `bb video:tour`（需后端 + `bb release` + ffmpeg）→ `target/tour/tour.mp4`，12 段，左侧常驻目录、内嵌章节与烧录台词；只重新合成用 `bb video:tour --compose-only` |
+| 功能导览录像 | `bb video:tour`（需后端 + `bb release` + ffmpeg）→ `target/tour/tour.mp4`，14 段约 16 分 56 秒（含文件管理、生产部署与 babashka 工程链），左侧常驻目录、内嵌章节与烧录台词；只重新合成用 `bb video:tour --compose-only` |
 | 覆盖率 | `bb coverage` → `target/coverage/index.html` |
 | 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束）+ `lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`） |
 | 格式化 | `bb fmt`（cljfmt 修改）/ `bb fmt:check`（只检查） |
