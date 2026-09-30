@@ -58,9 +58,3 @@
   (t/request {:method :put :uri (str "/system/user/" user-id "/authRole")
               :params {:role_ids role-ids}
               :on-success on-success :on-error on-error}))
-
-(defn export-users
-  "导出用户数据。"
-  [params]
-  ;;; 需要实现文件下载
-  (js/console.log "导出用户" params))

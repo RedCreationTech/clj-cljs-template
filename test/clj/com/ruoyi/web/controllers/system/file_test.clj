@@ -54,7 +54,10 @@
           (is (= 1 (count files)))
           (is (= "test.txt" (:name (first files))))
           (is (= 5 (:size (first files))))
-          (is (int? (:modified (first files)))))))))
+          ;; 时间给 java.util.Date,由 infra.json 统一编码成本地 "yyyy-MM-dd HH:mm:ss";
+          ;; 直接返回毫秒数的话前端要么显示成对象要么得自己格式化
+          (is (instance? java.util.Date (:modified (first files))))
+          (is (= 1609459200000 (.getTime ^java.util.Date (:modified (first files))))))))))
 
 (deftest test-upload-file-success
   (testing "成功上传文件"

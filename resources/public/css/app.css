@@ -13,6 +13,8 @@
   --app-text-placeholder: #c0c4cc;
   --app-border: #dcdfe6;
   --app-border-light: #ebeef5;
+  /* 文件名等可点击/强调文字的颜色(浅色沿用 antd 主色) */
+  --app-link: #409eff;
   /* 工具栏彩色按钮(新增 / 修改 / 删除 / 导入 / 导出):文字、边框、底色 */
   --app-btn-add-color: #409eff;    --app-btn-add-border: #a0cfff;    --app-btn-add-bg: #ecf5ff;
   --app-btn-edit-color: #67c23a;   --app-btn-edit-border: #b3e19d;   --app-btn-edit-bg: #f0f9eb;
@@ -21,6 +23,7 @@
   --app-btn-export-color: #e6a23c; --app-btn-export-border: #f3d19e; --app-btn-export-bg: #fdf6ec;
 }
 :root[data-theme="dark"] {
+  --app-link: #409eff;
   --app-btn-add-color: #409eff;    --app-btn-add-border: #1d3b5c;    --app-btn-add-bg: #18222c;
   --app-btn-edit-color: #67c23a;   --app-btn-edit-border: #2d481f;   --app-btn-edit-bg: #1c2518;
   --app-btn-delete-color: #f56c6c; --app-btn-delete-border: #5c2b2b; --app-btn-delete-bg: #2b1d1d;

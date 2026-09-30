@@ -8,6 +8,7 @@
    [com.ruoyi.frontend.events.depts]
    [com.ruoyi.frontend.events.dicts]
    [com.ruoyi.frontend.events.feedback]
+   [com.ruoyi.frontend.events.file]
    [com.ruoyi.frontend.events.formbuilder]
    [com.ruoyi.frontend.events.jobs]
    [com.ruoyi.frontend.events.logs]

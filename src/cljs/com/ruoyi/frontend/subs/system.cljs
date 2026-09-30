@@ -344,3 +344,11 @@
 (rf/reg-sub :posts/form-data
             (fn [db _]
               (get-in db [:posts :form-data] {})))
+
+(rf/reg-sub :file/items
+            (fn [db _]
+              (get-in db [:file :items] [])))
+
+(rf/reg-sub :file/loading?
+            (fn [db _]
+              (get-in db [:file :loading?] false)))

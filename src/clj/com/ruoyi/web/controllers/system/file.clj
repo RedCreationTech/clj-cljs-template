@@ -3,7 +3,9 @@
   (:require
    [clojure.java.io :as io]
    [com.ruoyi.infra.files :as files]
-   [ring.util.response :as response]))
+   [ring.util.response :as response])
+  (:import
+   [java.util Date]))
 
 (def upload-dir "uploads/")
 
@@ -17,21 +19,21 @@
    (-> (response/response {:code code :msg msg :data data})
        (response/content-type "application/json"))))
 
+(defn- file-entries [^java.io.File dir]
+  (when (.exists dir)
+    (->> (.listFiles dir)
+         (filter #(.isFile ^java.io.File %))
+         (sort-by #(.lastModified ^java.io.File %) >)
+         (mapv (fn [^java.io.File f]
+                 {:name (.getName f)
+                  :size (.length f)
+                  :modified (Date. (.lastModified f))})))))
+
 (defn list-files
-  "获取上传文件列表。"
+  "获取上传文件列表。修改时间给 java.util.Date,由 infra.json 统一编码成本地 yyyy-MM-dd HH:mm:ss。"
   [_ _]
   (ensure-dir!)
-  (let [dir (io/file upload-dir)
-        files (when (.exists dir)
-                (->> (.listFiles dir)
-                     (filter #(.isFile %))
-                     (mapv (fn [f]
-                             {:name (.getName f)
-                              :size (.length f)
-                              :modified (.lastModified f)}))
-                     (sort-by :modified)
-                     reverse))]
-    (ok files)))
+  (ok (file-entries (io/file upload-dir))))
 
 (defn upload-file
   "上传文件:先按 :upload-config 校验类型与大小;文件名只保留安全字符,同名不覆盖。"

@@ -25,5 +25,5 @@
 (defn file-delete
   "删除文件。"
   [filename on-success on-error]
-  (t/request {:method :delete :uri (str "/system/file/" filename)
+  (t/request {:method :delete :uri (str "/system/file/" (js/encodeURIComponent filename))
               :on-success on-success :on-error on-error}))

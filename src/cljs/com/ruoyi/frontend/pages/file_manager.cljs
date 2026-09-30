@@ -21,12 +21,16 @@
 
 (defn- file-columns []
   #js [#js {:title "文件名" :dataIndex "name" :key "name"
+            ;; 图标和文件名是兄弟节点:写成 [:> Icon {} v] 的话文字会变成图标的 children,渲染不出来
             :render (fn [v _]
-                      (r/as-element [:> FileTextOutlined {:style {:marginRight 8 :color "#1677ff"}} v]))}
+                      (r/as-element [:span
+                                     [:> FileTextOutlined {:style {:marginRight 8 :color "var(--app-link)"}}]
+                                     (str v)]))}
        #js {:title "大小" :dataIndex "size" :key "size" :width 120
             :render (fn [v _] (r/as-element [:span (format-size v)]))}
        #js {:title "修改时间" :dataIndex "modified" :key "modified" :width 180
-            :render (fn [v _] (r/as-element [:span (js/Date. v)]))}
+            ;; 后端已经把时间编码成 "yyyy-MM-dd HH:mm:ss" 文本,直接显示
+            :render (fn [v _] (r/as-element [:span (str v)]))}
        #js {:title "操作" :key "action" :width 180
             :render (fn [_ ^js record]
                       (r/as-element
