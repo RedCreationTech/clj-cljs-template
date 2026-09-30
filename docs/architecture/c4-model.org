@@ -698,6 +698,8 @@ flowchart LR
 | ~NREPL_PORT~ / ~NREPL_HOST~ | 7000 / 127.0.0.1 | nREPL |
 | ~JDBC_URL~ | ~jdbc:sqlite:ruoyi.db~ | 换 MySQL 时填 ~jdbc:mysql://…~ |
 | ~MIGRATION_DIR~ | 按 ~JDBC_URL~ 推导 | MySQL → ~migrations~ ,其它 → ~migrations-sqlite~ ( ~config/with-default-migration-dir~ );一般不用设 |
+| ~MIGRATE_ON_INIT~ | ~true~ (仅 prod 生效) | 启动时自动跑迁移;有独立发布流程或多实例想避免同时迁移时设 ~false~ |
+| ~DB_MAX_ACTIVE~ | SQLite 1,其它 10 | HikariCP 最大连接数。 ~config/with-dialect-pool~ 按方言兜底:SQLite 一律强制单连接(多连接只会互相等锁),MySQL 若还停在 ~system.edn~ 里给 SQLite 的那组 1 就抬到 10;显式设过本变量或改过配置的都不动 |
 | ~JWT_SECRET~ | 内置开发值 | prod 必填:≥32 字符且不等于内置值,否则拒绝启动(~infra/secrets.clj~);生成: ~openssl rand -hex 32~ |
 | ~COOKIE_SECRET~ | 内置开发值 | prod 必填:恰好 16 字节(AES-128 cookie store)且不等于内置值;生成: ~openssl rand -hex 8~ |
 | ~CAPTCHA_ENABLED~ | prod ~true~ ,dev/test ~false~ | 登录验证码;开启后空验证码判失败 |
@@ -705,8 +707,11 @@ flowchart LR
 | ~LOGIN_MAX_FAILURES~ / ~LOGIN_LOCK_MINUTES~ | 5 / 10 | 登录失败限流 |
 | ~REGISTER_ENABLED~ | ~false~ | 自助注册开关 |
 | ~CORS_ORIGINS~ | 空 | 允许跨域的来源,逗号分隔;空 = 只允许同源 |
+| ~UPLOAD_DIR~ | ~uploads~ | 上传根目录(相对 JVM 工作目录,容器里请挂持久卷);头像在它下面的 ~avatar/~ ,下载/删除接口只能访问这个目录(路径校验见 ~infra.files~) |
 | ~UPLOAD_MAX_MB~ | 10 | 单个上传文件的大小上限(头像另限 2MB) |
 | ~UPLOAD_EXTENSIONS~ | 空 = 内置白名单 | 允许上传的扩展名,逗号分隔(内置白名单见 ~infra.files/default-extensions~ ,不含可执行文件与 HTML/SVG) |
+| ~SCHEDULER_ENABLED~ | ~true~ | 是否装载 ~sys_job~ 定时任务。Quartz 用的是内存 JobStore,每个实例都会各自触发一遍;多实例部署时把从实例设为 ~false~ ,只留主实例跑任务(§9.7) |
+| ~TZ~ | 主机时区 | 写库与接口返回的时间都用 JVM 默认时区;prod 启动时 ~config/prod-warnings~ 会在未设 ~TZ~ 或仍用 SQLite 时打印警告 |
 
 test profile 使用独立端口 3100 / 7100 与独立的 ~test.db~ ,所以 ~bb test~ 可以和正在运行的 ~bb dev~ 并存; ~bb test:mysql~ / ~bb db:roundtrip~ 读取同样的 ~JDBC_URL~ / ~MIGRATION_DIR~ 。认证相关的值汇总在 ~system.edn~ 的 ~:reitit.routes/api :auth-config~ ,上传限制在同一处的 ~:upload-config~ 。健康检查 ~/api/health~ 会执行 ~SELECT 1~ ,数据库不可用时返回 503,可直接用作负载均衡 / 容器编排的探针。本地 MySQL 用仓库根目录的 ~docker-compose.yml~ (mysql:8.4,端口 3308)。
 
@@ -791,12 +796,12 @@ diff <(ls resources/migrations-sqlite | sed 's/\.\(up\|down\)\.sql$//' | sort -u
 | 续期宽限(30 秒) | ~sys_kv~ ~grace:<旧 jti>~ | 共享 |
 | 按钮权限、数据范围 | 每次请求查库,不缓存 | 共享 |
 | 通知已读 | ~sys_notice_read~ | 共享 |
-| 定时任务调度 | Quartz 内存存储(进程内) | *不共享*:每个实例都会触发同一个任务;在某个实例上新增 / 修改 / 暂停任务只影响该实例的调度器 |
+| 定时任务调度 | Quartz 内存存储(进程内) | *不共享*:每个实例都会触发同一个任务;在某个实例上新增 / 修改 / 暂停任务只影响该实例的调度器。从实例设 ~SCHEDULER_ENABLED=false~ 就不装载任何 ~sys_job~(见 §9.7) |
 | 缓存监控页的数据、函数调用追踪、连接池热切换 | 进程内 atom | 各实例各一份(运维 / 演示功能) |
 
 ~infra.kv~ 是一个小协议( ~Store~ :取、写、删、清过期、按前缀删),系统启动时由 ~:app.system/online-service~ 切到数据库实现(表 ~sys_kv~ ),停止后切回进程内存,单元测试与 REPL 不起系统也能用。写入先 ~UPDATE~ 再 ~INSERT~ ,两个实例同时插入同一个键撞主键时再 ~UPDATE~ 一次,不依赖两库不同的 UPSERT 语法。需要 Redis 时实现同一个协议即可。
 
-定时任务要在多实例下运行,两种做法:① 改用 Quartz 的 JDBC JobStore 集群模式( ~org.quartz.jobStore.isClustered = true~ ,两套迁移各加 ~QRTZ_*~ 表),任务由集群里的一个实例执行、变更对所有实例生效;② 只让一个实例调度,其它实例的 ~controllers.job~ 只改 ~sys_job~ 表、不操作本地调度器,再由调度实例定期按表重新加载。模板没有内置任何一种(§13 #5)。
+定时任务要在多实例下运行,两种做法:① 改用 Quartz 的 JDBC JobStore 集群模式( ~org.quartz.jobStore.isClustered = true~ ,两套迁移各加 ~QRTZ_*~ 表,还要按 Quartz 官方脚本维护 ~11 张 QRTZ_~ 表),任务由集群里的一个实例执行、变更对所有实例生效;② 只让一个实例调度:从实例设 ~SCHEDULER_ENABLED=false~ ( ~app.system/job-scheduler~ 的 ~:enabled?~ , ~infra.scheduler/init!~ 会跳过装载 ~sys_job~),任务表与「立即执行」仍由主实例负责。模板内置的是 ②(①需要两套方言的新迁移,没有验证环境就不默认开启),§13 #5 仍把它列为可选演进方向。
 
 可执行:共享状态的使用点与剩余的进程内状态
 
@@ -988,7 +993,7 @@ bb lint:migrations 2>&1 | tail -1
 | 2 | 数据权限接入 SQL | *已解决*(ADR-010): ~domain.system.data-scope~ + 固定写法的 SQL 参数,已接入用户管理(列表、导出、单条读写);自定义部门存 ~sys_role_dept~ 。其它按部门归属的业务表需要时照此接入 | 业务表加 ~dept_id~ / ~create_by~ 列后复用 ~sql-params~ 与 ~allows?~ | ~domain/system/data_scope.clj~ |
 | 3 | 前端统一错误处理 | *已解决*(ADR-010): ~api.transport~ 对 403 / 5xx / 网络断开 / 业务码非 200 统一提示并复位 loading;带令牌下载统一走 ~t/download!~ | — | — |
 | 4 | 生产安全默认值 | *已解决*:prod 密钥强制(ADR-008);CORS 改为白名单(ADR-009) | — | — |
-| 5 | 多实例部署 | *基本解决*(ADR-011):会话、验证码、登录失败计数与锁定、续期宽限都在数据库( ~sys_online~ / ~sys_kv~ ),多实例共享;仍在进程内:Quartz 调度(每个实例都会触发)、缓存监控演示数据 | 定时任务改用 Quartz JDBC JobStore 集群模式,或只让一个实例调度(§9.7) | ~infra/scheduler.clj~ ~domain/system.clj~ ~controllers/job.clj~ |
+| 5 | 多实例部署 | *基本解决*(ADR-011):会话、验证码、登录失败计数与锁定、续期宽限都在数据库( ~sys_online~ / ~sys_kv~ ),多实例共享;启动时会打印 prod 配置体检(仍用 SQLite、未设 ~TZ~ ).仍在进程内:Quartz 调度(从实例设 ~SCHEDULER_ENABLED=false~ 只留一个实例跑任务)、缓存监控演示数据 | 定时任务改用 Quartz JDBC JobStore 集群模式(需要 ~11 张 QRTZ_~ 表的两套迁移)(§9.7) | ~infra/scheduler.clj~ ~domain/system.clj~ ~controllers/job.clj~ ~config.clj~ |
 | 6 | 未使用的依赖 | *已解决*(ADR-011):删除 selmer(组件与依赖)、cheshire(JSON 统一用 jsonista)、clj-time、buddy-auth、kit-postgres; ~:cronut/scheduler~ 的 ~:schedule []~ 由 ~infra.scheduler~ 动态填充,保留 | — | — |
 | 7 | 两套代码生成 | *已解决*(ADR-012):删除页面代码生成器,只保留 ~bb new-module~ (CI 每次生成模块并完整验证) | 需要「从已有表生成模块」时,给脚手架加读取表结构转字段规格的入口,仍走同一套模板 | ~bb/tasks/scaffold/~ |
 | 8 | 静态检查遗留 | *已解决*(ADR-008) | 保持零 warning | ~.clj-kondo/config.edn~ |
