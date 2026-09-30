@@ -193,6 +193,7 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | 迁移往返 | `bb db:roundtrip`（up → down → up；默认临时 SQLite，设 `JDBC_URL` 则检查该库） |
 | E2E | `bb e2e`（需后端已在 3000 运行；首次运行先 `npx playwright install chromium`）；单个用例 `bb e2e tests/e2e/post-crud.spec.js` |
 | 功能导览录像 | `bb video:tour`（需后端 + `bb release` + ffmpeg）→ `target/tour/tour.mp4`，14 段约 16 分 56 秒（含文件管理、生产部署与 babashka 工程链），左侧常驻目录、内嵌章节与烧录台词；只重新合成用 `bb video:tour --compose-only` |
+| 导览旁白配音 | `bb video:narrate`（默认小米 MiMo TTS，密钥 `export MIMO_API_KEY=…` 或写进 `target/tour/mimo.key`，不要把密钥提交进仓库）：逐句合成 273 句台词，剪掉每句首尾静音，按烧录字幕的时刻排一条整片音轨（装不下就最多提速 1.3 倍追字幕，两句之间留 0.2 秒空隙，追不上才会舍弃），画面流 copy 所以字幕/章节/目录带不变，可反复执行；语音缓存于 `target/tour/narration/`（剪静音的副本在 `narration/trimmed/`），改哪句只重合成哪句，`--force` 会连同缓存一起重灌（会计费）。没网或没额度时用离线兜底 `bb video:narrate --provider say`，只补缓存用 `--only 分镜号` |
 | 覆盖率 | `bb coverage` → `target/coverage/index.html` |
 | 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束）+ `lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`） |
 | 格式化 | `bb fmt`（cljfmt 修改）/ `bb fmt:check`（只检查） |

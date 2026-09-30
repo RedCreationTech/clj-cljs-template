@@ -5,6 +5,7 @@
  :tasks
  {:requires ([tasks.dev :as dev]
              [tasks.lint :as lint]
+             [tasks.narrate :as narrate]
              [tasks.tour :as tour]
              [tasks.util :as u]
              [tasks.vendor :as vendor])
@@ -39,6 +40,8 @@
                     :task (dev/e2e! *command-line-args*)}
   video:tour       {:doc  "录制 tests/e2e/tour 的全部功能导览分镜并合成 target/tour/tour.mp4(左侧常驻目录 + 内嵌章节 + storyboard.md;--compose-only 只重新合成;需要 ffmpeg)"
                     :task (tour/video! *command-line-args*)}
+  video:narrate    {:doc  "给 target/tour/tour.mp4 加旁白音轨:按 storyboard 台词逐句合成语音并对齐时间轴(默认小米 MiMo TTS,密钥走 MIMO_API_KEY;离线兜底 --provider say)"
+                    :task (narrate/narrate! *command-line-args*)}
   db:roundtrip     {:doc  "迁移往返检查:up → down → up(默认临时 SQLite;设 JDBC_URL 则用该库,MySQL 自动选 migrations 目录)"
                     :task (dev/roundtrip!)}
   coverage         {:doc  "测试覆盖率(报告在 target/coverage/index.html)"
