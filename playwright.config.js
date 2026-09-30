@@ -7,6 +7,10 @@ const { defineConfig, devices } = require('@playwright/test');
 module.exports = defineConfig({
   testDir: './tests/e2e',
 
+  /* 功能导览录像用例在 tests/e2e/tour，走 playwright.tour.config.js（每次都录像），
+     不要混进常规门禁 */
+  testIgnore: '**/tour/**',
+
   /* Run tests in files in serial because they share the local SQLite DB */
   fullyParallel: false,
 
