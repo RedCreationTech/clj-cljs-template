@@ -26,8 +26,28 @@ async function createRoleWithMenus(page, roleName, roleKey, menuIds) {
   return Number(String(body.data).match(/\d+/)[0]);
 }
 
+/** 清掉历史失败运行残留的导览角色（先删挂在它上面的用户，否则后端拒绝删）。 */
+async function cleanRoles(page) {
+  const body = await t.api(page, 'GET', '/api/system/role?page=1&size=200');
+  for (const r of ((body && body.data && body.data.rows) || [])) {
+    const name = String(r.role_name || '');
+    if (name.startsWith('导览') || name.startsWith('只读') || String(r.role_key || '').startsWith('tour')) {
+      // eslint-disable-next-line no-await-in-loop
+      await t.api(page, 'DELETE', `/api/system/role/${r.role_id}`);
+    }
+  }
+}
+
+/** 角色列表是服务端分页的，新建的角色在最后一页，按名称筛一次才在镜头里。 */
+async function filterByRoleName(page, keyword) {
+  await page.getByPlaceholder('请输入角色名称').fill(keyword);
+  await page.getByRole('button', { name: /搜\s*索/ }).click();
+  await t.settle(page, 900);
+}
+
 test('05｜角色管理：权限、数据范围与只读视角', async ({ page }) => {
   await t.open(page);
+  await cleanRoles(page);
   await t.gotoMenu(page, '系统管理', '角色管理');
 
   await t.chapter(page, {
@@ -62,7 +82,11 @@ test('05｜角色管理：权限、数据范围与只读视角', async ({ page }
     await page.getByRole('button', { name: /确\s*定/ }).click();
   });
   await t.settle(page, 1100);
-  await t.step(page, '角色已建好。', () => expect(roleRow(page, TOUR_ROLE)).toBeVisible());
+  await t.say(page, '角色列表也是服务端分页的：新角色排在最后一页，按名称筛一下。');
+  await t.step(page, '角色已建好。', async () => {
+    await filterByRoleName(page, TOUR_ROLE);
+    await expect(roleRow(page, TOUR_ROLE)).toBeVisible();
+  });
 
   await t.say(page, '把鼠标移到行尾的「更多」：数据权限、分配用户、分配权限都在这里面。');
   await t.step(page, '打开数据权限，选「自定义数据」。', async () => {
@@ -126,11 +150,13 @@ test('05｜角色管理：权限、数据范围与只读视角', async ({ page }
   await t.signOut(page);
   await t.login(page);
   await t.settle(page, 1000);
-  await t.api(page, 'DELETE', `/api/system/role/${roleId}`);
+  // 先删用户再删角色：角色还挂在用户身上时后端拒绝删除
   const body = await t.api(page, 'GET', `/api/system/user?user_name=${TOUR_VIEWER}&page=1&size=5`);
   for (const u of (body && body.data && body.data.rows) || []) {
+    // eslint-disable-next-line no-await-in-loop
     await t.api(page, 'DELETE', `/api/system/user/${u.user_id}`);
   }
+  await t.api(page, 'DELETE', `/api/system/role/${roleId}`);
 });
 
 test('06｜菜单管理与部门管理：树形结构', async ({ page }) => {

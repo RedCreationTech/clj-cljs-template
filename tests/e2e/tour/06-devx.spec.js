@@ -1,5 +1,5 @@
 // 分镜 11 监控与工具：服务监控 · 缓存监控 · 连接池 · Integrant 视图 · Swagger · 表单构建
-// 分镜 12 个性化与收尾：多标签页 · 中英文 · 密度字号 · 暗色主题 · 个人中心
+// 分镜 12 个性化：多标签页 · 中英文 · 密度字号 · 暗色主题 · 个人中心
 const { test, expect } = require('@playwright/test');
 const t = require('./tour-helper');
 
@@ -29,6 +29,17 @@ async function avatarMenu(page, label) {
   await t.wait(page, 400);
   await page.locator('.ant-dropdown:not(.ant-dropdown-hidden)').getByText(label, { exact: true }).first().click();
   await t.settle(page, 900);
+}
+
+/** 现造一张 200x200 的渐变 PNG（在空白页里渲染后截图），头像上传用它，仓库里不留二进制文件。 */
+async function makeAvatarPng(context) {
+  const tab = await context.newPage();
+  await tab.setContent(
+    '<body style="margin:0;width:200px;height:200px;background:linear-gradient(135deg,#409eff,#67c23a)"></body>'
+  );
+  const buffer = await tab.screenshot({ type: 'png', clip: { x: 0, y: 0, width: 200, height: 200 } });
+  await tab.close();
+  return buffer;
 }
 
 test('11｜监控与工具：从连接池到依赖图', async ({ page }) => {
@@ -63,6 +74,18 @@ test('11｜监控与工具：从连接池到依赖图', async ({ page }) => {
     await expect(page.getByText('Memory Cache').first()).toBeVisible();
     await t.pan(page, 260, 900);
   });
+  await t.say(page, '右上角两个按钮：刷新重新拉统计；清空是独立权限 monitor:cache:remove，而且要二次确认。');
+  await t.step(page, '点「清空」，先弹确认框。', async () => {
+    await page.getByRole('button', { name: /清\s*空/ }).click();
+    await expect(page.getByText('确认清空全部缓存？')).toBeVisible();
+    await t.quiet(page, 700);
+  });
+  await t.step(page, '确认后接口回「缓存已清空」，命令统计的 clear 计数加一。', async () => {
+    await page.locator('.ant-popconfirm .ant-btn-primary, .ant-popover .ant-btn-primary').first().click();
+    await expect(page.getByText('缓存已清空', { exact: true })).toBeVisible({ timeout: 10000 });
+    await t.settle(page, 1400);
+  });
+  await t.say(page, '这一页是 RuoYi Redis 面板的对应物：四个演示缓存空间，键值可以逐条查看；真正要跨实例共享的临时状态——验证码、登录失败计数、令牌续期宽限——存在 sys_kv 表里，由 infra.kv 统一管理。');
 
   await t.gotoMenu(page, '系统监控', '数据监控');
   await t.say(page, '连接池监视直接读 HikariCP 的注册指标，活跃 / 空闲 / 等待线程一目了然。');
@@ -136,20 +159,20 @@ test('11｜监控与工具：从连接池到依赖图', async ({ page }) => {
   });
 });
 
-test('12｜个性化与收尾：语言、主题与工程门禁', async ({ page }) => {
+test('12｜个性化：语言、主题与个人中心', async ({ page }) => {
   await t.open(page);
   await t.gotoMenu(page, '系统管理', '用户管理');
 
   await t.chapter(page, {
     n: 12,
-    title: '个性化 · 工程化 · 收尾',
-    subtitle: '多标签页 · 中英文 · 暗色主题 · bb 任务链',
+    title: '个性化',
+    subtitle: '多标签页 · 中英文 · 密度字号 · 暗色主题 · 个人中心',
     points: [
       '标签页保留各页面状态，右键可关闭其它 / 全部',
       '文案走 i18n/tr 词典，右上角一键切英文',
       '布局密度与字号即时生效，颜色全部走 CSS 变量',
       '亮 / 暗主题与主题色存在本地，刷新后保持',
-      '脚手架 bb new-module 生成整模块，bb ci 把住质量门禁',
+      '个人中心改昵称手机邮箱，头像走上传接口',
     ],
   });
 
@@ -217,16 +240,44 @@ test('12｜个性化与收尾：语言、主题与工程门禁', async ({ page }
     await t.wait(page, 500);
   });
 
-  await t.say(page, '个人中心可以改昵称、手机与邮箱，头像支持上传。');
+  await t.say(page, '个人中心可以改昵称、手机与邮箱，头像支持上传，走的正是同一套带令牌的传输层。');
   await t.step(page, '打开个人中心。', () => avatarMenu(page, '个人中心'));
-  await t.step(page, '基本信息与修改密码两个页签。', async () => {
+  await t.step(page, '左侧档案卡：用户、部门、角色、创建日期都来自详情接口。', async () => {
+    await expect(page.getByText('个人信息').first()).toBeVisible();
     await expect(page.getByText('用户昵称').first()).toBeVisible();
     await expect(page.getByText('手机号码').first()).toBeVisible();
+    await expect(page.getByText('所属部门').first()).toBeVisible();
   });
 
-  await t.say(page, '最后看工程门禁：bb new-module 生成模块，bb ci 串起 lint、双库测试与前端编译。');
-  await t.step(page, '回到仪表盘，导览结束。', async () => {
-    await t.open(page);
-    await expect(page.getByText('在线用户').first()).toBeVisible();
+  await t.say(page, '头像就是一张图：点圆圈弹出选文件，上传成功再重新拉一次档案。');
+  await t.step(page, '选一张 PNG 提交，头像立刻换成上传的图。', async () => {
+    const before = await page.locator('#avatar-upload + div img').getAttribute('src');
+    const buffer = await makeAvatarPng(page.context());
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      page.locator('#avatar-upload + div').click(),
+    ]);
+    await chooser.setFiles({ name: 'tour-avatar.png', mimeType: 'image/png', buffer });
+    const img = page.locator('#avatar-upload + div img');
+    await expect(img).toBeVisible({ timeout: 20000 });
+    await expect(img).not.toHaveAttribute('src', before ?? '');
+  });
+  await t.settle(page, 1000);
+  await t.say(page, '文件经 infra.files 的 store! 落到上传目录的 avatar 子目录，库里只存相对路径。');
+  await t.step(page, '顶部头像同步换上了。', async () => {
+    await expect(page.locator('.ant-layout-header .ant-avatar img, .ant-layout-header .ant-avatar-image').first())
+      .toBeVisible({ timeout: 10000 });
+  });
+
+  await t.step(page, '切到「修改密码」页签。', async () => {
+    await page.locator('.ant-tabs-tab', { hasText: '修改密码' }).click();
+    await expect(page.getByPlaceholder('请输入旧密码')).toBeVisible();
+    await expect(page.getByPlaceholder('请输入新密码')).toBeVisible();
+    await expect(page.getByPlaceholder('请再次输入新密码')).toBeVisible();
+  });
+  await t.say(page, '改密码要先验旧密码，后端拿 BCrypt 哈希比对，通过才写新哈希并让当前会话继续有效；这里只展示表单，演示账号的密码不动。');
+  await t.step(page, '回到「基本资料」页签。', async () => {
+    await page.locator('.ant-tabs-tab', { hasText: '基本资料' }).click();
+    await t.quiet(page, 800);
   });
 });

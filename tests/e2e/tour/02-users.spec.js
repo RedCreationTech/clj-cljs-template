@@ -1,5 +1,5 @@
-// 分镜 03 用户管理 · 查询与表格
-// 分镜 04 用户管理 · 新增、详情、重置密码与删除
+// 分镜 03 用户管理 · 查询、表格、导出与 CSV 导入
+// 分镜 04 用户管理 · 表单校验、增删改查、详情与重置密码
 const { test, expect } = require('@playwright/test');
 const t = require('./tour-helper');
 
@@ -7,6 +7,7 @@ const SUFFIX = String(Date.now()).slice(-6);
 const TOUR_USER = `tour${SUFFIX}`;
 const TOUR_NICK = `导览用户${SUFFIX}`;
 const SEED_PREFIX = 'tourdemo';
+const IMPORT_PREFIX = 'tourimp';
 
 const rowOf = (page, name) => page.locator('.ant-table-tbody tr.ant-table-row', { hasText: name }).first();
 const circle = (page, icon) => page.locator(`button:has(.anticon-${icon})`);
@@ -50,7 +51,7 @@ async function deleteUserByName(page, userName) {
   return !!id;
 }
 
-/** 清掉历史失败运行残留的导览用户（前缀 tour）。 */
+/** 清掉历史失败运行残留的导览用户（前缀 tour，含 tourdemo / tourview）。 */
 async function cleanTourUsers(page) {
   const body = await t.api(page, 'GET', '/api/system/user?user_name=tour&page=1&size=100');
   for (const u of (body && body.data && body.data.rows) || []) {
@@ -61,15 +62,24 @@ async function cleanTourUsers(page) {
   }
 }
 
+/** 列表是服务端分页的：新建 / 造出来的记录在最后一页，按名称筛一次才在镜头里。 */
+async function filterByUserName(page, keyword) {
+  await page.getByPlaceholder('请输入用户名称').first().fill(keyword);
+  await page.getByRole('button', { name: /搜\s*索/ }).click();
+  await t.settle(page, 900);
+}
+
 test('03｜用户管理：部门树、搜索与表格', async ({ page }) => {
+  const importModal = page.locator('#user-import-modal');
   await t.open(page);
+  await cleanTourUsers(page);
   await cleanSeeded(page);
   await t.gotoMenu(page, '系统管理', '用户管理');
 
   await t.chapter(page, {
     n: 3,
     title: '用户管理 · 查询与表格',
-    subtitle: '部门树 · 搜索表单 · 工具栏 · 服务端分页',
+    subtitle: '部门树 · 搜索表单 · 工具栏 · 服务端分页 · CSV 导入导出',
     points: [
       '左侧部门树由接口下发，点节点即按 dept_id 过滤',
       '搜索表单：用户名称 / 手机号码 / 状态 / 创建时间，折叠带高度动画',
@@ -135,12 +145,20 @@ test('03｜用户管理：部门树、搜索与表格', async ({ page }) => {
     await page.keyboard.press('Escape');
   });
 
+  await t.say(page, '列表是服务端分页的，先按前缀把这十二个演示用户筛出来，再动状态开关。');
+  await t.step(page, '筛选演示用户。', () => filterByUserName(page, SEED_PREFIX));
+
   await t.step(page, '状态列是开关，直接调 PUT 接口停用，不必进编辑页。', async () => {
     await rowOf(page, `${SEED_PREFIX}01`).locator('.ant-switch').click();
   });
   await t.settle(page, 800);
   await t.step(page, '再点回来。', () => rowOf(page, `${SEED_PREFIX}01`).locator('.ant-switch').click());
   await t.settle(page, 800);
+
+  await t.step(page, '清掉筛选条件，回到全量列表。', async () => {
+    await page.getByRole('button', { name: /重\s*置/ }).click();
+    await t.settle(page, 900);
+  });
 
   await t.say(page, '分页条在页面下方：每页条数、上下页、跳页，全部走服务端分页。');
   await t.step(page, '切到第 2 页。', () => page.locator('button', { hasText: '›' }).click());
@@ -156,7 +174,45 @@ test('03｜用户管理：部门树、搜索与表格', async ({ page }) => {
     expect(download.suggestedFilename()).toContain('users_export');
   });
 
+  await t.say(page, '「导入」是同一套 CSV 通道的反向：先下模板，填好再传上来。');
+  await t.step(page, '打开导入弹窗。', async () => {
+    await page.getByRole('button', { name: /导\s*入/ }).click();
+    await expect(importModal).toBeVisible();
+  });
+  await t.step(page, '下载模板，表头就是可导入的八个字段。', async () => {
+    const [template] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20000 }),
+      importModal.getByRole('button', { name: /下载模板/ }).click(),
+    ]);
+    expect(template.suggestedFilename()).toContain('user_import_template');
+  });
+  await t.say(page, '后端逐行建用户，密码统一给 123456，失败行会带回具体原因。');
+  await t.step(page, '选一个两行的 CSV，提交。', async () => {
+    const lines = ['user_name,nick_name,email,phonenumber,sex,status,dept_id,remark']
+      .concat([1, 2].map((i) => `${IMPORT_PREFIX}${i},导入用户${i},${IMPORT_PREFIX}${i}@example.com,1390000900${i},0,0,4,导览录像临时数据`))
+      .join('\n');
+    await importModal.locator('input[type=file]').setInputFiles({
+      name: 'tour-import.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from(`${lines}\n`),
+    });
+    await expect(importModal.getByText('tour-import.csv')).toBeVisible();
+    await importModal.getByRole('button', { name: /确\s*定/ }).click();
+  });
+  await t.step(page, '导入结果分别给出成功与失败条数，弹窗随之关闭。', async () => {
+    await expect(page.getByText(/导入完成：成功 2 条，失败 0 条/)).toBeVisible({ timeout: 20000 });
+    await expect(importModal).toHaveCount(0);
+  });
+  await t.settle(page, 900);
+  await t.step(page, '筛出刚导入的两条。', async () => {
+    await filterByUserName(page, IMPORT_PREFIX);
+    await expect(rowOf(page, `${IMPORT_PREFIX}1`)).toBeVisible();
+    await expect(rowOf(page, `${IMPORT_PREFIX}2`)).toBeVisible();
+  });
+  await t.say(page, '导入的用户没有角色与岗位，密码也是默认值，接下来该走「重置密码」和「分配角色」。');
+
   await cleanSeeded(page);
+  await cleanTourUsers(page);
 });
 
 test('04｜用户管理：新增、详情、重置密码与删除', async ({ page }) => {
@@ -167,8 +223,9 @@ test('04｜用户管理：新增、详情、重置密码与删除', async ({ pag
   await t.chapter(page, {
     n: 4,
     title: '用户管理 · 增删改查',
-    subtitle: '弹窗表单 · 详情抽屉 · 重置密码 · 批量删除',
+    subtitle: '弹窗表单 · 前端校验 · 详情抽屉 · 重置密码 · 批量删除',
     points: [
+      '表单校验：空表单一提交必填项标红，请求不发出去',
       '新增 / 修改：双列布局弹窗，部门树选择 + 岗位角色多选',
       '详情：点用户名称从右侧拉出抽屉，角色岗位以标签呈现',
       '重置密码、分配角色是独立接口，密码只以哈希入库',
@@ -180,6 +237,16 @@ test('04｜用户管理：新增、详情、重置密码与删除', async ({ pag
     await page.getByRole('button', { name: /新\s*增/ }).click();
     await expect(page.getByRole('heading', { name: '添加用户' })).toBeVisible();
   });
+
+  await t.say(page, '先什么都不填，直接提交一次，看看前端的表单校验。');
+  await t.step(page, '必填项当场标红，请求压根没发出去。', async () => {
+    await page.getByRole('button', { name: /确\s*定/ }).last().click();
+    await expect(page.locator('.ant-form-item-explain-error')).toHaveCount(2);
+    await expect(page.getByText('请输入用户昵称').first()).toBeVisible();
+    await expect(page.getByText('请输入用户名称').first()).toBeVisible();
+  });
+  await t.say(page, '规则写在 Form.Item 的 rules 里：昵称与登录名必填，密码默认 123456；提交前整表校验，不通过就不发请求。');
+
   await t.say(page, '左列是基本信息，右列是账号密码，字段排布与 RuoYi 一致。');
   await t.step(page, '填用户昵称。', () => page.locator('#nick_name').first().fill(TOUR_NICK));
   await t.step(page, '归属部门用树选择器。', async () => {
@@ -204,9 +271,11 @@ test('04｜用户管理：新增、详情、重置密码与删除', async ({ pag
     page.getByRole('button', { name: /确\s*定/ }).last().click()
   );
   await t.settle(page, 1300);
-  await t.step(page, '创建成功，列表刷新出现新用户。', () =>
-    expect(rowOf(page, TOUR_NICK)).toBeVisible()
-  );
+  await t.say(page, '列表是服务端分页的，新记录排在最后一页——按登录名筛一下就能定位到它。');
+  await t.step(page, '创建成功，筛出这条新用户。', async () => {
+    await filterByUserName(page, TOUR_USER);
+    await expect(rowOf(page, TOUR_NICK)).toBeVisible();
+  });
 
   await t.step(page, '点用户名称打开详情抽屉。', async () => {
     await rowOf(page, TOUR_NICK).getByText(TOUR_USER).click();

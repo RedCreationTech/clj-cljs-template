@@ -1,5 +1,6 @@
 (ns tasks.tour
-  "功能导览录像:跑 tests/e2e/tour 的 12 个分镜,按分镜顺序拼成 target/tour/tour.mp4,
+  "功能导览录像:跑 tests/e2e/tour 的全部分镜(编号 01~NN,一个测试一段),
+   按分镜顺序拼成 target/tour/tour.mp4,
    并生成内嵌章节、时间轴 chapters.txt 与分镜脚本 storyboard.md。
 
    台词由 tests/e2e/tour/tour-helper.js 直接画在页面上,字幕天然录在视频里,不需要后期压制。
@@ -186,7 +187,7 @@
   (u/exec! [(or (u/exe "node") (u/fail! "找不到 node")) "tests/e2e/tour/toc-band.js"]))
 
 (defn- composite!
-  "tour-raw.mp4 + 12 张目录图 + 章节元数据 → tour.mp4(成片)。"
+  "tour-raw.mp4 + 每段一张目录图 + 章节元数据 → tour.mp4(成片)。"
   [segments]
   (let [meta-idx (inc (count segments))
         images (map #(format "%s/toc/%02d.png" out-dir (:no %)) segments)]

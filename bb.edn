@@ -37,7 +37,7 @@
                     :task (dev/test-mysql! *command-line-args*)}
   e2e              {:doc  "Playwright 端到端测试(需后端已在 3000 运行)"
                     :task (dev/e2e! *command-line-args*)}
-  video:tour       {:doc  "录制 12 段功能导览并合成 target/tour/tour.mp4(左侧常驻目录 + 内嵌章节 + storyboard.md;--compose-only 只重新合成;需要 ffmpeg)"
+  video:tour       {:doc  "录制 tests/e2e/tour 的全部功能导览分镜并合成 target/tour/tour.mp4(左侧常驻目录 + 内嵌章节 + storyboard.md;--compose-only 只重新合成;需要 ffmpeg)"
                     :task (tour/video! *command-line-args*)}
   db:roundtrip     {:doc  "迁移往返检查:up → down → up(默认临时 SQLite;设 JDBC_URL 则用该库,MySQL 自动选 migrations 目录)"
                     :task (dev/roundtrip!)}

@@ -11,7 +11,7 @@ const path = require('path');
 
 const SPEED = Number(process.env.TOUR_SPEED || 1);
 const OUT_DIR = process.env.TOUR_OUT_DIR || path.join('target', 'tour', 'storyboard');
-const TOTAL = Number(process.env.TOUR_CHAPTERS || 12);
+const TOTAL = Number(process.env.TOUR_CHAPTERS || 14);
 
 let current = null; // 正在录制的分镜，用于累积台词
 
@@ -53,11 +53,34 @@ async function ensureOverlay(page) {
         #tour-card ul { list-style: none; padding: 0; margin: 0; font-size: 21px; color: #e6efff; }
         #tour-card li { margin: 10px 0; }
         #tour-card li::before { content: "·"; color: #409eff; margin-right: 12px; font-weight: 700; }
-        #tour-card .foot { position: absolute; bottom: 40px; font-size: 16px; color: #7d8ca3; letter-spacing: 2px; }`;
+        #tour-card .foot { position: absolute; bottom: 40px; font-size: 16px; color: #7d8ca3; letter-spacing: 2px; }
+        #tour-term { position: absolute; inset: 0; display: none; flex-direction: column;
+                     justify-content: center; align-items: center; background: rgba(8,11,18,.97); }
+        #tour-term .win { width: 74%; max-width: 980px; border-radius: 12px; overflow: hidden;
+                          background: #0e1420; border: 1px solid #223050;
+                          box-shadow: 0 24px 60px rgba(0,0,0,.55); }
+        #tour-term .bar { display: flex; align-items: center; gap: 8px; padding: 11px 16px;
+                          background: #162032; border-bottom: 1px solid #223050; }
+        #tour-term .bar i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+        #tour-term .bar .r { background: #ff5f57; }
+        #tour-term .bar .y { background: #febc2e; }
+        #tour-term .bar .g { background: #28c840; }
+        #tour-term .bar span { color: #8b9ab0; font-size: 13px; margin-left: 10px;
+                               font-family: ui-monospace, Menlo, Consolas, monospace; }
+        #tour-term pre { margin: 0; padding: 20px 24px 26px; min-height: 320px; max-height: 62vh;
+                         overflow: auto;
+                         font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 17px;
+                         line-height: 1.7; color: #c9d6e8; white-space: pre-wrap; }
+        #tour-term b { color: #7ee787; font-weight: 600; }
+        #tour-term u { color: #7c8ea8; text-decoration: none; }
+        #tour-term em { color: #ffd166; font-style: normal; font-weight: 600; }`;
       const root = document.createElement('div');
       root.id = 'tour-root';
       root.innerHTML =
         '<div id="tour-card"></div>' +
+        '<div id="tour-term"><div class="win">' +
+        '<div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span></span></div>' +
+        '<pre></pre></div></div>' +
         '<div id="tour-chip"></div>' +
         '<div id="tour-rec"><i></i><span>REC</span></div>' +
         '<div id="tour-caption"></div>';
@@ -80,6 +103,18 @@ async function ensureOverlay(page) {
           const el = document.getElementById('tour-card');
           el.innerHTML = html || '';
           el.style.display = html ? 'flex' : 'none';
+        },
+        term(html, label) {
+          const el = document.getElementById('tour-term');
+          if (html) {
+            el.querySelector('.bar span').textContent = label || '';
+            const pre = el.querySelector('pre');
+            pre.innerHTML = html;
+            pre.scrollTop = pre.scrollHeight;
+            el.style.display = 'flex';
+          } else {
+            el.style.display = 'none';
+          }
         },
       };
     },
@@ -140,6 +175,38 @@ async function step(page, text, action, { lead = 350, after = 1100 } = {}) {
 /** 连续台词，用于纯展示型段落。 */
 async function voiceover(page, items) {
   for (const [text, ms] of items) await say(page, text, ms);
+}
+
+/** 终端里的一行：转义后把 **高亮** 变成黄色。 */
+const rich = (s) => esc(s).replace(/\*\*([^*]+)\*\*/g, '<em>$1</em>');
+
+/**
+ * 终端卡：整屏假终端，逐行打出命令与输出（工程链一段用；命令在录制前真跑过，这里只回放结果）。
+ * rows 形如 [["bb ci", "…", "**检查全部通过**"], ["bb uberjar", "…"]]，第一列是命令，其余是输出行，
+ * 多组之间自动空一行。
+ */
+async function terminal(page, { label = 'babashka', rows = [], lead = 600, gap = 700, hold = 2600 } = {}) {
+  await ensureOverlay(page);
+  await page.evaluate(() => window.__tour.set(''));
+  const lines = [];
+  rows.forEach(([cmd, ...outs], i) => {
+    if (i) lines.push({ html: '', text: null });
+    lines.push({ html: `<b>$ ${rich(cmd)}</b>`, text: `$ ${cmd}` });
+    outs.forEach((o) => lines.push({ html: `<u>${rich(o)}</u>`, text: null }));
+  });
+  for (let i = 0; i < lines.length; i += 1) {
+    const body = lines.slice(0, i + 1).map((l) => l.html).join('\n');
+    // eslint-disable-next-line no-await-in-loop
+    await page.evaluate(({ body: html, label: l }) => window.__tour.term(html, l), { body, label });
+    if (lines[i].text && current) {
+      current.lines.push({ text: lines[i].text, at: Date.now() - current.startedAt, for: gap * 3 });
+      dump();
+    }
+    // eslint-disable-next-line no-await-in-loop
+    await wait(page, i === 0 ? lead : gap);
+  }
+  await wait(page, hold);
+  await page.evaluate(() => window.__tour.term(''));
 }
 
 /** 清掉字幕，便于看清页面本身（例如切主题）。 */
@@ -257,6 +324,7 @@ module.exports = {
   say,
   step,
   voiceover,
+  terminal,
   quiet,
   open,
   reload,

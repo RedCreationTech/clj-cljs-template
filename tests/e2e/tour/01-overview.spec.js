@@ -33,6 +33,29 @@ test('01｜开场：一个进程跑完整栈', async ({ page }) => {
 
   await t.pan(page, -420);
   await t.say(page, '左侧菜单不是静态数据：它按当前登录角色的权限从接口动态加载。');
+
+  await t.say(page, '菜单多了以后顶部这个搜索框比逐级点开快：候选项同样只来自当前用户能访问的页面。');
+  await t.step(page, '点搜索图标，输入「岗位」。', async () => {
+    await page.locator('.ant-layout-header .anticon-search').first().click();
+    await t.wait(page, 500);
+    const popover = page.locator('.ant-popover:visible').last();
+    await popover.locator('input[role=combobox]').first().fill('岗位');
+    await t.wait(page, 600);
+  });
+  await t.step(page, '按钮类菜单不进候选，所以这里只出现「岗位管理」。', async () => {
+    await t.pickOption(page, '岗位管理');
+  });
+  await t.settle(page, 1000);
+  await t.step(page, '选中即跳转，页签与面包屑一起跟上。', async () => {
+    await expect(page.locator('.tab-item', { hasText: '岗位管理' }).first()).toBeVisible();
+    await expect(page.getByPlaceholder('请输入岗位名称')).toBeVisible();
+  });
+  await t.say(page, '跳转走的是同一个路由表，越权的菜单既搜不到也进不去。');
+  await t.step(page, '回到仪表盘。', async () => {
+    await page.locator('.tab-item', { hasText: '首页' }).first().click();
+    await t.settle(page, 800);
+  });
+
   await t.say(page, '下面从登录与安全开始，逐段演示模板的全部能力。');
 });
 
