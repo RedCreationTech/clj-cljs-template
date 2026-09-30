@@ -1,5 +1,7 @@
 (ns com.ruoyi.infra.files
   "上传文件的校验、落盘与读取。
+   - 目录:上传根目录由 :upload-config 的 :dir 决定(环境变量 UPLOAD_DIR,默认 uploads),
+     头像在它下面的 avatar/,不要在控制器里再写死路径;
    - 校验:扩展名白名单 + 大小上限(system.edn 的 :upload-config,环境变量 UPLOAD_MAX_MB / UPLOAD_EXTENSIONS);
    - 落盘:客户端给的文件名只取最后一段并替换不安全字符,同名不覆盖;
    - 读取:按名字读、删文件时先规范化路径,确认仍是根目录的直接子文件(防 ../ 目录穿越)。
@@ -9,6 +11,27 @@
    [clojure.string :as str])
   (:import
    [java.io File]))
+
+(def default-upload-dir
+  "没有配置 :upload-config :dir 时使用的上传目录(相对工作目录)。"
+  "uploads")
+
+(defn upload-dir
+  "上传根目录:system.edn 的 :upload-config :dir(环境变量 UPLOAD_DIR),没配置时用 default-upload-dir。
+   统一去掉结尾的 /,拼接子目录时不会出现 uploads//avatar。"
+  [{:keys [dir]}]
+  (let [d (or (not-empty dir) default-upload-dir)]
+    (str/replace d #"/+$" "")))
+
+(defn avatar-dir
+  "头像目录(上传根目录下的 avatar/),控制器只从这里面读写图片。"
+  [upload-config]
+  (str (upload-dir upload-config) "/avatar"))
+
+(defn resource-dir
+  "资源文件目录:目前与上传根目录同一个,单独留出是为了以后拆分导出文件目录时只改这里。"
+  [upload-config]
+  (upload-dir upload-config))
 
 (defn safe-name
   "客户端文件名 → 安全文件名:去掉目录部分,只保留字母、数字、点、横线、下划线(含中文);

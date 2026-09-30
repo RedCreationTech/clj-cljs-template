@@ -5,12 +5,13 @@
    [com.ruoyi.web.controllers.common :as common]))
 
 (defn common-routes [{:keys [upload-config]}]
-  [["/captchaImage" {:get {:summary "生成验证码" :handler (partial captcha/captcha-image {})}}]
-   ["/common" {:auth? true}
-    ;; <img> 带不了令牌,头像图片公开访问(只读头像目录里的图片)
-    ["/avatar/:name" {:auth? false
-                      :get {:summary "头像图片" :handler (partial common/avatar {})}}]
-    ["/upload" {:post {:summary "通用文件上传(类型与大小见 :upload-config)"
-                       :handler (partial common/upload {:upload-config upload-config})}}]
-    ["/download" {:get {:summary "通用文件下载" :handler (partial common/download {})}}]
-    ["/download/resource" {:get {:summary "下载资源文件" :handler (partial common/download-resource {})}}]]])
+  (let [cfg {:upload-config upload-config}]
+    [["/captchaImage" {:get {:summary "生成验证码" :handler (partial captcha/captcha-image {})}}]
+     ["/common" {:auth? true}
+      ;; <img> 带不了令牌,头像图片公开访问(只读头像目录里的图片)
+      ["/avatar/:name" {:auth? false
+                        :get {:summary "头像图片" :handler (partial common/avatar cfg)}}]
+      ["/upload" {:post {:summary "通用文件上传(类型、大小与目录见 :upload-config)"
+                         :handler (partial common/upload cfg)}}]
+      ["/download" {:get {:summary "通用文件下载" :handler (partial common/download cfg)}}]
+      ["/download/resource" {:get {:summary "下载资源文件" :handler (partial common/download-resource cfg)}}]]]))

@@ -59,7 +59,8 @@
   (kv/use-store! (kv/memory-store)))
 
 (defmethod ig/init-key :app.system/job-scheduler
-  [_ {:keys [scheduler query-fn migrations]}]
-  ;; 依赖 migrations 确保 sys_job 表已创建
-  (scheduler/init! scheduler query-fn)
+  [_ {:keys [scheduler query-fn enabled?] :or {enabled? true}}]
+  ;; Quartz 是内存 JobStore:每个实例都会各自触发一遍 sys_job 里的任务。
+  ;; 多实例部署时从实例设 SCHEDULER_ENABLED=false,任务只由一个实例调度。
+  (scheduler/init! scheduler query-fn {:load-jobs? enabled?})
   {:scheduler scheduler})

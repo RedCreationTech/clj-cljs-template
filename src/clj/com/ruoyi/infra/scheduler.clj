@@ -220,9 +220,12 @@
       ruoyi-job)))
 
 (defn init!
-  "初始化调度器：注入并加载任务。"
-  [scheduler query-fn]
+  "初始化调度器：注入 scheduler 与 query-fn,并把 sys_job 里的任务装载进 Quartz。
+   `:load-jobs? false` 时只注入不装载 —— 多实例部署的从实例用它避免重复触发任务。"
+  [scheduler query-fn & [{:keys [load-jobs?] :or {load-jobs? true}}]]
   (set-scheduler! scheduler)
   (set-query-fn! query-fn)
   (.setJobFactory ^org.quartz.Scheduler scheduler (make-job-factory))
-  (load-jobs!))
+  (if load-jobs?
+    (load-jobs!)
+    (log/info "调度器已注入,但按配置跳过装载 sys_job 任务(SCHEDULER_ENABLED=false)")))

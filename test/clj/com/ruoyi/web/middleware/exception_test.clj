@@ -24,14 +24,16 @@
         (is (= "/api/test" (:uri body)))))))
 
 (deftest test-handler-logs-server-errors
-  (testing "handler 在状态码 >= 500 时不会丢失异常信息"
+  (testing "5xx 只回通用文案:异常类名、URI、ex-data 都留在服务端日志里"
     (let [ex (RuntimeException. "server error")
           response (exception/handler "internal" 500 ex {:uri "/error"})]
       (is (= 500 (:status response)))
       (let [body (parse-json-body response)]
-        (is (= "internal" (:message body)))
+        (is (= 500 (:code body)))
         (is (= "服务器内部错误,请稍后重试" (:msg body)) "5xx 不泄露异常消息")
-        (is (= "java.lang.RuntimeException" (:exception body)))))))
+        (is (not (contains? body :exception)) "5xx 不回显异常类名")
+        (is (not (contains? body :uri)) "5xx 不回显请求路径")
+        (is (not (contains? body :data)) "5xx 不回显 ex-data")))))
 
 (defn- make-throwing-handler [e]
   (fn [_request]
@@ -83,31 +85,34 @@
       (is (= "forbidden" (:message (parse-json-body response)))))))
 
 (deftest test-wrap-exception-internal-exception
-  (testing "内部异常映射为 500"
+  (testing "内部异常映射为 500,响应只有通用文案"
     (let [ex (ex-info "内部错误" {:type :system.exception/internal})
           handler (wrap-handler (make-throwing-handler ex))
-          response (handler {:uri "/api/fail"})]
+          response (handler {:uri "/api/fail"})
+          body (parse-json-body response)]
       (is (= 500 (:status response)))
-      (is (= "internal exception" (:message (parse-json-body response)))))))
+      (is (= 500 (:code body)))
+      (is (= "服务器内部错误,请稍后重试" (:msg body)))
+      (is (not (contains? body :message)) "5xx 不回显内部消息"))))
 
 (deftest test-wrap-exception-default-exception
   (testing "未注册类型异常使用默认 500 处理器"
     (let [ex (ex-info "未知错误" {:unknown true})
           handler (wrap-handler (make-throwing-handler ex))
-          response (handler {:uri "/api/unknown"})]
+          response (handler {:uri "/api/unknown"})
+          body (parse-json-body response)]
       (is (= 500 (:status response)))
-      (let [body (parse-json-body response)]
-        (is (= "default" (:message body)))
-        (is (not (contains? body :data)) "5xx 不返回 ex-data")
-        (is (= "/api/unknown" (:uri body)))))))
+      (is (= "服务器内部错误,请稍后重试" (:msg body)) "异常消息不外泄")
+      (is (not (contains? body :data)) "5xx 不返回 ex-data")
+      (is (not (contains? body :uri)) "5xx 不回显请求路径"))))
 
 (deftest test-wrap-exception-runtime-exception
   (testing "普通 RuntimeException 使用默认 500 处理器"
     (let [ex (RuntimeException. "boom")
           handler (wrap-handler (make-throwing-handler ex))
-          response (handler {:uri "/api/crash"})]
+          response (handler {:uri "/api/crash"})
+          body (parse-json-body response)]
       (is (= 500 (:status response)))
-      (let [body (parse-json-body response)]
-        (is (= "default" (:message body)))
-        (is (= "java.lang.RuntimeException" (:exception body)))
-        (is (= "/api/crash" (:uri body)))))))
+      (is (= 500 (:code body)))
+      (is (not (contains? body :exception)) "5xx 不回显异常类名")
+      (is (not (contains? body :uri)) "5xx 不回显请求路径"))))

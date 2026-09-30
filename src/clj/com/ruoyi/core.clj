@@ -53,6 +53,9 @@
     (secrets/verify! (:profile opts) (System/getenv))
     ((or (:start params) (:start defaults) (fn [])))
     (let [cfg (-> (config/system-config opts) ig/expand)]
+      ;; 配置体检只提示不阻止启动:SQLite、没设 TZ 这类默认值能跑,但不是给生产用的
+      (doseq [warning (config/prod-warnings cfg (System/getenv))]
+        (log/warn warning))
       ;; 监控页展示的就是真正跑起来的那份配置,不能请求时按别的 profile 再读一遍
       (config/remember-active-config! cfg)
       (->> cfg ig/init (reset! system)))))

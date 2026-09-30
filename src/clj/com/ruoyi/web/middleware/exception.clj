@@ -18,20 +18,24 @@
     (or (not-empty (ex-message exception)) (default-msgs status) "请求失败")))
 
 (defn handler
-  "异常 → JSON 响应。body 与控制器的约定一致(:code / :msg),另附异常类型便于排查;
-   ex-data 只在 4xx 时返回(5xx 可能含内部信息)。"
+  "异常 → JSON 响应。body 与控制器的约定一致(:code / :msg)。
+   4xx 另附异常消息、类型、ex-data 与 URI 便于前端定位;
+   5xx 只回通用文案 —— 异常类名、URI、堆栈都属于服务端,不能出现在响应里(日志会记全)。"
   [message status exception request]
   (when (>= status 500)
-    (log/error exception "Exception:" (.getMessage exception)))
+    (log/error exception (str "Exception: " (.getMessage exception) " uri=" (:uri request))))
   {:status  status
    :headers {"content-type" "application/json;charset=utf-8"}
    :body    (json/write-str
-             (cond-> {:code      status
-                      :msg       (user-message status exception)
-                      :message   message
-                      :exception (.getName (.getClass exception))
-                      :uri       (:uri request)}
-               (< status 500) (assoc :data (ex-data exception))))})
+             (if (< status 500)
+               {:code      status
+                :msg       (user-message status exception)
+                :message   message
+                :exception (.getName (.getClass exception))
+                :uri       (:uri request)
+                :data      (ex-data exception)}
+               {:code status
+                :msg  (user-message status exception)}))})
 
 (def wrap-exception
   (exception/create-exception-middleware

@@ -88,7 +88,10 @@
  {:scheduler  #ig/ref :cronut/scheduler
   :query-fn   #ig/ref :db.sql/query-fn
   :migrations #ig/ref :db.sql/migrations
-  :db         #ig/ref :db.sql/connection}
+  :db         #ig/ref :db.sql/connection
+  ;; Quartz 用的是内存 JobStore:每个实例都会各自触发一遍 sys_job 里的任务。
+  ;; 多实例部署时把从实例设为 SCHEDULER_ENABLED=false,只留一个实例跑任务。
+  :enabled?   #boolean #or [#env SCHEDULER_ENABLED "true"]}
 
  :reitit.routes/api
  {:base-path      "/api"
@@ -100,8 +103,10 @@
                    :lock-minutes      #long #or [#env LOGIN_LOCK_MINUTES 10]
                    ;; 登录页预填 admin/admin123,只在开发/测试环境
                    :demo-account?     #profile {:dev true :test true :prod false}}
-  ;; 上传限制(见 com.ruoyi.infra.files):单文件大小上限(MB)与扩展名白名单(逗号分隔,留空用默认)
-  :upload-config  {:max-mb     #long #or [#env UPLOAD_MAX_MB 10]
+  ;; 上传限制(见 com.ruoyi.infra.files):上传根目录、单文件大小上限(MB)与扩展名白名单(逗号分隔,留空用默认)
+  ;; 目录相对 JVM 工作目录;容器里请挂到持久卷上,否则换容器就丢文件
+  :upload-config  {:dir        #or [#env UPLOAD_DIR "uploads"]
+                   :max-mb     #long #or [#env UPLOAD_MAX_MB 10]
                    :extensions #or [#env UPLOAD_EXTENSIONS ""]}
   :query-fn       #ig/ref :db.sql/query-fn
   :datasource     #ig/ref :db.sql/connection
@@ -130,11 +135,12 @@
  {:schedule []}
 
  :db.sql/connection
+ ;; 连接池上限可用 DB_MAX_ACTIVE 覆盖;SQLite 下 com.ruoyi.config/with-dialect-pool 会强制回 1
  #profile {:dev  {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:ruoyi.db"]
                   :init-size  1
                   :min-idle   1
                   :max-idle   1
-                  :max-active 1
+                  :max-active #long #or [#env DB_MAX_ACTIVE 1]
                   :connection-test-query "SELECT 1"
                   :validation-timeout 3000}
            ;; 测试用独立的 test.db,不污染开发库(bb test 每次先删除它)
@@ -142,14 +148,14 @@
                   :init-size  1
                   :min-idle   1
                   :max-idle   1
-                  :max-active 1
+                  :max-active #long #or [#env DB_MAX_ACTIVE 1]
                   :connection-test-query "SELECT 1"
                   :validation-timeout 3000}
            :prod {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:ruoyi.db"]
                   :init-size  1
                   :min-idle   1
                   :max-idle   1
-                  :max-active 1
+                  :max-active #long #or [#env DB_MAX_ACTIVE 1]
                   :connection-test-query "SELECT 1"
                   :validation-timeout 3000}}
 
@@ -172,5 +178,6 @@
                   :migration-dir    #or [#env MIGRATION_DIR "migrations-sqlite"]}
            :prod {:store            :database
                   :db               {:datasource #ig/ref :db.sql/connection}
-                  :migrate-on-init? true
+                  ;; 多实例部署时从实例可设 MIGRATE_ON_INIT=false,避免和主实例抢同一批迁移
+                  :migrate-on-init? #boolean #or [#env MIGRATE_ON_INIT "true"]
                   :migration-dir    #or [#env MIGRATION_DIR "migrations-sqlite"]}}}

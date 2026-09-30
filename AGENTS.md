@@ -15,6 +15,8 @@
 - **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟。改了任务名或参数，要同步改 CI。
 - **新增业务模块用 `bb new-module`**（见 README「新增业务模块」）。源码里的 `;; [new-module] <tag>` 注释是脚手架的登记点（`system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs`），**不要删除或改写这些标记行**；重构这些文件时把标记保留在对应集合的末尾。改动脚手架模板（`bb/tasks/scaffold/*.clj`）后，至少生成一个模块跑一遍 lint / fmt:check / 生成的测试 / `bb cljs:check`（CI 的 scaffold 任务会做完整检查）。
 - **生产密钥**：prod profile 下 `JWT_SECRET`（≥32 字符）与 `COOKIE_SECRET`（16 字节）缺失或为内置默认值时拒绝启动（`com.ruoyi.infra.secrets`）；dev/test 用默认值即可，不要把真实密钥写进仓库。
+- **配置只走 `system.edn` + 环境变量，不要在读到配置的代码里再读 `System/getenv`**：环境相关项在 `resources/system.edn` 用 `#env`/`#profile` 声明，跨方言兜底（迁移目录、连接池）与 prod 体检由 `com.ruoyi.config` 的纯函数（`with-default-migration-dir` / `with-dialect-pool` / `prod-warnings`）在 `system-config` 里统一处理后交给 Integrant，新增这类规则请在这里加纯函数并补 `config_test`，不要在控制器里读环境变量。连接池：SQLite 强制单连接，MySQL 默认 10（`DB_MAX_ACTIVE` 可覆盖）；定时任务用内存 JobStore，多实例部署时非主实例设 `SCHEDULER_ENABLED=false`；启动迁移可用 `MIGRATE_ON_INIT=false` 关闭。
+- **5xx 响应不能带内部信息**：`web.middleware.exception/handler` 对 5xx 只回 `{:code :msg}`（通用文案），异常类名、URI、`ex-data`、堆栈只进服务端日志；4xx 才保留异常消息与 `ex-data` 便于前端定位。给响应加字段前先确认不会泄露路径、SQL、依赖版本等。
 - **前端编译前必须打 `node_modules` 补丁**：Quill/Parchment 的 static super 会被 Closure Compiler 编译坏（公告富文本渲染不出来），补丁表在 `bb/tasks/vendor.clj`，由 `bb release` / `bb cljs:check` / `bb dev` / `bb e2e` 自动执行。手动跑 shadow-cljs 或 `npm install` 之后要先 `bb patch:vendor`；升级 quill/parchment 时补丁命中数对不上会直接失败，需要重新核对补丁表或确认上游已修复后删除。
 
 ## Non-Interactive Shell Commands
@@ -114,7 +116,7 @@ clj-nrepl-eval -p 7000 '(user/migrate)'     # 运行迁移
 - **需要跨实例共享的临时状态放 `infra.kv`**（`put!` 带毫秒 TTL、`get-val`、`take!` 一次性读取、`del!`）：系统运行时存在 `sys_kv` 表，单元测试 / REPL 没起系统时是进程内存（测试里用 `(kv/use-store! (kv/memory-store))` 隔离）。验证码（`captcha:<uuid>`）、登录失败计数与锁定（`login-fail:` / `login-lock:`）、续期宽限（`grace:<jti>`）都在这里；不要再用 atom 存这类状态，否则多实例部署时各实例各记一份。过期键由会话清理线程每 5 分钟顺带删除。
 - **鉴权由路由数据驱动**(`web.middleware.auth`,挂在 `routes/api.clj` 的顶层):`wrap-jwt-auth` 写入 `:identity`,`authorize` 读取路由数据 `:auth? true`(要求登录,可放在路由组上)与 `:perms "模块:资源:动作"`(字符串或集合,满足任一);未登录 401、无权限 403。**不要**再在路由组里挂中间件。权限按请求实时算(`domain.system.permission`),新接口的权限标识要在迁移里登记成按钮菜单(F)并授权给 admin 角色(参考 `20260924000001-add-button-perms`)。
 - **数据权限**:`domain.system.data-scope` 计算当前用户可见范围(角色 `data_scope` 1~5,多角色取并集),列表查询把 `sql-params` 传给 SQL 里固定的 `AND (:scope_all = 1 OR x.dept_id IN (:v*:scope_dept_ids) OR x.user_id = :scope_user_id)`,单条操作用 `allows?` 检查(用户管理控制器是完整示例)。
-- 文件上传下载要求登录,路径必须经 `infra.files/resolve-in` / `resolve-under` / `store!`,不能直接用请求里的文件名拼路径;上传先用 `files/upload-error` 按 `:upload-config`(类型白名单、大小上限)校验。
+- 文件上传下载要求登录,路径必须经 `infra.files/resolve-in` / `resolve-under` / `store!`,不能直接用请求里的文件名拼路径;上传先用 `files/upload-error` 按 `:upload-config`(类型白名单、大小上限)校验。**上传根目录只有一个来源**:`:upload-config` 的 `:dir`(环境变量 `UPLOAD_DIR`,默认 `uploads`),取路径用 `files/upload-dir` / `files/avatar-dir` / `files/resource-dir`,控制器通过路由数据 `(partial handler {:upload-config upload-config})` 拿到它,不要再各自 `def upload-dir` 写死。测试里直接传带 `:upload-config` 的 context,不用 `with-redefs`。
 - 列表接口读查询参数用 `controllers.params/query`:reitit 的 `:query-params` 是字符串键,直接传给领域层会让筛选条件被静默忽略。
 - 用户记录不带密码哈希(`find-user-by-id` 已去掉 `:password`,列表 SQL 不查);校验密码用 `user-service/password-matches?`。`update-user!` 只改给出的字段,空密码视为不修改。
 - 认证相关配置都在 `system.edn` 的 `:reitit.routes/api :auth-config`，环境变量覆盖见 README。

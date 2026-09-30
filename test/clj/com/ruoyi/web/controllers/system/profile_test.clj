@@ -1,9 +1,9 @@
 (ns com.ruoyi.web.controllers.system.profile-test
   "个人中心控制器测试。"
   (:require
+   [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing]]
    [com.ruoyi.infra.security :as security]
-   [com.ruoyi.web.controllers.common :as common]
    [com.ruoyi.web.controllers.system.profile :as profile])
   (:import
    [java.nio.file Files]
@@ -64,13 +64,14 @@
       (is (nil? (:dept_id p)))
       (is (nil? (:password p)) "改密码必须走 /password 并核对旧密码"))))
 
-(defn- with-avatar-dir [f]
+(defn- with-avatar-dir
+  "在临时上传目录里跑测试:头像落在它下面的 avatar/。f 是 (fn [ctx dir])。"
+  [f]
   (let [dir (.toFile (Files/createTempDirectory "avatar-test" (make-array FileAttribute 0)))]
     (try
-      (with-redefs [common/avatar-dir (str dir "/")]
-        (f dir))
+      (f {:upload-config {:dir (.getPath dir)}} dir)
       (finally
-        (doseq [x (.listFiles dir)] (.delete x))
+        (doseq [x (file-seq dir)] (.delete x))
         (.delete dir)))))
 
 (defn- upload [filename content]
@@ -80,15 +81,19 @@
 
 (deftest test-upload-avatar
   (with-avatar-dir
-    (fn [dir]
+    (fn [ctx dir]
       (let [user-service (mock-user-service {:password (security/hash-password "admin123")})
-            call #(profile/upload-avatar {:user-service user-service} {:identity {:user-id 1} :params {:avatarfile %}})]
+            call #(profile/upload-avatar (merge {:user-service user-service} ctx)
+                                         {:identity {:user-id 1} :params {:avatarfile %}})
+            avatar-dir (io/file dir "avatar")]
         (testing "图片保存到头像目录,返回公开访问地址"
           (let [response (call (upload "me.png" "fake image content"))
                 url (get-in response [:body :data :avatar])]
             (is (= 200 (get-in response [:body :code])))
             (is (re-matches #"/api/common/avatar/\d+_me\.png" url))
-            (is (= 1 (count (.listFiles dir))))))
+            (is (= 1 (count (.listFiles avatar-dir))))
+            (is (= ["avatar"] (vec (.list dir)))
+                "落在 avatar/ 子目录,不污染上传根目录")))
         (testing "不是图片:拒绝"
           (let [response (call (upload "run.exe" "MZ"))]
             (is (= 400 (get-in response [:body :code])))

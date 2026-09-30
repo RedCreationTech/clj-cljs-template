@@ -4,7 +4,6 @@
    [clojure.string :as str]
    [com.ruoyi.domain.system.user :as user-service]
    [com.ruoyi.infra.files :as files]
-   [com.ruoyi.web.controllers.common :as common]
    [ring.util.response :as response]))
 
 (defn- ok
@@ -44,14 +43,15 @@
       (fail (.getMessage e)))))
 
 (defn upload-avatar
-  "上传头像:只接受图片(见 infra.files/image-policy),保存到 common/avatar-dir,
+  "上传头像:只接受图片(见 infra.files/image-policy),保存到头像目录(见 infra.files/avatar-dir),
    通过公开接口 /api/common/avatar/<文件名> 访问。"
   [{:keys [user-service upload-config]} request]
   (let [{:keys [tempfile filename] :as file} (get-in request [:params :avatarfile])]
     (if-let [err (files/upload-error (files/image-policy upload-config) file)]
       (ok 400 err nil)
       (try
-        (let [target (files/store! common/avatar-dir tempfile (str (System/currentTimeMillis) "_" filename))
+        (let [target (files/store! (files/avatar-dir upload-config)
+                                   tempfile (str (System/currentTimeMillis) "_" filename))
               url (str "/api/common/avatar/" (.getName target))]
           (user-service/update-user! user-service {:user-id (get-in request [:identity :user-id]) :avatar url})
           (ok {:avatar url}))

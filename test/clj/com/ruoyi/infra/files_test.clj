@@ -18,6 +18,17 @@
   (is (nil? (files/safe-name ".env")))
   (is (nil? (files/safe-name ""))))
 
+(deftest upload-dir-test
+  (testing "目录来自 :upload-config,不再写死在控制器里"
+    (is (= "uploads" (files/upload-dir {})) "没配 :dir 时用默认值")
+    (is (= "uploads" (files/upload-dir {:dir ""})))
+    (is (= "/data/files" (files/upload-dir {:dir "/data/files"})))
+    (is (= "/data/files" (files/upload-dir {:dir "/data/files///"}))
+        "结尾斜杠统一去掉,拼子目录时不会出现 //")
+    (is (= "uploads/avatar" (files/avatar-dir {})))
+    (is (= "/data/files/avatar" (files/avatar-dir {:dir "/data/files"})))
+    (is (= "/data/files" (files/resource-dir {:dir "/data/files/"})))))
+
 (deftest resolve-test
   (let [root (temp-dir)]
     (testing "resolve-in 只接受根目录的直接子文件名"

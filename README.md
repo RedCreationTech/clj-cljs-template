@@ -168,12 +168,15 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | `LOGIN_MAX_FAILURES` / `LOGIN_LOCK_MINUTES` | 5 / 10 | 同一用户名失败次数上限与锁定时长 |
 | `REGISTER_ENABLED` | `false` | 自助注册；开启后只接受用户名密码，新用户无角色 |
 | `CORS_ORIGINS` | 空（只允许同源） | 允许跨域的前端地址，逗号分隔；`*` 仅建议开发用 |
-| `UPLOAD_MAX_MB` / `UPLOAD_EXTENSIONS` | 10 / 内置白名单 | 单文件大小上限与允许的扩展名（逗号分隔）；头像另限图片、2MB。请求体整体大小请在反向代理上再限制 |
+| `UPLOAD_DIR` / `UPLOAD_MAX_MB` / `UPLOAD_EXTENSIONS` | `uploads` / 10 / 内置白名单 | 上传根目录（头像在其下的 `avatar/`，下载/删除接口只能访问这个目录）、单文件大小上限与允许的扩展名（逗号分隔）；头像另限图片、2MB。请求体整体大小请在反向代理上再限制 |
+| `DB_MAX_ACTIVE` | SQLite 1；MySQL 等 10 | HikariCP 最大连接数。**连接池会按方言兜底**：SQLite 一律强制 1（多连接只会互相等锁），MySQL 若还是 system.edn 里那组给 SQLite 的 1 则抬到 10；显式设过本变量或改过配置的都不动 |
+| `MIGRATE_ON_INIT` | `true` | 启动时自动跑迁移；已有专门的发布流程或想避免多实例同时迁移时设为 `false` |
+| `SCHEDULER_ENABLED` | `true` | 是否装载 `sys_job` 定时任务。多实例部署时只在主实例保持 `true`，其它实例设 `false`，否则同一个任务会被每个实例各跑一遍（Quartz 用的是内存 JobStore，见下） |
 | `TZ` | 主机时区 | 写库与接口返回的时间都是 JVM 默认时区的本地时间（`yyyy-MM-dd HH:mm:ss`），容器里请显式设置，如 `TZ=Asia/Shanghai` |
 
 `Dockerfile` 提供多阶段镜像构建（`clojure:temurin-21-tools-deps` 构建 → `eclipse-temurin:21-jre-alpine` 运行）；构建镜像前先执行 `bb release`，运行时用 `-e JWT_SECRET=… -e COOKIE_SECRET=…` 注入密钥。
 
-**多实例部署**：会话、验证码、登录失败计数与锁定、续期宽限都在数据库里（`sys_online`、`sys_kv`），多个实例连同一个 MySQL 即可放在负载均衡后面，不需要 Redis 或会话粘滞。各实例请使用相同的 `TZ`、`JWT_SECRET`、`COOKIE_SECRET`。例外是定时任务：Quartz 在每个实例的内存里调度，多实例会重复执行，且在某个实例上改的任务不会同步到其它实例——只在一个实例上跑任务，或改用 Quartz 的 JDBC 集群存储（见 C4 文档 §9.7）。
+**多实例部署**：会话、验证码、登录失败计数与锁定、续期宽限都在数据库里（`sys_online`、`sys_kv`），多个实例连同一个 MySQL 即可放在负载均衡后面，不需要 Redis 或会话粘滞。各实例请使用相同的 `TZ`、`JWT_SECRET`、`COOKIE_SECRET`。例外是定时任务：Quartz 用的是内存 JobStore，每个实例都会各自调度 `sys_job`，且某个实例上改的任务不会同步到其它实例——把除主实例以外的实例设 `SCHEDULER_ENABLED=false`（主实例同时在「定时任务」页负责增删改），需要真正集群化时改用 Quartz 的 JDBC 存储并建 11 张 `QRTZ_*` 表（见 C4 文档 §9.7）。生产环境启动时会打印配置体检结果：仍用 SQLite、或未设 `TZ` 都会给出警告。
 
 ---
 

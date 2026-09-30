@@ -261,15 +261,19 @@
 (defn- file-routes
   "文件管理路由。"
   [{:keys [upload-config]}]
-  [["/file"
-    ["" {:get {:perms "system:file:list" :summary "文件列表" :description "查询上传文件列表"
-               :handler (partial file/list-files {})}
-         :post {:perms "system:file:upload" :summary "上传文件" :description "上传文件到服务器(类型与大小见 :upload-config)"
-                :handler (partial file/upload-file {:upload-config upload-config})}}]
-    ["/:filename" {:get {:perms "system:file:download" :summary "下载文件" :description "下载指定文件"
-                         :handler (partial file/download-file {})}
-                   :delete {:perms "system:file:remove" :summary "删除文件" :description "删除指定文件"
-                            :handler (partial file/delete-file {})}}]]])
+  (let [cfg {:upload-config upload-config}]
+    [["/file"
+      ["" {:get  {:perms "system:file:list" :summary "文件列表" :description "查询上传文件列表"
+                  :handler (partial file/list-files cfg)}
+           :post {:perms "system:file:upload" :summary "上传文件"
+                  :description "上传文件到服务器(类型、大小与目录见 :upload-config)"
+                  :handler (partial file/upload-file cfg)}}]
+      ["/:filename" {:get    {:perms "system:file:download" :summary "下载文件"
+                              :description "下载指定文件"
+                              :handler (partial file/download-file cfg)}
+                     :delete {:perms "system:file:remove" :summary "删除文件"
+                              :description "删除指定文件"
+                              :handler (partial file/delete-file cfg)}}]]]))
 
 (defn system-routes
   "系统管理路由聚合:整组要求登录(:auth? true),各接口用 :perms 声明按钮权限(见 web.middleware.auth)。"

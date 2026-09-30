@@ -1,5 +1,5 @@
 (ns com.ruoyi.web.controllers.system.file
-  "文件管理控制器 — 上传、列表、下载、删除。"
+  "文件管理控制器 — 上传、列表、下载、删除。目录与类型限制都来自 :upload-config(见 infra.files)。"
   (:require
    [clojure.java.io :as io]
    [com.ruoyi.infra.files :as files]
@@ -7,10 +7,8 @@
   (:import
    [java.util Date]))
 
-(def upload-dir "uploads/")
-
-(defn- ensure-dir! []
-  (let [dir (io/file upload-dir)]
+(defn- ensure-dir! [upload-config]
+  (let [dir (io/file (files/upload-dir upload-config))]
     (when-not (.exists dir) (.mkdirs dir))))
 
 (defn- ok
@@ -31,9 +29,9 @@
 
 (defn list-files
   "获取上传文件列表。修改时间给 java.util.Date,由 infra.json 统一编码成本地 yyyy-MM-dd HH:mm:ss。"
-  [_ _]
-  (ensure-dir!)
-  (ok (file-entries (io/file upload-dir))))
+  [{:keys [upload-config]} _]
+  (ensure-dir! upload-config)
+  (ok (file-entries (io/file (files/upload-dir upload-config)))))
 
 (defn upload-file
   "上传文件:先按 :upload-config 校验类型与大小;文件名只保留安全字符,同名不覆盖。"
@@ -42,19 +40,20 @@
     (if-let [err (files/upload-error (files/policy upload-config) file)]
       (ok 400 err nil)
       (try
-        (let [target (files/store! upload-dir tempfile filename)]
+        (let [target (files/store! (files/upload-dir upload-config) tempfile filename)]
           (ok {:name (.getName target) :size (.length target)}))
         (catch Exception e
           (ok 500 (.getMessage e) nil))))))
 
-(defn- existing-file [request]
-  (let [f (files/resolve-in upload-dir (get-in request [:path-params :filename]))]
+(defn- existing-file [upload-config request]
+  (let [f (files/resolve-in (files/upload-dir upload-config)
+                            (get-in request [:path-params :filename]))]
     (when (and f (.isFile f)) f)))
 
 (defn download-file
   "下载文件(只能是上传目录里的文件)。"
-  [_ request]
-  (if-let [file (existing-file request)]
+  [{:keys [upload-config]} request]
+  (if-let [file (existing-file upload-config request)]
     (-> (response/response file)
         (response/header "Content-Disposition" (str "attachment; filename=\"" (.getName file) "\""))
         (response/content-type "application/octet-stream"))
@@ -62,7 +61,7 @@
 
 (defn delete-file
   "删除文件(只能是上传目录里的文件)。"
-  [_ request]
-  (if-let [file (existing-file request)]
+  [{:keys [upload-config]} request]
+  (if-let [file (existing-file upload-config request)]
     (do (.delete file) (ok "删除成功"))
     (ok 404 "文件不存在" nil)))
