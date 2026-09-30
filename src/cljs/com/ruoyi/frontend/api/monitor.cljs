@@ -59,9 +59,9 @@
               :on-success on-success :on-error on-error}))
 
 (defn clear-cache
-  "清空缓存。"
+  "清空缓存(重置回种子数据)。路由是 /system/cache/clear,不是 /system/cache。"
   [on-success on-error]
-  (t/request {:method :delete :uri "/system/cache"
+  (t/request {:method :delete :uri "/system/cache/clear"
               :on-success on-success :on-error on-error}))
 
 (defn get-cache-names

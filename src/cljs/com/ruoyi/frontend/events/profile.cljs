@@ -52,10 +52,16 @@
                                               (js/alert (:msg result))))
                                           (fn [_]))))
 
+(rf/reg-event-fx :profile/upload-avatar
+                 (fn [_ [_ form-data]]
+                   {:api/upload-avatar form-data}))
+
 (rf/reg-fx :api/upload-avatar
            (fn [form-data]
              (profile-api/upload-avatar form-data
                                         (fn [result]
                                           (when (= 200 (:code result))
-                                            (rf/dispatch [:profile/fetch])))
+                                            ;; 顶栏头像读的是 :auth/current-user，一起刷新才立刻生效
+                                            (rf/dispatch [:profile/fetch])
+                                            (rf/dispatch [:auth/fetch-info])))
                                         (fn [_]))))

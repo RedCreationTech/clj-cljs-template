@@ -42,7 +42,7 @@
                           (when-let [file (-> e .-target .-files (aget 0))]
                             (let [form-data (js/FormData.)]
                               (.append form-data "avatarfile" file)
-                              (rf/dispatch [:api/upload-avatar form-data]))))}]
+                              (rf/dispatch [:profile/upload-avatar form-data]))))}]
      [:div {:style {:width 128
                     :height 128
                     :borderRadius "50%"

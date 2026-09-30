@@ -135,9 +135,10 @@
                                        nil))}
                    :trigger (clj->js ["click"])}
       [:div {:style {:display "flex" :alignItems "center" :gap 8 :cursor "pointer" :padding "0 6px"}}
-       [:> Avatar {:size 32
-                   :style {:background "linear-gradient(135deg,#f7d7c4,#9bc9ff)"
-                           :color "#fff"
-                           :fontWeight 700}}
+       [:> Avatar (merge {:size 32
+                          :style {:background "linear-gradient(135deg,#f7d7c4,#9bc9ff)"
+                                  :color "#fff"
+                                  :fontWeight 700}}
+                         (when (seq (:avatar user)) {:src (:avatar user)}))
         (str (first (or (:nick_name user) (:user_name user) "管理员")))]
        [:span {:style {:fontSize 14 :fontWeight 600 :color "var(--app-text-primary)"}} (or (:nick_name user) (:user_name user) "管理员")]]]]))
