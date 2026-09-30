@@ -1,12 +1,14 @@
 (ns com.ruoyi.domain.system.config
   "参数配置领域服务。"
   (:require
+   [com.ruoyi.domain.paging :as paging]
    [com.ruoyi.infra.db :as db]))
 
 (defn list-configs
-  "查询参数配置列表。"
+  "查询参数配置列表(分页,返回 {:rows :total})。"
   [{:keys [query-fn]} params]
-  (query-fn :list-configs (merge {:config_name nil :config_key nil :config_type nil} params)))
+  (paging/paginate query-fn :list-configs :count-configs
+                   {:config_name nil :config_key nil :config_type nil} params))
 
 (defn find-config-by-id
   "根据ID查询配置。"

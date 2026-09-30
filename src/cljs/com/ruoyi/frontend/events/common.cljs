@@ -68,6 +68,17 @@
                    (assoc d :children children)
                    d))))))
 
+(defn fetch-with-query
+  "列表取数:把 overrides 并进 app-db 里该模块的 :query-params 后再发请求。
+   这样新增/修改/删除之后不带参数地重新取数,仍停在当前页并保留筛选条件;
+   :query-params 里的 :page / :size 就是列表接口的分页参数。"
+  [db mod fetch-fx overrides]
+  (let [params (merge (get-in db [mod :query-params] {}) overrides)]
+    {:db (-> db
+             (assoc-in [mod :loading?] true)
+             (assoc-in [mod :query-params] params))
+     fetch-fx params}))
+
 (defn stop-all-loading
   "接口失败时把各模块的 :loading? 统一复位(列表请求失败后表格不会一直转圈)。
    约定:模块状态放在 app-db 顶层键下,形如 {:configs {:loading? true ..}}。"

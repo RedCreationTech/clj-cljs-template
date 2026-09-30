@@ -165,7 +165,7 @@
                                          {:title nil :oper_name nil :oper_ip nil
                                           :business_type nil :status nil
                                           :begin_time nil :end_time nil}))
-        jobs (query-fn :list-jobs {:job_name nil :job_group nil :status nil})
+        jobs (query-fn :all-jobs {})
         job-total (count jobs)
         job-running (count (filter #(= "0" (:status %)) jobs))
         recent-ops (query-fn :list-oper-logs

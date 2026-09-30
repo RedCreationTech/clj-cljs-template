@@ -1,10 +1,10 @@
 (ns com.ruoyi.frontend.events.jobs
   "在线用户、定时任务与任务日志事件。"
   (:require
-   [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api.jobs :as jobs-api]
    [com.ruoyi.frontend.api.monitor :as monitor-api]
+   [com.ruoyi.frontend.events.common :as ec]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :online-users/set-list
@@ -16,30 +16,13 @@
                          (assoc-in [:online-users :total] total)
                          (assoc-in [:online-users :loading?] false)))))
 
-(rf/reg-event-fx :online-users/search
-                 (fn [{:keys [db]} [_ params]]
-                   {:db (assoc-in db [:online-users :loading?] true)
-                    :api/list-online-users-search params}))
-
-(rf/reg-fx :api/list-online-users-search
-           (fn [params]
-             (monitor-api/list-online-users {}
-                                            (fn [result]
-                                              (when (= 200 (:code result))
-                                                (let [data (:data result)
-                                                      items (if (sequential? data) data (:rows data []))
-                                                      filtered (cond->> items
-                                                                 (:user_name params)
-                                                                 (filter #(clojure.string/includes?
-                                                                           (or (get % "user-name" (:user_name %)) "")
-                                                                           (:user_name params))))]
-                                                  (rf/dispatch [:online-users/set-list {:rows filtered :total (count filtered)}]))))
-                                            (fn [_]))))
-
 (rf/reg-event-fx :online-users/fetch
-                 (fn [{:keys [db]} [_ params]]
-                   {:db (assoc-in db [:online-users :loading?] true)
-                    :api/list-online-users params}))
+                 (fn [{:keys [db]} [_ overrides]]
+                   (ec/fetch-with-query db :online-users :api/list-online-users overrides)))
+
+(rf/reg-event-fx :online-users/change-page
+                 (fn [_ [_ page page-size]]
+                   {:dispatch [:online-users/fetch {:page page :size page-size}]}))
 
 (rf/reg-fx :api/list-online-users
            (fn [params]
@@ -58,7 +41,7 @@
              (monitor-api/force-logout token-id
                                        (fn [result]
                                          (when (= 200 (:code result))
-                                           (rf/dispatch [:online-users/fetch {}])))
+                                           (rf/dispatch [:online-users/fetch])))
                                        (fn [_]))))
 
 (rf/reg-event-db :jobs/set-list
@@ -71,33 +54,16 @@
                          (assoc-in [:jobs :loading?] false)))))
 
 (rf/reg-event-fx :jobs/search
-                 (fn [{:keys [db]} [_ params]]
-                   {:db (assoc-in db [:jobs :loading?] true)
-                    :api/list-jobs-search params}))
+                 (fn [_ [_ filters]]
+                   {:dispatch [:jobs/fetch (merge {:page 1} filters)]}))
 
-(rf/reg-fx :api/list-jobs-search
-           (fn [params]
-             (jobs-api/list-jobs {}
-                                 (fn [result]
-                                   (when (= 200 (:code result))
-                                     (let [data (:data result)
-                                           items (if (sequential? data) data (:rows data []))
-                                           filtered (cond->> items
-                                                      (:job_name params)
-                                                      (filter #(clojure.string/includes?
-                                                                (or (:job_name %) "")
-                                                                (:job_name params)))
-                                                      (:job_group params)
-                                                      (filter #(clojure.string/includes?
-                                                                (or (:job_group %) "")
-                                                                (:job_group params))))]
-                                       (rf/dispatch [:jobs/set-list {:rows filtered :total (count filtered)}]))))
-                                 (fn [_]))))
+(rf/reg-event-fx :jobs/change-page
+                 (fn [_ [_ page page-size]]
+                   {:dispatch [:jobs/fetch {:page page :size page-size}]}))
 
 (rf/reg-event-fx :jobs/fetch
-                 (fn [{:keys [db]} [_ params]]
-                   {:db (assoc-in db [:jobs :loading?] true)
-                    :api/list-jobs params}))
+                 (fn [{:keys [db]} [_ overrides]]
+                   (ec/fetch-with-query db :jobs :api/list-jobs overrides)))
 
 (rf/reg-fx :api/list-jobs
            (fn [params]
@@ -116,7 +82,7 @@
              (jobs-api/create-job params
                                   (fn [result]
                                     (when (= 200 (:code result))
-                                      (rf/dispatch [:jobs/fetch {}])))
+                                      (rf/dispatch [:jobs/fetch])))
                                   (fn [_]))))
 
 (rf/reg-event-fx :jobs/update
@@ -128,7 +94,7 @@
              (jobs-api/update-job id params
                                   (fn [result]
                                     (when (= 200 (:code result))
-                                      (rf/dispatch [:jobs/fetch {}])))
+                                      (rf/dispatch [:jobs/fetch])))
                                   (fn [_]))))
 
 (rf/reg-event-fx :jobs/change-status
@@ -140,7 +106,7 @@
              (jobs-api/change-job-status id status
                                          (fn [result]
                                            (when (= 200 (:code result))
-                                             (rf/dispatch [:jobs/fetch {}])))
+                                             (rf/dispatch [:jobs/fetch])))
                                          (fn [_]))))
 
 (rf/reg-event-fx :jobs/delete
@@ -152,7 +118,7 @@
              (jobs-api/delete-job id
                                   (fn [result]
                                     (when (= 200 (:code result))
-                                      (rf/dispatch [:jobs/fetch {}])))
+                                      (rf/dispatch [:jobs/fetch])))
                                   (fn [_]))))
 
 (rf/reg-event-fx :jobs/run-once
@@ -175,9 +141,12 @@
                        (assoc-in [:job-logs :loading?] false))))
 
 (rf/reg-event-fx :job-logs/fetch
-                 (fn [{:keys [db]} [_ params]]
-                   {:db (assoc-in db [:job-logs :loading?] true)
-                    :api/list-job-logs params}))
+                 (fn [{:keys [db]} [_ overrides]]
+                   (ec/fetch-with-query db :job-logs :api/list-job-logs overrides)))
+
+(rf/reg-event-fx :job-logs/change-page
+                 (fn [_ [_ page page-size]]
+                   {:dispatch [:job-logs/fetch {:page page :size page-size}]}))
 
 (rf/reg-fx :api/list-job-logs
            (fn [params]

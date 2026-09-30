@@ -1,19 +1,16 @@
 (ns com.ruoyi.domain.system.log
-  "日志审计领域服务。")
+  "日志审计领域服务。列表统一走 com.ruoyi.domain.paging/paginate,返回 {:rows :total}。"
+  (:require
+   [com.ruoyi.domain.paging :as paging]))
+
+(def ^:private oper-log-defaults
+  {:title nil :oper_name nil :oper_ip nil :business_type nil :status nil
+   :begin_time nil :end_time nil})
 
 (defn list-oper-logs
   "查询操作日志列表，支持分页。"
   [{:keys [query-fn]} params]
-  (let [page-num (or (:page-num params) 1)
-        page-size (or (:page-size params) 10)
-        offset (* (dec page-num) page-size)
-        filters (merge {:title nil :oper_name nil :oper_ip nil :business_type nil :status nil :begin_time nil :end_time nil}
-                       (-> params
-                           (dissoc :page-num :page-size)
-                           (assoc :offset offset :page_size page-size)))
-        rows (query-fn :list-oper-logs filters)
-        total (query-fn :count-oper-logs filters)]
-    {:rows rows :total (:total total)}))
+  (paging/paginate query-fn :list-oper-logs :count-oper-logs oper-log-defaults params))
 
 (defn create-oper-log!
   "记录操作日志。"
@@ -31,19 +28,13 @@
   (doseq [id ids]
     (query-fn :delete-oper-log! {:oper_id id})))
 
+(def ^:private login-log-defaults
+  {:user_name nil :ipaddr nil :status nil :begin_time nil :end_time nil})
+
 (defn list-login-logs
   "查询登录日志列表。"
   [{:keys [query-fn]} params]
-  (let [page-num (or (:page-num params) 1)
-        page-size (or (:page-size params) 10)
-        offset (* (dec page-num) page-size)
-        filters (merge {:user_name nil :ipaddr nil :status nil :begin_time nil :end_time nil}
-                       (-> params
-                           (dissoc :page-num :page-size)
-                           (assoc :offset offset :page_size page-size)))
-        rows (query-fn :list-login-logs filters)
-        total (query-fn :count-login-logs filters)]
-    {:rows rows :total (:total total)}))
+  (paging/paginate query-fn :list-login-logs :count-login-logs login-log-defaults params))
 
 (defn create-login-log!
   "记录登录日志。"
@@ -64,15 +55,8 @@
 (defn list-online-users
   "查询在线用户列表。"
   [{:keys [query-fn]} params]
-  (let [page-num (or (:page-num params) 1)
-        page-size (or (:page-size params) 10)
-        offset (* (dec page-num) page-size)
-        filters (-> (merge {:ipaddr nil :login_name nil} params)
-                    (dissoc :page-num :page-size)
-                    (assoc :offset offset :page_size page-size))
-        rows (query-fn :list-online-users filters)
-        total (query-fn :count-online-users filters)]
-    {:rows rows :total (:total total)}))
+  (paging/paginate query-fn :list-online-users :count-online-users
+                   {:ipaddr nil :login_name nil} params))
 
 (defn create-online-user!
   "记录在线用户。"

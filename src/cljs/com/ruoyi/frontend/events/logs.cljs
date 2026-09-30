@@ -4,6 +4,7 @@
    [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api.logs :as logs-api]
+   [com.ruoyi.frontend.events.common :as ec]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :oper-logs/set-list
@@ -16,9 +17,15 @@
                          (assoc-in [:oper-logs :loading?] false)))))
 
 (rf/reg-event-fx :oper-logs/fetch
-                 (fn [{:keys [db]} [_ params]]
-                   {:db (assoc-in db [:oper-logs :loading?] true)
-                    :api/list-oper-logs params}))
+                 (fn [{:keys [db]} [_ overrides]]
+                   (ec/fetch-with-query db :oper-logs :api/list-oper-logs overrides)))
+
+(rf/reg-event-fx :oper-logs/change-page
+                 (fn [_ [_ page page-size]]
+                   {:dispatch [:oper-logs/fetch {:page page :size page-size}]}))
+
+(rf/reg-event-db :oper-logs/reset-query
+                 (fn [db _] (assoc-in db [:oper-logs :query-params] {})))
 
 (rf/reg-fx :api/list-oper-logs
            (fn [params]
@@ -44,7 +51,7 @@
                                         (fn [result]
                                           (when (= 200 (:code result))
                                             (antd/success! "删除成功")
-                                            (rf/dispatch [:oper-logs/fetch {}]))
+                                            (rf/dispatch [:oper-logs/fetch]))
                                           (when (not= 200 (:code result))
                                             (antd/error! (:msg result))))
                                         (fn [_]))))
@@ -61,7 +68,7 @@
 (rf/reg-event-fx :oper-logs/cleared
                  (fn [{:keys [db]} _]
                    {:db db
-                    :dispatch [:oper-logs/fetch {}]}))
+                    :dispatch [:oper-logs/fetch]}))
 
 (rf/reg-event-fx :oper-logs/export
                  (fn [{:keys [db]} _]
@@ -98,9 +105,15 @@
                          (assoc-in [:login-logs :loading?] false)))))
 
 (rf/reg-event-fx :login-logs/fetch
-                 (fn [{:keys [db]} [_ params]]
-                   {:db (assoc-in db [:login-logs :loading?] true)
-                    :api/list-login-logs params}))
+                 (fn [{:keys [db]} [_ overrides]]
+                   (ec/fetch-with-query db :login-logs :api/list-login-logs overrides)))
+
+(rf/reg-event-fx :login-logs/change-page
+                 (fn [_ [_ page page-size]]
+                   {:dispatch [:login-logs/fetch {:page page :size page-size}]}))
+
+(rf/reg-event-db :login-logs/reset-query
+                 (fn [db _] (assoc-in db [:login-logs :query-params] {})))
 
 (rf/reg-fx :api/list-login-logs
            (fn [params]
@@ -126,7 +139,7 @@
                                          (fn [result]
                                            (when (= 200 (:code result))
                                              (antd/success! "删除成功")
-                                             (rf/dispatch [:login-logs/fetch {}]))
+                                             (rf/dispatch [:login-logs/fetch]))
                                            (when (not= 200 (:code result))
                                              (antd/error! (:msg result))))
                                          (fn [_]))))
@@ -155,7 +168,7 @@
 (rf/reg-event-fx :login-logs/cleared
                  (fn [{:keys [db]} _]
                    {:db db
-                    :dispatch [:login-logs/fetch {}]}))
+                    :dispatch [:login-logs/fetch]}))
 
 (rf/reg-event-fx :login-logs/export
                  (fn [{:keys [db]} _]

@@ -2,6 +2,7 @@
   "用户领域服务，处理用户 CRUD、密码管理与角色关联。"
   (:require
    [clojure.string :as str]
+   [com.ruoyi.domain.paging :as paging]
    [com.ruoyi.domain.system.data-scope :as data-scope]
    [com.ruoyi.infra.db :as db]
    [com.ruoyi.infra.security :as security]))
@@ -17,17 +18,11 @@
   "查询用户列表，支持分页和条件筛选。params 里的 :scope_* 为数据范围(见 domain.system.data-scope/sql-params),
    不传时不做数据过滤——对外接口必须由控制器按当前用户传入。"
   [{:keys [query-fn]} params]
-  (let [page-num (or (:page-num params) 1)
-        page-size (or (:page-size params) 10)
-        offset (* (dec page-num) page-size)
-        filters (merge {:user_name nil :phonenumber nil :status nil :dept_id nil}
-                       data-scope/unrestricted
-                       (dissoc params :page-num :page-size)
-                       {:offset offset :page_size page-size})
-        filters (assoc filters :dept_ids (dept-with-children query-fn (:dept_id filters)))
-        rows (query-fn :list-users filters)
-        total (query-fn :count-users filters)]
-    {:rows rows :total (:total total)}))
+  (paging/paginate query-fn :list-users :count-users
+                   (merge {:user_name nil :phonenumber nil :status nil :dept_id nil}
+                          data-scope/unrestricted)
+                   params
+                   :filters-fn #(assoc % :dept_ids (dept-with-children query-fn (:dept_id %)))))
 
 (defn find-user-by-id
   "根据ID查询用户详情，包含部门、角色、岗位信息。不含密码哈希(校验密码用 password-matches?)。"

@@ -6,6 +6,7 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.components.pagination :as pagination]
    [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
@@ -82,10 +83,11 @@
 (defn notice-page []
   (let [items @(rf/subscribe [:notices/items])
         total @(rf/subscribe [:notices/total])
-        loading? @(rf/subscribe [:notices/loading?])]
+        loading? @(rf/subscribe [:notices/loading?])
+        query-params @(rf/subscribe [:notices/query-params])]
     [:div
-     ;; 搜索栏
-     (let [[title set-title!] (hooks/use-state "")]
+     ;; 搜索栏(初值取自 app-db,重新挂载时表单与列表条件一致)
+     (let [[title set-title!] (hooks/use-state (or (:notice_name query-params) ""))]
        [page-search/page-search {:visible? true}
         [page-search/search-row
          [page-search/search-item
@@ -99,7 +101,7 @@
                                        :on-click #(rf/dispatch [:notices/search {:notice_name title}])}]
           [page-toolbar/reset-button {:icon (r/as-element [:> ReloadOutlined])
                                       :on-click #(do (set-title! "")
-                                                     (rf/dispatch [:notices/fetch {}]))}]]]])
+                                                     (rf/dispatch [:notices/fetch {:page 1 :notice_name nil}]))}]]]])
      [page-toolbar/page-toolbar
       {:left [page-toolbar/toolbar-left
               [page-toolbar/toolbar-button {:perm "system:notice:add"
@@ -110,17 +112,18 @@
        :right [page-toolbar/toolbar-right
                [page-toolbar/round-tool-button {:title "搜索"
                                                 :icon (r/as-element [:> SearchOutlined])
-                                                :on-click #(rf/dispatch [:notices/fetch {}])}]
+                                                :on-click #(rf/dispatch [:notices/fetch])}]
                [page-toolbar/round-tool-button {:title "刷新"
                                                 :icon (r/as-element [:> ReloadOutlined])
-                                                :on-click #(rf/dispatch [:notices/fetch {}])}]]}]
+                                                :on-click #(rf/dispatch [:notices/fetch])}]]}]
      [antd/table {:scroll #js {:x "max-content"} :rowKey "notice_id"
                   :rowSelection #js {}
                   :columns (notice-columns)
                   :dataSource (clj->js items)
                   :loading loading?
-                  :pagination {:total total
-                               :pageSize 10
-                               :showSizeChanger true
-                               :showTotal (fn [total] (str "共 " total " 条"))}}]
+                  :pagination (pagination/table-pagination
+                               {:total total
+                                :page (:page query-params)
+                                :page-size (:size query-params)
+                                :on-change #(rf/dispatch [:notices/change-page % %2])})}]
      [notice-modal]]))

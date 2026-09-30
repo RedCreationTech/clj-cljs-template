@@ -3,6 +3,7 @@
   (:require
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api.posts :as posts-api]
+   [com.ruoyi.frontend.events.common :as common]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :posts/set-list
@@ -12,9 +13,13 @@
                      (-> db (assoc-in [:posts :items] items) (assoc-in [:posts :total] total) (assoc-in [:posts :loading?] false)))))
 
 (rf/reg-event-fx :posts/search
-                 ;; 按搜索表单里的条件查询(条件存在 app-db 的 [:posts :query-params])
+                 ;; 按搜索表单里的条件查询(条件存在 app-db 的 [:posts :query-params]),换条件回到第 1 页
                  (fn [{:keys [db]} _]
-                   {:dispatch [:posts/fetch (get-in db [:posts :query-params] {})]}))
+                   {:dispatch [:posts/fetch {:page 1}]}))
+
+(rf/reg-event-fx :posts/change-page
+                 (fn [_ [_ page page-size]]
+                   {:dispatch [:posts/fetch {:page page :size page-size}]}))
 
 (rf/reg-event-db :posts/update-query
                  (fn [db [_ k v]] (assoc-in db [:posts :query-params k] v)))
@@ -23,8 +28,8 @@
                  (fn [db _] (assoc-in db [:posts :query-params] {})))
 
 (rf/reg-event-fx :posts/fetch
-                 (fn [{:keys [db]} [_ params]]
-                   {:db (assoc-in db [:posts :loading?] true) :api/list-posts params}))
+                 (fn [{:keys [db]} [_ overrides]]
+                   (common/fetch-with-query db :posts :api/list-posts overrides)))
 
 (rf/reg-fx :api/list-posts
            (fn [params]

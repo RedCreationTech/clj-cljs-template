@@ -21,13 +21,15 @@
   [q _p]
   (case q
     :list-jobs [test-job]
+    :count-jobs {:total 1}
     :find-job-by-id test-job
     :create-job! nil
     :last-insert-job-id {:job_id 2}
     :update-job! nil
     :delete-job! nil
     :list-job-logs [{:job_log_id 1 :job_name "test"}]
-    :count-job-logs [{:total 1}]
+    ;; :? :1 的查询返回单行 map,不是向量
+    :count-job-logs {:total 1}
     :execute-job! nil
     :clean-job-logs! nil
     nil))
@@ -36,12 +38,13 @@
   {:query-fn mock-query-fn})
 
 (deftest test-list-jobs
-  (testing "查询定时任务列表"
-    (let [request {:query-params {:job_name "test" :status "0"}}
+  (testing "查询定时任务列表(服务端分页)"
+    (let [request {:query-params {"job_name" "test" "status" "0" "page" "2" "size" "10"}}
           response (job/list-jobs mock-service request)]
       (is (= 200 (:status response)))
       (is (= 200 (get-in response [:body :code])))
-      (is (= [test-job] (get-in response [:body :data]))))))
+      (is (= [test-job] (get-in response [:body :data :rows])))
+      (is (= 1 (get-in response [:body :data :total]))))))
 
 (deftest test-get-job-found
   (testing "获取定时任务详情（存在）"
@@ -113,7 +116,7 @@
 
 (deftest test-list-job-logs
   (testing "查询任务日志列表"
-    (let [request {:query-params {:job-name "test" :status "0" :page-num "1" :page-size "10"}}
+    (let [request {:query-params {"job_name" "test" "status" "0" "page" "1" "size" "10"}}
           response (job/list-job-logs mock-service request)]
       (is (= 200 (:status response)))
       (is (= 200 (get-in response [:body :code])))

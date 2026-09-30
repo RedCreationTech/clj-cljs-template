@@ -1,12 +1,14 @@
 (ns com.ruoyi.domain.system.role
   "角色领域服务，处理角色 CRUD、菜单授权与数据权限。"
   (:require
+   [com.ruoyi.domain.paging :as paging]
    [com.ruoyi.infra.db :as db]))
 
 (defn list-roles
-  "查询角色列表。"
+  "查询角色列表(分页,返回 {:rows :total})。"
   [{:keys [query-fn]} params]
-  (query-fn :list-roles (merge {:role_name nil :role_key nil :status nil} params)))
+  (paging/paginate query-fn :list-roles :count-roles
+                   {:role_name nil :role_key nil :status nil} params))
 
 (defn find-role-by-id
   "根据ID查询角色详情，包含关联菜单ID列表。"

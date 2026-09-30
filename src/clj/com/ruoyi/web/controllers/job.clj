@@ -1,8 +1,8 @@
 (ns com.ruoyi.web.controllers.job
   "定时任务控制器。"
   (:require
-   [clojure.string :as str]
    [clojure.walk :as walk]
+   [com.ruoyi.domain.paging :as paging]
    [com.ruoyi.infra.cron :as cron]
    [com.ruoyi.infra.db :as db]
    [com.ruoyi.infra.scheduler :as scheduler-core]
@@ -27,8 +27,9 @@
 
 (defn list-jobs
   [{:keys [query-fn]} request]
-  (ok (query-fn :list-jobs (merge {:job_name nil :job_group nil :status nil}
-                                  (params/query request)))))
+  (ok (paging/paginate query-fn :list-jobs :count-jobs
+                       {:job_name nil :job_group nil :status nil}
+                       (params/query request))))
 
 (defn get-job
   [{:keys [query-fn]} request]
@@ -89,20 +90,9 @@
 
 (defn list-job-logs
   [{:keys [query-fn]} request]
-  (let [params (:query-params request)
-        ->kw (fn [k] (keyword (str/replace (name k) #"-" "_")))
-        norm (->> params
-                  (map (fn [[k v]] [(->kw k) v]))
-                  (into {}))
-        page-num (or (some-> (:page_num norm) parse-long) 1)
-        page-size (or (some-> (:page_size norm) parse-long) 10)
-        offset (* (dec page-num) page-size)
-        filters (merge {:job_name nil :job_group nil :status nil}
-                       (-> norm
-                           (dissoc :page_num :page_size)
-                           (assoc :offset offset :page_size page-size)))]
-    (ok {:rows (query-fn :list-job-logs filters)
-         :total (-> (query-fn :count-job-logs filters) first :total)})))
+  (ok (paging/paginate query-fn :list-job-logs :count-job-logs
+                       {:job_name nil :job_group nil :status nil}
+                       (params/query request))))
 
 (defn execute-job
   [{:keys [query-fn]} request]

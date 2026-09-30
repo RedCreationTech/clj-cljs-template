@@ -7,6 +7,7 @@
    [com.ruoyi.frontend.api.impexp :as impexp-api]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.components.pagination :as pagination]
    [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
@@ -41,7 +42,7 @@
                                     :on-click #(rf/dispatch [:posts/search])}]
        [page-toolbar/reset-button {:icon (r/as-element [:> ReloadOutlined])
                                    :on-click #(do (rf/dispatch [:posts/reset-query])
-                                                  (rf/dispatch [:posts/fetch {}]))}]]]]))
+                                                  (rf/dispatch [:posts/fetch {:page 1 :size 10}]))}]]]]))
 
 ;; ─── 工具栏 ────────────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@
                                              :on-click #(rf/dispatch [:posts/search])}]
             [page-toolbar/round-tool-button {:title "刷新"
                                              :icon (r/as-element [:> ReloadOutlined])
-                                             :on-click #(rf/dispatch [:posts/fetch {}])}]]}])
+                                             :on-click #(rf/dispatch [:posts/fetch])}]]}])
 
 ;; ─── 表格列 ──────────────────────────────────────────────────────
 
@@ -131,9 +132,10 @@
 ;; ─── 主页面 ──────────────────────────────────────────────────────
 
 (defn post-page []
-  (hooks/use-effect (fn [] (rf/dispatch [:posts/fetch {}]) js/undefined) [])
+  (hooks/use-effect (fn [] (rf/dispatch [:posts/fetch]) js/undefined) [])
   (let [items @(rf/subscribe [:posts/items])
         total @(rf/subscribe [:posts/total])
+        query-params @(rf/subscribe [:posts/query-params])
         loading? @(rf/subscribe [:posts/loading?])
         [selected-ids set-selected-ids!] (hooks/use-state [])]
     [:div
@@ -144,6 +146,9 @@
                                      :onChange (fn [keys _]
                                                  (set-selected-ids! (js->clj keys)))}
                   :dataSource (clj->js items)
-                  :pagination {:total total :pageSize 10 :showSizeChanger true
-                               :showTotal (fn [total] (str "共 " total " 条"))}}]
+                  :pagination (pagination/table-pagination
+                               {:total total
+                                :page (:page query-params)
+                                :page-size (:size query-params)
+                                :on-change #(rf/dispatch [:posts/change-page % %2])})}]
      [edit-modal]]))

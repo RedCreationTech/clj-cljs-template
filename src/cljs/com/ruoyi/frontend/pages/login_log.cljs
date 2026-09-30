@@ -8,6 +8,7 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.components.pagination :as pagination]
    [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
@@ -33,7 +34,7 @@
        #js {:title "登录日期" :dataIndex "login_time" :key "login_time" :width 180
             :sorter true}])
 
-(defn- query-params [ipaddr username status date-range]
+(defn- search-filters [ipaddr username status date-range]
   (cond-> {:ipaddr ipaddr :user_name username :status status}
     (first date-range) (assoc :begin_time (first date-range))
     (second date-range) (assoc :end_time (second date-range))))
@@ -76,7 +77,8 @@
                                                 (set-username! "")
                                                 (set-status! nil)
                                                 (set-date-range! [])
-                                                (rf/dispatch [:login-logs/fetch {}]))}]]]])
+                                                (rf/dispatch [:login-logs/reset-query])
+                                                (rf/dispatch [:login-logs/fetch {:page 1}]))}]]]])
 
 (defn- login-log-toolbar [{:keys [items selected-ids set-selected-ids! run-search]}]
   (let [selected-id-string #(str/join "," selected-ids)]
@@ -117,9 +119,9 @@
                                                :on-click run-search}]
               [page-toolbar/round-tool-button {:title "刷新"
                                                :icon (r/as-element [:> ReloadOutlined])
-                                               :on-click #(rf/dispatch [:login-logs/fetch {}])}]]}]))
+                                               :on-click #(rf/dispatch [:login-logs/fetch])}]]}]))
 
-(defn- login-log-table [{:keys [loading? items total selected-ids set-selected-ids!]}]
+(defn- login-log-table [{:keys [loading? items total query-params selected-ids set-selected-ids!]}]
   [antd/table {:scroll #js {:x "max-content"}
                :rowKey "info_id"
                :rowSelection #js {:selectedRowKeys (clj->js selected-ids)
@@ -128,25 +130,30 @@
                :loading loading?
                :columns (login-log-columns)
                :dataSource (clj->js items)
-               :pagination {:pageSize 10
-                            :total total
-                            :showSizeChanger true
-                            :showTotal (fn [t] (str "共 " t " 条"))}}])
+               :pagination (pagination/table-pagination
+                            {:total total
+                             :page (:page query-params)
+                             :page-size (:size query-params)
+                             :on-change #(rf/dispatch [:login-logs/change-page % %2])})}])
 
 (defn login-log-page []
   (hooks/use-effect (fn []
-                      (rf/dispatch [:login-logs/fetch {}])
+                      (rf/dispatch [:login-logs/fetch])
                       js/undefined)
                     [])
   (let [items @(rf/subscribe [:login-logs/items])
         total @(rf/subscribe [:login-logs/total])
         loading? @(rf/subscribe [:login-logs/loading?])
-        [ipaddr set-ipaddr!] (hooks/use-state "")
-        [username set-username!] (hooks/use-state "")
-        [status set-status!] (hooks/use-state nil)
-        [date-range set-date-range!] (hooks/use-state [])
+        query-params @(rf/subscribe [:login-logs/query-params])
+        [ipaddr set-ipaddr!] (hooks/use-state (or (:ipaddr query-params) ""))
+        [username set-username!] (hooks/use-state (or (:user_name query-params) ""))
+        [status set-status!] (hooks/use-state (:status query-params))
+        [date-range set-date-range!] (hooks/use-state (filter some? [(:begin_time query-params)
+                                                                     (:end_time query-params)]))
         [selected-ids set-selected-ids!] (hooks/use-state [])
-        run-search #(rf/dispatch [:login-logs/fetch (query-params ipaddr username status date-range)])]
+        run-search #(rf/dispatch [:login-logs/fetch
+                                  (merge (search-filters ipaddr username status date-range)
+                                         {:page 1})])]
     [:div
      [login-log-search-form {:ipaddr ipaddr
                              :set-ipaddr! set-ipaddr!
@@ -164,5 +171,6 @@
      [login-log-table {:loading? loading?
                        :items items
                        :total total
+                       :query-params query-params
                        :selected-ids selected-ids
                        :set-selected-ids! set-selected-ids!}]]))

@@ -1,6 +1,8 @@
 (ns com.ruoyi.web.controllers.system.notice
   "通知公告控制器。"
   (:require
+   [com.ruoyi.domain.paging :as paging]
+   [com.ruoyi.web.controllers.params :as params]
    [ring.util.response :as response]))
 
 (defn- ok
@@ -24,18 +26,9 @@
 (defn list-notices
   "查询通知公告列表。"
   [{:keys [query-fn]} request]
-  (let [params (:query-params request)
-        page (or (parse-int (get params "page")) 1)
-        size (or (parse-int (get params "size")) 10)
-        offset (* (dec page) size)
-        query-params {:notice_name (get params "notice_name")
-                      :notice_type (get params "notice_type")
-                      :create_by   (get params "create_by")
-                      :page_size   size
-                      :offset      offset}
-        rows (query-fn :list-notices query-params)
-        total (query-fn :count-notices query-params)]
-    (ok {:rows rows :total (:total total)})))
+  (ok (paging/paginate query-fn :list-notices :count-notices
+                       {:notice_name nil :notice_type nil :create_by nil}
+                       (params/query request))))
 
 (defn latest-notices
   "顶部铃铛(登录即可访问):最新 5 条已发布通知(带 is_read)与当前用户的未读总数。"

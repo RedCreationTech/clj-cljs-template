@@ -207,7 +207,7 @@
 (defn load-jobs!
   "从 sys_job 表加载所有正常任务到调度器。"
   []
-  (let [jobs ((query-fn) :list-jobs {:job_name nil :job_group nil :status nil})]
+  (let [jobs ((query-fn) :all-jobs {})]
     (doseq [job jobs]
       (try
         (schedule-job! job)

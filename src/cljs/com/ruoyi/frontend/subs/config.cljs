@@ -45,6 +45,10 @@
             (fn [db _]
               (get-in db [:configs :loading?])))
 
+(rf/reg-sub :configs/query-params
+            (fn [db _]
+              (get-in db [:configs :query-params] {})))
+
 ;; ─── 操作日志 ──────────────────────────────────────────────────────
 
 (rf/reg-sub :oper-logs/items
@@ -58,6 +62,10 @@
 (rf/reg-sub :oper-logs/loading?
             (fn [db _]
               (get-in db [:oper-logs :loading?])))
+
+(rf/reg-sub :oper-logs/query-params
+            (fn [db _]
+              (get-in db [:oper-logs :query-params] {})))
 
 (rf/reg-sub :oper-logs/detail-visible?
             (fn [db _]
@@ -80,6 +88,10 @@
 (rf/reg-sub :login-logs/loading?
             (fn [db _]
               (get-in db [:login-logs :loading?])))
+
+(rf/reg-sub :login-logs/query-params
+            (fn [db _]
+              (get-in db [:login-logs :query-params] {})))
 
 ;; ─── 首页仪表盘 ──────────────────────────────────────────────────────
 
@@ -104,6 +116,10 @@
 (rf/reg-sub :notices/loading?
             (fn [db _]
               (get-in db [:notices :loading?] false)))
+
+(rf/reg-sub :notices/query-params
+            (fn [db _]
+              (get-in db [:notices :query-params] {})))
 
 (rf/reg-sub :notices/modal-visible?
             (fn [db _]

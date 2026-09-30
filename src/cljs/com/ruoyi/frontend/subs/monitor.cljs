@@ -17,6 +17,10 @@
             (fn [db _]
               (get-in db [:online-users :loading?])))
 
+(rf/reg-sub :online-users/query-params
+            (fn [db _]
+              (get-in db [:online-users :query-params] {})))
+
 ;; ─── 定时任务 ──────────────────────────────────────────────────────
 
 (rf/reg-sub :jobs/items
@@ -31,6 +35,10 @@
             (fn [db _]
               (get-in db [:jobs :loading?])))
 
+(rf/reg-sub :jobs/query-params
+            (fn [db _]
+              (get-in db [:jobs :query-params] {})))
+
 (rf/reg-sub :job-logs/items
             (fn [db _]
               (get-in db [:job-logs :items])))
@@ -42,6 +50,10 @@
 (rf/reg-sub :job-logs/loading?
             (fn [db _]
               (get-in db [:job-logs :loading?])))
+
+(rf/reg-sub :job-logs/query-params
+            (fn [db _]
+              (get-in db [:job-logs :query-params] {})))
 
 ;; ─── 服务器监控 ──────────────────────────────────────────────────────
 

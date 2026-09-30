@@ -5,6 +5,7 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.components.pagination :as pagination]
    [com.ruoyi.frontend.perm :as perm]
    [goog.object :as gobj]
    [re-frame.core :as rf]
@@ -41,12 +42,14 @@
 (defn online-page []
   (hooks/use-effect
    (fn []
-     (rf/dispatch [:online-users/fetch {}])
-     (let [interval (js/setInterval #(rf/dispatch [:online-users/fetch {}]) 30000)]
+     (rf/dispatch [:online-users/fetch])
+     (let [interval (js/setInterval #(rf/dispatch [:online-users/fetch]) 30000)]
        (fn [] (js/clearInterval interval))))
    [])
   (let [items @(rf/subscribe [:online-users/items])
-        [uname set-uname!] (hooks/use-state "")
+        query-params @(rf/subscribe [:online-users/query-params])
+        ;; 搜索框初值取自 app-db:重新挂载时表单与列表条件一致
+        [uname set-uname!] (hooks/use-state (or (:user_name query-params) ""))
         total @(rf/subscribe [:online-users/total])
         loading? @(rf/subscribe [:online-users/loading?])]
     [:div
@@ -61,22 +64,26 @@
                      :onChange #(set-uname! (-> % .-target .-value))}]]
        [page-search/search-actions
         [page-toolbar/search-button {:icon (r/as-element [:> SearchOutlined])
-                                     :on-click #(rf/dispatch [:online-users/search {:user_name uname}])}]
+                                     :on-click #(rf/dispatch [:online-users/fetch {:page 1 :user_name uname}])}]
         [page-toolbar/reset-button {:icon (r/as-element [:> ReloadOutlined])
                                     :on-click #(do (set-uname! "")
-                                                   (rf/dispatch [:online-users/fetch {}]))}]]]]
+                                                   (rf/dispatch [:online-users/fetch {:page 1 :user_name nil}]))}]]]]
      [page-toolbar/page-toolbar
       {:left [page-toolbar/toolbar-left]
        :right [page-toolbar/toolbar-right
                [page-toolbar/round-tool-button {:title "搜索"
                                                 :icon (r/as-element [:> SearchOutlined])
-                                                :on-click #(rf/dispatch [:online-users/search {:user_name uname}])}]
+                                                :on-click #(rf/dispatch [:online-users/fetch {:page 1 :user_name uname}])}]
                [page-toolbar/round-tool-button {:title "刷新"
                                                 :icon (r/as-element [:> ReloadOutlined])
-                                                :on-click #(rf/dispatch [:online-users/fetch {}])}]]}]
+                                                :on-click #(rf/dispatch [:online-users/fetch])}]]}]
      [antd/table {:scroll #js {:x "max-content"} :rowKey "token-id"
                   :rowSelection #js {}
                   :loading loading?
                   :columns (online-columns)
                   :dataSource (clj->js items)
-                  :pagination {:pageSize 10 :total total}}]]))
+                  :pagination (pagination/table-pagination
+                               {:total total
+                                :page (:page query-params)
+                                :page-size (:size query-params)
+                                :on-change #(rf/dispatch [:online-users/change-page % %2])})}]]))

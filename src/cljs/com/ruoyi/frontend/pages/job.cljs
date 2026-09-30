@@ -6,6 +6,7 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.components.pagination :as pagination]
    [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
@@ -58,7 +59,7 @@
 
 (defn- show-log! [{:keys [job-name set-log-job-name! set-show-log!]}]
   (set-log-job-name! job-name)
-  (rf/dispatch [:job-logs/fetch {:job_name job-name}])
+  (rf/dispatch [:job-logs/fetch {:job_name job-name :page 1}])
   (set-show-log! true))
 
 ;; ─── 表格列 ──────────────────────────────────────────────────────
@@ -141,7 +142,7 @@
      [page-toolbar/reset-button {:icon (r/as-element [:> ReloadOutlined])
                                  :on-click #(do (set-job-name! "")
                                                 (set-job-group! "")
-                                                (rf/dispatch [:jobs/fetch {}]))}]]]])
+                                                (rf/dispatch [:jobs/fetch {:page 1 :job_name nil :job_group nil}]))}]]]])
 
 ;; ─── 工具栏 ──────────────────────────────────────────────────────
 
@@ -159,7 +160,7 @@
                                              :on-click #(rf/dispatch [:jobs/search {:job_name job-name :job_group job-group}])}]
             [page-toolbar/round-tool-button {:title "刷新"
                                              :icon (r/as-element [:> ReloadOutlined])
-                                             :on-click #(rf/dispatch [:jobs/fetch {}])}]]}])
+                                             :on-click #(rf/dispatch [:jobs/fetch])}]]}])
 
 ;; ─── 新增/编辑弹窗 ──────────────────────────────────────────────────────
 
@@ -186,7 +187,7 @@
 
 ;; ─── 日志抽屉 ──────────────────────────────────────────────────────
 
-(defn- job-log-drawer [{:keys [open? job-name loading? items total on-close]}]
+(defn- job-log-drawer [{:keys [open? job-name loading? items total query-params on-close]}]
   [antd/drawer {:title (str "任务日志 - " job-name)
                 :open open?
                 :onClose on-close
@@ -197,13 +198,17 @@
                 :loading loading?
                 :columns (job-log-columns)
                 :dataSource (clj->js items)
-                :pagination {:pageSize 10 :total total}}]])
+                :pagination (pagination/table-pagination
+                             {:total total
+                              :page (:page query-params)
+                              :page-size (:size query-params)
+                              :on-change #(rf/dispatch [:job-logs/change-page % %2])})}]])
 
 ;; ─── 视图组合 ──────────────────────────────────────────────────────
 
 (defn- job-view [{:keys [setters form-fields job-name job-group set-job-name! set-job-group!
-                         items total loading? on-edit on-show-log show-form? editing-record
-                         log-items log-total log-loading? show-log? log-job-name set-show-log!]}]
+                         items total loading? query-params on-edit on-show-log show-form? editing-record
+                         log-items log-total log-loading? log-query-params show-log? log-job-name set-show-log!]}]
   [:div
    ;; 搜索栏
    [job-search {:job-name job-name :job-group job-group
@@ -216,20 +221,27 @@
                 :loading loading?
                 :columns (job-columns on-edit on-show-log)
                 :dataSource (clj->js items)
-                :pagination {:pageSize 10 :total total}}]
+                :pagination (pagination/table-pagination
+                             {:total total
+                              :page (:page query-params)
+                              :page-size (:size query-params)
+                              :on-change #(rf/dispatch [:jobs/change-page % %2])})}]
    ;; 新增/编辑弹窗
    [job-form-modal (merge setters form-fields
                           {:open? show-form? :editing-record editing-record})]
    ;; 日志抽屉
    [job-log-drawer {:open? show-log? :job-name log-job-name :loading? log-loading?
-                    :items log-items :total log-total :on-close #(set-show-log! false)}]])
+                    :items log-items :total log-total :query-params log-query-params
+                    :on-close #(set-show-log! false)}]])
 
 ;; ─── 主页面 ──────────────────────────────────────────────────────
 
 (defn job-page []
-  (let [[show-form? set-show-form!] (hooks/use-state false)
-        [job-name set-job-name!] (hooks/use-state "")
-        [job-group set-job-group!] (hooks/use-state "")
+  (let [query-params @(rf/subscribe [:jobs/query-params])
+        ;; 搜索框初值取自 app-db:重新挂载时表单与列表条件一致
+        [show-form? set-show-form!] (hooks/use-state false)
+        [job-name set-job-name!] (hooks/use-state (or (:job_name query-params) ""))
+        [job-group set-job-group!] (hooks/use-state (or (:job_group query-params) ""))
         [editing-record set-editing-record!] (hooks/use-state nil)
         [show-log? set-show-log!] (hooks/use-state false)
         [log-job-name set-log-job-name!] (hooks/use-state "")
@@ -252,7 +264,7 @@
         on-show-log (fn [j] (show-log! {:job-name j :set-log-job-name! set-log-job-name! :set-show-log! set-show-log!}))]
     (hooks/use-effect
      (fn []
-       (rf/dispatch [:jobs/fetch {}])
+       (rf/dispatch [:jobs/fetch])
        js/undefined)
      [])
     (let [items @(rf/subscribe [:jobs/items])
@@ -260,13 +272,15 @@
           loading? @(rf/subscribe [:jobs/loading?])
           log-items @(rf/subscribe [:job-logs/items])
           log-total @(rf/subscribe [:job-logs/total])
-          log-loading? @(rf/subscribe [:job-logs/loading?])]
+          log-loading? @(rf/subscribe [:job-logs/loading?])
+          log-query-params @(rf/subscribe [:job-logs/query-params])]
       [job-view {:setters setters :form-fields form-fields
                  :job-name job-name :job-group job-group
                  :set-job-name! set-job-name! :set-job-group! set-job-group!
-                 :items items :total total :loading? loading?
+                 :items items :total total :loading? loading? :query-params query-params
                  :on-edit on-edit :on-show-log on-show-log
                  :show-form? show-form? :editing-record editing-record
                  :log-items log-items :log-total log-total :log-loading? log-loading?
+                 :log-query-params log-query-params
                  :show-log? show-log? :log-job-name log-job-name
                  :set-show-log! set-show-log!}])))

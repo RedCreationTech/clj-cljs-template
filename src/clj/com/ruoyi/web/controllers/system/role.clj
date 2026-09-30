@@ -81,7 +81,7 @@
 (defn option-select
   "获取角色选项列表（下拉框用）。"
   [{:keys [role-service]} _]
-  (ok (role-service/list-roles role-service {:limit 999 :offset 0})))
+  (ok (:rows (role-service/list-roles role-service {:page-num 1 :page-size 1000}))))
 
 (defn allocated-list
   "查询角色已分配用户列表。"

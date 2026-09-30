@@ -6,6 +6,7 @@
    [com.ruoyi.frontend.api.impexp :as impexp-api]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.components.pagination :as pagination]
    [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
@@ -120,7 +121,7 @@
                :rowSelection #js {}
                :columns (type-columns onSelect onEdit onDelete)
                :dataSource (clj->js types)
-               :pagination {:pageSize 10 :show-total (fn [t] (str "共 " t " 条"))}}])
+               :pagination (pagination/client-pagination)}])
 
 (defn- type-section []
   (let [types @(rf/subscribe [:dicts/types])
@@ -243,7 +244,7 @@
                :rowSelection #js {}
                :columns (data-columns onEdit onDelete)
                :dataSource (clj->js data)
-               :pagination {:pageSize 10 :show-total (fn [t] (str "共 " t " 条"))}}])
+               :pagination (pagination/client-pagination)}])
 
 (defn- data-section []
   (let [dict-type @(rf/subscribe [:dicts/selected-type])

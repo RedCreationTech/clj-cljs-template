@@ -47,18 +47,18 @@
                        :phonenumber {:label "手机号码" :visible? true}
                        :status {:label "状态" :visible? true}
                        :create_time {:label "创建时间" :visible? true}}}
-     :roles {:loading? false :items [] :query-params {}}
+     :roles {:loading? false :items [] :total 0 :query-params {}}
      :menus {:loading? false :items [] :tree []}
      :depts {:loading? false :items [] :tree []}
      :posts {:loading? false :items [] :total 0 :query-params {}}
      :dicts {:loading? false :types [] :data []}
-     :configs {:loading? false :items []}
-     :notices {:loading? false :items [] :total 0}
-     :oper-logs {:loading? false :items [] :total 0}
-     :login-logs {:loading? false :items [] :total 0}
-     :online-users {:loading? false :items [] :total 0}
-     :jobs {:loading? false :items [] :total 0 :filters {}}
-     :job-logs {:loading? false :items [] :total 0}
+     :configs {:loading? false :items [] :total 0 :query-params {}}
+     :notices {:loading? false :items [] :total 0 :query-params {}}
+     :oper-logs {:loading? false :items [] :total 0 :query-params {}}
+     :login-logs {:loading? false :items [] :total 0 :query-params {}}
+     :online-users {:loading? false :items [] :total 0 :query-params {}}
+     :jobs {:loading? false :items [] :total 0 :query-params {}}
+     :job-logs {:loading? false :items [] :total 0 :query-params {}}
      :profile {:loading? false}
      :dashboard {:loading? false :stats nil}
      :server {:loading? false :data nil :datasource nil :datasource-loading? false}

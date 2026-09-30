@@ -8,6 +8,7 @@
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.components.pagination :as pagination]
    [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
@@ -105,7 +106,7 @@
                                      :onClick #(rf/dispatch [:oper-logs/show-detail (js->clj record :keywordize-keys true)])}
                         "详细"]))}])
 
-(defn- query-params [oper-ip title oper-name business-type status date-range]
+(defn- search-filters [oper-ip title oper-name business-type status date-range]
   (cond-> {:oper_ip oper-ip
            :title title
            :oper_name oper-name
@@ -165,7 +166,8 @@
                                                 (set-business-type! nil)
                                                 (set-status! nil)
                                                 (set-date-range! [])
-                                                (rf/dispatch [:oper-logs/fetch {}]))}]]]])
+                                                (rf/dispatch [:oper-logs/reset-query])
+                                                (rf/dispatch [:oper-logs/fetch {:page 1}]))}]]]])
 
 (defn- oper-log-toolbar [{:keys [selected-ids set-selected-ids! run-search]}]
   (let [selected-id-string #(str/join "," selected-ids)]
@@ -197,9 +199,9 @@
                                                :on-click run-search}]
               [page-toolbar/round-tool-button {:title "刷新"
                                                :icon (r/as-element [:> ReloadOutlined])
-                                               :on-click #(rf/dispatch [:oper-logs/fetch {}])}]]}]))
+                                               :on-click #(rf/dispatch [:oper-logs/fetch])}]]}]))
 
-(defn- oper-log-table [{:keys [loading? items total selected-ids set-selected-ids!]}]
+(defn- oper-log-table [{:keys [loading? items total query-params selected-ids set-selected-ids!]}]
   [antd/table {:scroll #js {:x "max-content"}
                :rowKey "oper_id"
                :loading loading?
@@ -208,24 +210,30 @@
                                   :onChange (fn [keys _]
                                               (set-selected-ids! (js->clj keys)))}
                :dataSource (clj->js items)
-               :pagination {:pageSize 10
-                            :total total
-                            :showSizeChanger true
-                            :showTotal (fn [t] (str "共 " t " 条"))}}])
+               :pagination (pagination/table-pagination
+                            {:total total
+                             :page (:page query-params)
+                             :page-size (:size query-params)
+                             :on-change #(rf/dispatch [:oper-logs/change-page % %2])})}])
 
 (defn oper-log-page []
-  (hooks/use-effect (fn [] (rf/dispatch [:oper-logs/fetch {}]) js/undefined) [])
+  (hooks/use-effect (fn [] (rf/dispatch [:oper-logs/fetch]) js/undefined) [])
   (let [items @(rf/subscribe [:oper-logs/items])
         total @(rf/subscribe [:oper-logs/total])
         loading? @(rf/subscribe [:oper-logs/loading?])
-        [oper-ip set-oper-ip!] (hooks/use-state "")
-        [title set-title!] (hooks/use-state "")
-        [oper-name set-oper-name!] (hooks/use-state "")
-        [business-type set-business-type!] (hooks/use-state nil)
-        [status set-status!] (hooks/use-state nil)
-        [date-range set-date-range!] (hooks/use-state [])
+        query-params @(rf/subscribe [:oper-logs/query-params])
+        ;; 搜索框的初值取自 app-db:重新挂载组件时表单条件与列表条件仍然一致
+        [oper-ip set-oper-ip!] (hooks/use-state (or (:oper_ip query-params) ""))
+        [title set-title!] (hooks/use-state (or (:title query-params) ""))
+        [oper-name set-oper-name!] (hooks/use-state (or (:oper_name query-params) ""))
+        [business-type set-business-type!] (hooks/use-state (:business_type query-params))
+        [status set-status!] (hooks/use-state (:status query-params))
+        [date-range set-date-range!] (hooks/use-state (filter some? [(:begin_time query-params)
+                                                                     (:end_time query-params)]))
         [selected-ids set-selected-ids!] (hooks/use-state [])
-        run-search #(rf/dispatch [:oper-logs/fetch (query-params oper-ip title oper-name business-type status date-range)])]
+        run-search #(rf/dispatch [:oper-logs/fetch
+                                  (merge (search-filters oper-ip title oper-name business-type status date-range)
+                                         {:page 1})])]
     [:div
      [oper-log-search-form {:oper-ip oper-ip
                             :set-oper-ip! set-oper-ip!
@@ -246,6 +254,7 @@
      [oper-log-table {:loading? loading?
                       :items items
                       :total total
+                      :query-params query-params
                       :selected-ids selected-ids
                       :set-selected-ids! set-selected-ids!}]
      [detail-modal]]))

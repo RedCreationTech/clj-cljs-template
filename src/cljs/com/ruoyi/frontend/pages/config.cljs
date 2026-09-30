@@ -6,13 +6,16 @@
    [com.ruoyi.frontend.api.impexp :as impexp-api]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.components.pagination :as pagination]
    [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
    [reagent.hooks :as hooks]))
 
 (defn- search-bar []
-  (let [[keyword set-keyword!] (hooks/use-state "")]
+  ;; 初值取自 app-db:组件重新挂载时表单条件与列表条件仍然一致
+  (let [[keyword set-keyword!] (hooks/use-state (or (:config_name @(rf/subscribe [:configs/query-params]))
+                                                    ""))]
     [page-search/page-search {:visible? true}
      [page-search/search-row
       [page-search/search-item
@@ -23,10 +26,12 @@
                     :on-change #(set-keyword! (.. % -target -value))}]]
       [page-search/search-actions
        [page-toolbar/search-button {:icon (r/as-element [:> SearchOutlined])
-                                    :on-click #(rf/dispatch [:configs/fetch {:config_name keyword}])}]
+                                    :on-click #(rf/dispatch [:configs/fetch {:config_name keyword
+                                                                             :page 1}])}]
        [page-toolbar/reset-button {:icon (r/as-element [:> ReloadOutlined])
                                    :on-click #(do (set-keyword! "")
-                                                  (rf/dispatch [:configs/fetch {}]))}]]]]))
+                                                  (rf/dispatch [:configs/fetch {:config_name ""
+                                                                                :page 1}]))}]]]]))
 
 (defn- config-columns [on-edit on-delete]
   #js [#js {:title "参数ID" :dataIndex "config_id" :key "config_id" :width 80}
@@ -83,44 +88,51 @@
       [antd/text-area {:value (:remark form "") :rows 3
                        :on-change #(set-form! (assoc form :remark (.. % -target -value)))}]]]))
 
+(defn- config-toolbar [on-add]
+  [page-toolbar/page-toolbar
+   {:left [page-toolbar/toolbar-left
+           [page-toolbar/toolbar-button {:perm "system:config:add"
+                                         :kind :add
+                                         :icon (r/as-element [:> PlusOutlined])
+                                         :on-click on-add
+                                         :label "新增"}]
+           [page-toolbar/toolbar-button {:perm "system:config:export"
+                                         :kind :export
+                                         :icon (r/as-element [:> DownloadOutlined])
+                                         :on-click #(impexp-api/export-configs {})
+                                         :label "导出"}]]
+    :right [page-toolbar/toolbar-right
+            [page-toolbar/round-tool-button {:title "搜索"
+                                             :icon (r/as-element [:> SearchOutlined])
+                                             :on-click #(rf/dispatch [:configs/fetch])}]
+            [page-toolbar/round-tool-button {:title "刷新"
+                                             :icon (r/as-element [:> ReloadOutlined])
+                                             :on-click #(rf/dispatch [:configs/fetch])}]]}])
+
 (defn config-page []
   (let [items @(rf/subscribe [:configs/items])
         total @(rf/subscribe [:configs/total])
+        query-params @(rf/subscribe [:configs/query-params])
         loading? @(rf/subscribe [:configs/loading?])
         [modal-visible? set-modal-visible!] (hooks/use-state false)
         [editing set-editing!] (hooks/use-state nil)]
     (hooks/use-effect
-     (fn [] (rf/dispatch [:configs/fetch {}]) js/undefined)
+     (fn [] (rf/dispatch [:configs/fetch]) js/undefined)
      [])
     [:div
      [search-bar]
-     [page-toolbar/page-toolbar
-      {:left [page-toolbar/toolbar-left
-              [page-toolbar/toolbar-button {:perm "system:config:add"
-                                            :kind :add
-                                            :icon (r/as-element [:> PlusOutlined])
-                                            :on-click #(do (set-editing! nil) (set-modal-visible! true))
-                                            :label "新增"}]
-              [page-toolbar/toolbar-button {:perm "system:config:export"
-                                            :kind :export
-                                            :icon (r/as-element [:> DownloadOutlined])
-                                            :on-click #(impexp-api/export-configs {})
-                                            :label "导出"}]]
-       :right [page-toolbar/toolbar-right
-               [page-toolbar/round-tool-button {:title "搜索"
-                                                :icon (r/as-element [:> SearchOutlined])
-                                                :on-click #(rf/dispatch [:configs/fetch {}])}]
-               [page-toolbar/round-tool-button {:title "刷新"
-                                                :icon (r/as-element [:> ReloadOutlined])
-                                                :on-click #(rf/dispatch [:configs/fetch {}])}]]}]
+     [config-toolbar #(do (set-editing! nil) (set-modal-visible! true))]
      [antd/table {:rowKey "config_id" :loading loading? :scroll #js {:x 800}
                   :rowSelection #js {}
                   :columns (config-columns
                             #(do (set-editing! %) (set-modal-visible! true))
                             #(rf/dispatch [:configs/delete %]))
                   :dataSource (clj->js items)
-                  :pagination {:pageSize 10 :total total
-                               :show-total (fn [t] (str "共 " t " 条"))}}]
+                  :pagination (pagination/table-pagination
+                               {:total total
+                                :page (:page query-params)
+                                :page-size (:size query-params)
+                                :on-change #(rf/dispatch [:configs/change-page % %2])})}]
      [config-modal
       {:visible? modal-visible?
        :editing editing

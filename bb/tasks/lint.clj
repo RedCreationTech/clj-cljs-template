@@ -1,5 +1,5 @@
 (ns tasks.lint
-  "静态检查:bb lint = clj-kondo(warning 即失败)+ 迁移文件检查 + 规模约束。"
+  "静态检查:bb lint = clj-kondo(warning 即失败)+ 迁移文件 + 规模约束 + 分页约定。"
   (:require
    [babashka.fs :as fs]
    [babashka.pods :as pods]
@@ -159,3 +159,24 @@
     (if (or (seq big-files) (seq long-fns))
       (u/fail! "规模约束未通过:超限的文件/函数请按职责拆分(见 AGENTS.md)")
       (println "✔ 规模约束通过"))))
+
+;; ─── 列表分页约定 ──────────────────────────────────────────────────
+
+(def ^:private hand-rolled-pagination
+  "页面里手写 :pagination {…} 或 :pagination #js {…}:漏掉 :current / :onChange 时,页码会跳但数据不换。"
+  #":pagination\s*(?:#js\s*)?\{")
+
+(defn pagination-conventions!
+  "列表页的 :pagination 必须来自 components/pagination(table-pagination / client-pagination)。"
+  []
+  (let [files (->> (fs/glob "src/cljs" "**.cljs")
+                   (map str) sort (filter #(str/includes? % "/pages/")))
+        problems (for [f files
+                       :let [hits (keep (fn [[i line]] (when (re-find hand-rolled-pagination line) (inc i)))
+                                        (map-indexed vector (str/split-lines (slurp f))))]
+                       :when (seq hits)]
+                   (str f ":" (str/join "," hits) " 手写了 :pagination 属性"))]
+    (if (seq problems)
+      (do (doseq [p problems] (println "  ✖" p))
+          (u/fail! "分页约定未通过:服务端分页用 pagination/table-pagination,本地翻页用 client-pagination"))
+      (println "✔ 分页约定通过:" (count files) "个页面表格的分页属性都来自 components/pagination"))))

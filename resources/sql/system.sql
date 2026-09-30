@@ -133,11 +133,20 @@ UPDATE sys_dept SET ancestors = :ancestors WHERE dept_id = :dept_id
 UPDATE sys_dept SET del_flag = '2', update_time = :now WHERE dept_id = :dept_id
 
 -- :name list-roles :? :*
+-- :doc 角色列表(分页),:offset / :page_size 由 com.ruoyi.domain.paging/paginate 给出
 SELECT * FROM sys_role WHERE del_flag = '0'
   AND (:role_name IS NULL OR INSTR(role_name, :role_name) > 0)
   AND (:role_key IS NULL OR role_key = :role_key)
   AND (:status IS NULL OR status = :status)
 ORDER BY role_sort
+LIMIT :page_size OFFSET :offset
+
+-- :name count-roles :? :1
+-- :doc 统计角色数量(与 list-roles 同样的筛选条件)
+SELECT COUNT(*) AS total FROM sys_role WHERE del_flag = '0'
+  AND (:role_name IS NULL OR INSTR(role_name, :role_name) > 0)
+  AND (:role_key IS NULL OR role_key = :role_key)
+  AND (:status IS NULL OR status = :status)
 
 -- :name find-role-by-id :? :1
 SELECT * FROM sys_role WHERE role_id = :role_id AND del_flag = '0'
@@ -216,11 +225,20 @@ DELETE FROM sys_role_menu WHERE role_id = :role_id
 INSERT INTO sys_role_menu (role_id, menu_id) VALUES (:role_id, :menu_id)
 
 -- :name list-posts :? :*
+-- :doc 岗位列表(分页)
 SELECT * FROM sys_post WHERE 1=1
   AND (:post_code IS NULL OR INSTR(post_code, :post_code) > 0)
   AND (:post_name IS NULL OR INSTR(post_name, :post_name) > 0)
   AND (:status IS NULL OR status = :status)
 ORDER BY post_sort
+LIMIT :page_size OFFSET :offset
+
+-- :name count-posts :? :1
+-- :doc 统计岗位数量(与 list-posts 同样的筛选条件)
+SELECT COUNT(*) AS total FROM sys_post WHERE 1=1
+  AND (:post_code IS NULL OR INSTR(post_code, :post_code) > 0)
+  AND (:post_name IS NULL OR INSTR(post_name, :post_name) > 0)
+  AND (:status IS NULL OR status = :status)
 
 -- :name find-post-by-id :? :1
 SELECT * FROM sys_post WHERE post_id = :post_id
@@ -303,11 +321,20 @@ WHERE dict_code = :dict_code
 DELETE FROM sys_dict_data WHERE dict_code = :dict_code
 
 -- :name list-configs :? :*
+-- :doc 参数配置列表(分页)
 SELECT * FROM sys_config WHERE 1=1
   AND (:config_name IS NULL OR INSTR(config_name, :config_name) > 0)
   AND (:config_key IS NULL OR INSTR(config_key, :config_key) > 0)
   AND (:config_type IS NULL OR config_type = :config_type)
 ORDER BY config_id
+LIMIT :page_size OFFSET :offset
+
+-- :name count-configs :? :1
+-- :doc 统计参数配置数量(与 list-configs 同样的筛选条件)
+SELECT COUNT(*) AS total FROM sys_config WHERE 1=1
+  AND (:config_name IS NULL OR INSTR(config_name, :config_name) > 0)
+  AND (:config_key IS NULL OR INSTR(config_key, :config_key) > 0)
+  AND (:config_type IS NULL OR config_type = :config_type)
 
 -- :name find-config-by-id :? :1
 SELECT * FROM sys_config WHERE config_id = :config_id

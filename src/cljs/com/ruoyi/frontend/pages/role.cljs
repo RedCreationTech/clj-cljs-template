@@ -7,6 +7,7 @@
    [com.ruoyi.frontend.api.impexp :as impexp-api]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
+   [com.ruoyi.frontend.components.pagination :as pagination]
    [com.ruoyi.frontend.perm :as perm]
    [re-frame.core :as rf]
    [reagent.core :as r]
@@ -82,7 +83,7 @@
                                     :on-click #(rf/dispatch [:roles/search])}]
        [page-toolbar/reset-button {:icon (r/as-element [:> ReloadOutlined])
                                    :on-click #(do (rf/dispatch [:roles/reset-query])
-                                                  (rf/dispatch [:roles/fetch {}]))}]]]]))
+                                                  (rf/dispatch [:roles/fetch {:page 1}]))}]]]]))
 
 ;; ─── 工具栏 ────────────────────────────────────────────────────────
 
@@ -105,7 +106,7 @@
                                              :on-click #(rf/dispatch [:roles/search])}]
             [page-toolbar/round-tool-button {:title "刷新"
                                              :icon (r/as-element [:> ReloadOutlined])
-                                             :on-click #(rf/dispatch [:roles/fetch {}])}]]}])
+                                             :on-click #(rf/dispatch [:roles/fetch])}]]}])
 
 ;; ─── 表格列定义 ──────────────────────────────────────────────────────
 
@@ -272,9 +273,8 @@
                                   (rf/dispatch [dispatch-fetch]))}
       "重置"]]))
 
-(defn- user-alloc-table [items-sub total-sub loading?-sub selected-sub set-selected-event _fetch-event action-label action-event]
+(defn- user-alloc-table [items-sub loading?-sub selected-sub set-selected-event action-label action-event]
   (let [items @(rf/subscribe (if (keyword? items-sub) [items-sub] items-sub))
-        total @(rf/subscribe (if (keyword? total-sub) [total-sub] total-sub))
         loading? @(rf/subscribe (if (keyword? loading?-sub) [loading?-sub] loading?-sub))
         selected @(rf/subscribe (if (keyword? selected-sub) [selected-sub] selected-sub))]
     [:div
@@ -286,10 +286,7 @@
                   :rowSelection #js {:selectedRowKeys (clj->js (mapv str selected))
                                      :onChange (fn [keys _]
                                                  (rf/dispatch [set-selected-event (js->clj keys)]))}
-                  :pagination {:total total
-                               :pageSize 10
-                               :showSizeChanger true
-                               :showTotal (fn [t] (str "共 " t " 条"))}}]]))
+                  :pagination (pagination/client-pagination)}]]))
 
 (defn- allocated-tab-item []
   {:key "allocated"
@@ -301,11 +298,9 @@
                 :roles/reset-allocated-query
                 :roles/fetch-allocated]
                [user-alloc-table :roles/allocated-items
-                :roles/allocated-total
                 :roles/allocated-loading?
                 :roles/allocated-selected
                 :roles/set-allocated-selected
-                :roles/fetch-allocated
                 "取消授权"
                 :roles/cancel-user]
                [:div {:style {:marginTop 12 :textAlign "right"}}
@@ -323,11 +318,9 @@
                 :roles/reset-unallocated-query
                 :roles/fetch-unallocated]
                [user-alloc-table :roles/unallocated-items
-                :roles/unallocated-total
                 :roles/unallocated-loading?
                 :roles/unallocated-selected
                 :roles/set-unallocated-selected
-                :roles/fetch-unallocated
                 "选择"
                 :roles/select-all-users]
                [:div {:style {:marginTop 12 :textAlign "right"}}
@@ -361,12 +354,13 @@
 (defn role-page []
   (hooks/use-effect
    (fn []
-     (rf/dispatch [:roles/fetch {}])
+     (rf/dispatch [:roles/fetch])
      js/undefined)
    [])
   (let [items @(rf/subscribe [:roles/items])
         total @(rf/subscribe [:roles/total])
-        loading? @(rf/subscribe [:roles/loading?])]
+        loading? @(rf/subscribe [:roles/loading?])
+        query-params @(rf/subscribe [:roles/query-params])]
     [:div
      [search-form]
      [toolbar]
@@ -375,10 +369,11 @@
                   :columns (role-columns)
                   :dataSource (clj->js items)
                   :loading loading?
-                  :pagination {:total total
-                               :pageSize 10
-                               :showSizeChanger true
-                               :showTotal (fn [total] (str "共 " total " 条"))}}]
+                  :pagination (pagination/table-pagination
+                               {:total total
+                                :page (:page query-params)
+                                :page-size (:size query-params)
+                                :on-change #(rf/dispatch [:roles/change-page % %2])})}]
      [edit-modal]
      [permission-modal]
      [data-scope-modal]

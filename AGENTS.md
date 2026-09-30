@@ -11,7 +11,7 @@
 ## 任务入口与质量门禁
 
 - **所有任务走 babashka**：`bb tasks` 列出全部任务；不要再写 Makefile / shell 脚本，新任务加到 `bb.edn`，实现放 `bb/tasks/*.clj`（跨平台，Windows 也能跑）。
-- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`）、`bb lint:migrations`、`bb check`；格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
+- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`）、`bb lint:migrations`、`bb check`、`bb lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`，见「Frontend 组件规范」§11b）；格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
 - **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟。改了任务名或参数，要同步改 CI。
 - **新增业务模块用 `bb new-module`**（见 README「新增业务模块」）。源码里的 `;; [new-module] <tag>` 注释是脚手架的登记点（`system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs`），**不要删除或改写这些标记行**；重构这些文件时把标记保留在对应集合的末尾。改动脚手架模板（`bb/tasks/scaffold/*.clj`）后，至少生成一个模块跑一遍 lint / fmt:check / 生成的测试 / `bb cljs:check`（CI 的 scaffold 任务会做完整检查）。
 - **生产密钥**：prod profile 下 `JWT_SECRET`（≥32 字符）与 `COOKIE_SECRET`（16 字节）缺失或为内置默认值时拒绝启动（`com.ruoyi.infra.secrets`）；dev/test 用默认值即可，不要把真实密钥写进仓库。
@@ -271,6 +271,41 @@ Reagent 函数组件作为 `Form.Item` 子元素时，antd 无法像对原生 In
 ;; ✅ 正确
 {:api/list-users (merge params {:page page :size size})}
 ```
+
+### 11b. 列表页分页：服务端分页 + `components/pagination`（`bb lint:pagination` 强制）
+
+每个列表模块在 app-db 里存 `:query-params`（含 `:page` / `:size` 与筛选条件），取数一律走 `events.common/fetch-with-query`：
+
+```clojure
+;; 事件：把 overrides 并进 [:posts :query-params] 后再请求，页码与筛选条件因此一直保留
+(rf/reg-event-fx :posts/fetch
+                 (fn [{:keys [db]} [_ overrides]]
+                   (common/fetch-with-query db :posts :api/list-posts overrides)))
+
+(rf/reg-event-fx :posts/change-page
+                 (fn [_ [_ page page-size]]
+                   {:dispatch [:posts/fetch {:page page :size page-size}]}))
+
+;; 换搜索条件回到第 1 页
+(rf/reg-event-fx :posts/search
+                 (fn [{:keys [db]} _] {:dispatch [:posts/fetch {:page 1}]}))
+```
+
+新增/修改/删除成功之后的重新取数不要清空 `:query-params`：派发 `[:posts/fetch]`（停在当前页）或 `[:posts/search]`（回到第 1 页）都可以，两者都保留筛选条件；不要在 fx 里另写一套前端假搜索（按关键字在已取到的 `:items` 里 filter），那会绕过分页。
+
+表格的分页属性只能来自 `components/pagination`，不要在页面里手写 `:pagination {…}`：
+
+```clojure
+;; ✅ 服务端分页（绝大多数列表页）
+:pagination (pagination/table-pagination
+             {:total total :page (:page query-params) :page-size (:size query-params)
+              :on-change #(rf/dispatch [:posts/change-page % %2])})
+
+;; ✅ 一次拿全量、由 antd 本地翻页（弹窗里的分配列表、字典等短数据）
+:pagination (pagination/client-pagination)
+```
+
+漏掉 `:current` / `:onChange` 时页码会跳但数据不换（曾出现在操作日志、登录日志、角色、参数、定时任务、在线用户上）。手写还容易写成 `:show-total` 这类 kebab-case 属性，antd 直接忽略。后端对应约定：控制器用 `controllers.params/query` 读参数，领域层用 `com.ruoyi.domain.paging/paginate` 把 `{:page-num :page-size}` 换算成 `LIMIT/OFFSET` 并配对 `count-*` 查询，返回 `{:rows … :total …}`。
 
 ### 12. 不要同时设置 `:border` 和 `:borderColor`
 

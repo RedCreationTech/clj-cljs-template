@@ -9,9 +9,13 @@
    [re-frame.core :as rf]))
 
 (rf/reg-event-fx :roles/search
-                 ;; 按搜索表单里的条件查询(条件存在 app-db 的 [:roles :query-params])
-                 (fn [{:keys [db]} _]
-                   {:dispatch [:roles/fetch (get-in db [:roles :query-params] {})]}))
+                 ;; 搜索条件已经写进 [:roles :query-params],换条件回到第 1 页
+                 (fn [_ _]
+                   {:dispatch [:roles/fetch {:page 1}]}))
+
+(rf/reg-event-fx :roles/change-page
+                 (fn [_ [_ page page-size]]
+                   {:dispatch [:roles/fetch {:page page :size page-size}]}))
 
 (rf/reg-event-db :roles/update-query
                  (fn [db [_ k v]]
@@ -31,9 +35,8 @@
                          (assoc-in [:roles :loading?] false)))))
 
 (rf/reg-event-fx :roles/fetch
-                 (fn [{:keys [db]} [_ params]]
-                   {:db (assoc-in db [:roles :loading?] true)
-                    :api/list-roles params}))
+                 (fn [{:keys [db]} [_ overrides]]
+                   (ec/fetch-with-query db :roles :api/list-roles overrides)))
 
 (rf/reg-fx :api/list-roles
            (fn [params]

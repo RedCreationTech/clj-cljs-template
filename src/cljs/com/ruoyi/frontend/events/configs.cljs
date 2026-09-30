@@ -3,6 +3,7 @@
   (:require
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api.configs :as configs-api]
+   [com.ruoyi.frontend.events.common :as common]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :configs/set-list
@@ -15,9 +16,12 @@
                          (assoc-in [:configs :loading?] false)))))
 
 (rf/reg-event-fx :configs/fetch
-                 (fn [{:keys [db]} [_ params]]
-                   {:db (assoc-in db [:configs :loading?] true)
-                    :api/list-configs params}))
+                 (fn [{:keys [db]} [_ overrides]]
+                   (common/fetch-with-query db :configs :api/list-configs overrides)))
+
+(rf/reg-event-fx :configs/change-page
+                 (fn [_ [_ page page-size]]
+                   {:dispatch [:configs/fetch {:page page :size page-size}]}))
 
 (rf/reg-fx :api/list-configs
            (fn [params]
@@ -45,7 +49,7 @@
 
 (rf/reg-event-fx :configs/created
                  (fn [_ _]
-                   {:dispatch [:configs/fetch {}]}))
+                   {:dispatch [:configs/fetch]}))
 
 (rf/reg-event-fx :configs/update
                  (fn [{:keys [db]} [_ id params]]
@@ -66,7 +70,7 @@
 (rf/reg-event-fx :configs/updated
                  (fn [{:keys [db]} _]
                    {:db db
-                    :dispatch [:configs/fetch {}]}))
+                    :dispatch [:configs/fetch]}))
 
 (rf/reg-event-fx :configs/delete
                  (fn [{:keys [db]} [_ id]]
@@ -87,4 +91,4 @@
 (rf/reg-event-fx :configs/deleted
                  (fn [{:keys [db]} _]
                    {:db db
-                    :dispatch [:configs/fetch {}]}))
+                    :dispatch [:configs/fetch]}))

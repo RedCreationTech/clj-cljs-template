@@ -206,8 +206,8 @@
           job-id (get-in (parse-json (:response create-ctx)) [:data :job_id])
           run-resp (PUT (handler) (str "/api/system/job/" job-id "/run") {} (auth-headers token))
           _ (Thread/sleep 1200)
-          all-log-resp (GET (handler) "/api/system/job-log?page-num=1&page-size=10" {} (auth-headers token))
-          log-resp (GET (handler) "/api/system/job-log?page-num=1&page-size=10&job_name=test-job" {} (auth-headers token))
+          all-log-resp (GET (handler) "/api/system/job-log?page=1&size=10" {} (auth-headers token))
+          log-resp (GET (handler) "/api/system/job-log?page=1&size=10&job_name=test-job" {} (auth-headers token))
           log-body (parse-json log-resp)
           all-log-body (parse-json all-log-resp)]
       (is (some? job-id))

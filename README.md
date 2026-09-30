@@ -191,7 +191,7 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | E2E | `bb e2e`（需后端已在 3000 运行；首次运行先 `npx playwright install chromium`）；单个用例 `bb e2e tests/e2e/post-crud.spec.js` |
 | 功能导览录像 | `bb video:tour`（需后端 + `bb release` + ffmpeg）→ `target/tour/tour.mp4`，12 段，左侧常驻目录、内嵌章节与烧录台词；只重新合成用 `bb video:tour --compose-only` |
 | 覆盖率 | `bb coverage` → `target/coverage/index.html` |
-| 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束） |
+| 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束）+ `lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`） |
 | 格式化 | `bb fmt`（cljfmt 修改）/ `bb fmt:check`（只检查） |
 | 构建 | `bb release`（前端）、`bb uberjar`（前端 + 后端 jar）、`bb cljs:check`（快速编译检查）、`bb patch:vendor`（给 node_modules 打补丁，见下） |
 | 与 CI 相同的快速检查 | `bb ci`（lint + fmt:check + test + test:cljs） |
@@ -240,7 +240,7 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 
 | 任务 | 内容 |
 |------|------|
-| lint | `bb lint`（clj-kondo、迁移检查、规模约束）+ `bb fmt:check` |
+| lint | `bb lint`（clj-kondo、迁移检查、规模约束、分页约定）+ `bb fmt:check` |
 | test-sqlite | `bb test` + `bb db:roundtrip` |
 | test-mysql | MySQL 8.4 service 上 `bb test:mysql` + `bb db:roundtrip` |
 | e2e | `bb test:cljs` → `bb release`（warning 即失败）→ 启动后端 → `bb e2e`，失败时上传报告与后端日志 |
@@ -289,14 +289,15 @@ Swagger UI：http://localhost:3000/api
 ## 开发约定
 
 - 后端分层：`route -> controller -> domain(service) -> HugSQL query -> db`；组件全部在 `system.edn` 装配。
-- API 契约：响应信封 `{:code :msg :data}`，分页 `{:total :rows}`，参数 `page`/`size`，字段 snake_case（详见 C4 文档 §6.6）；列表接口用 `controllers.params/query` 读查询参数（字符串键 → 关键字键，空串视为未填）。
+- API 契约：响应信封 `{:code :msg :data}`，分页 `{:total :rows}`，参数 `page`/`size`，字段 snake_case（详见 C4 文档 §6.6）；列表接口用 `controllers.params/query` 读查询参数（字符串键 → 关键字键，空串视为未填），领域层用 `domain.paging/paginate` 配对 `LIMIT/OFFSET` 列表与 `count-*` 查询。
 - 权限：新接口在路由数据里声明 `:auth?` / `:perms`，对应按钮菜单（F）写进迁移；前端按钮加 `:perm` 或包 `perm/when-allowed`。前端只负责显隐，拦截以后端为准。
-- 接口失败由 `api.transport` 统一提示（403、5xx、网络断开、业务码非 200）并复位 loading，调用方的 `on-error` 只做收尾，不要再各自弹「网络错误」；上传用 `t/request` 的 `:body`，带令牌下载用 `t/download!`。
+- 接口失败由 `api.transport` 统一提示（403、5xx、网络断开、业务码非 200）并复位 loading（`events.common/stop-all-loading` 把 app-db 里各模块的 `:loading?` 清掉，请求失败后表格不会一直转圈），调用方的 `on-error` 只做收尾，不要再各自弹「网络错误」；上传用 `t/request` 的 `:body`，带令牌下载用 `t/download!`。
 - 每个 namespace ≤ 500 行、函数 ≤ 50 行（`bb check` 检查 src / env / test / bb / scripts）；超限时拆分。
 - clj-kondo 零 warning、cljfmt 格式一致（`bb lint`、`bb fmt:check`，CI 强制）。
 - 时间由应用生成：SQL 里写 `:now`（`infra.clock` 自动注入本地时间），不写 `CURRENT_TIMESTAMP` / `NOW()`（lint 检查）；接口里的时间统一编码为 `yyyy-MM-dd HH:mm:ss`（`infra.json`），两库一致。需要多实例共享的临时状态用 `infra.kv`，不要放 atom。
 - SQL 统一放 `resources/sql/*.sql`；两套迁移目录必须同步（`bb lint:migrations` 检查）；共用 SQL 只写两库都支持的语法（如 `INSTR` 代替 `||`、派生表代替 `DUAL`）。
 - 前端状态统一 re-frame；组件局部状态用 Hooks，不用 `reagent/atom`；分页参数固定 `page` / `size`。
+- 列表页一律服务端分页：模块在 app-db 存 `:query-params`（含 `:page` / `:size`），取数走 `events.common/fetch-with-query`，表格的 `:pagination` 只用 `components/pagination` 的 `table-pagination`（服务端）/ `client-pagination`（本地翻页），不要在页面里手写（`bb lint:pagination` 检查）。
 - 前端界面文案用 `(i18n/tr "中文原文")` 包裹、英文译文加到 `i18n.cljs`（外壳与通用组件已完成，业务页面可逐步迁移）；localStorage 只通过 `storage` 命名空间访问；内联样式的颜色用 `var(--app-*)` 变量（见 `resources/public/css/app.css`），暗色主题才能自动适配。
 - 中文 docstring 描述职责、参数与返回值。
 - 更多 antd 6 适配与坑位清单见 `AGENTS.md`。

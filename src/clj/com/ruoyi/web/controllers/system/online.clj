@@ -1,6 +1,7 @@
 (ns com.ruoyi.web.controllers.system.online
   "在线用户控制器。"
   (:require
+   [com.ruoyi.web.controllers.params :as params]
    [ring.util.response :as response]))
 
 (defn- ok [data]
@@ -11,21 +12,15 @@
   (-> (response/response {:code 200 :msg msg})
       (response/content-type "application/json")))
 
-(defn- parse-int [v]
-  (when v (Integer/parseInt v)))
-
 (defn list-online
-  "获取在线用户列表。"
+  "获取在线用户列表(分页)。空的筛选条件不要传 nil:list-online 的 :or 默认值只对缺失的键生效。"
   [{:keys [online-service]} request]
-  (let [params (:query-params request)
-        page (or (parse-int (get params "pageNum")) 1)
-        size (or (parse-int (get params "pageSize")) 10)
-        result ((:list-online online-service)
-                {:login-name (get params "user_name")
-                 :ipaddr (get params "ipaddr")
-                 :page-num page
-                 :page-size size})]
-    (ok {:rows (:rows result) :total (:total result)})))
+  (let [q (params/query request)]
+    (ok ((:list-online online-service)
+         (cond-> {:page-num (or (:page-num q) 1)
+                  :page-size (or (:page-size q) 10)}
+           (:user_name q) (assoc :login-name (:user_name q))
+           (:ipaddr q) (assoc :ipaddr (:ipaddr q)))))))
 
 (defn force-logout
   "强退指定用户。"

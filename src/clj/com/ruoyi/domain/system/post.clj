@@ -1,12 +1,14 @@
 (ns com.ruoyi.domain.system.post
   "岗位领域服务。"
   (:require
+   [com.ruoyi.domain.paging :as paging]
    [com.ruoyi.infra.db :as db]))
 
 (defn list-posts
-  "查询岗位列表。"
+  "查询岗位列表(分页,返回 {:rows :total})。"
   [{:keys [query-fn]} params]
-  (query-fn :list-posts (merge {:post_code nil :post_name nil :status nil} params)))
+  (paging/paginate query-fn :list-posts :count-posts
+                   {:post_code nil :post_name nil :status nil} params))
 
 (defn find-post-by-id
   "根据ID查询岗位。"

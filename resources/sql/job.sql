@@ -1,9 +1,22 @@
 -- :name list-jobs :? :*
+-- :doc 定时任务列表(分页),给管理界面用
 SELECT * FROM sys_job WHERE 1=1
   AND (:job_name IS NULL OR INSTR(job_name, :job_name) > 0)
   AND (:job_group IS NULL OR job_group = :job_group)
   AND (:status IS NULL OR status = :status)
 ORDER BY job_id
+LIMIT :page_size OFFSET :offset
+
+-- :name count-jobs :? :1
+-- :doc 统计定时任务数量(与 list-jobs 同样的筛选条件)
+SELECT COUNT(*) AS total FROM sys_job WHERE 1=1
+  AND (:job_name IS NULL OR INSTR(job_name, :job_name) > 0)
+  AND (:job_group IS NULL OR job_group = :job_group)
+  AND (:status IS NULL OR status = :status)
+
+-- :name all-jobs :? :*
+-- :doc 全部定时任务,不分页:调度器启动时加载、仪表盘统计用
+SELECT * FROM sys_job ORDER BY job_id
 
 -- :name find-job-by-id :? :1
 SELECT * FROM sys_job WHERE job_id = :job_id

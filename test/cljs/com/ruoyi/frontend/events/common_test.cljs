@@ -35,3 +35,17 @@
               :auth {:token "t"}
               :page :config}
              (ec/stop-all-loading db))))))
+
+(deftest fetch-with-query-test
+  (let [db {:configs {:loading? false :query-params {:page 2 :size 10 :config_name "用户"}}}]
+    (testing "翻页只覆盖页码,筛选条件保留"
+      (let [effects (ec/fetch-with-query db :configs :api/list-configs {:page 3})]
+        (is (= {:page 3 :size 10 :config_name "用户"} (:api/list-configs effects)))
+        (is (true? (get-in effects [:db :configs :loading?])))
+        (is (= {:page 3 :size 10 :config_name "用户"} (get-in effects [:db :configs :query-params])))))
+    (testing "不带参数(新增后重新取数)沿用当前页与条件"
+      (is (= {:page 2 :size 10 :config_name "用户"}
+             (:api/list-configs (ec/fetch-with-query db :configs :api/list-configs nil)))))
+    (testing "模块还没有条件时用覆盖值本身"
+      (is (= {:page 1}
+             (:api/list-jobs (ec/fetch-with-query {} :jobs :api/list-jobs {:page 1})))))))
