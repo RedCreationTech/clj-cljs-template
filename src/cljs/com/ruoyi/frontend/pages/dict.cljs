@@ -17,7 +17,7 @@
   (let [[form set-form!] (hooks/use-state {})]
     (hooks/use-effect
      (fn [] (set-form! (or editing {})) js/undefined)
-     #js [visible?])
+     [visible?])
     [antd/modal {:open visible?
                  :title (if editing "编辑字典类型" "新增字典类型")
                  :on-ok #(on-ok form)
@@ -163,7 +163,7 @@
   (let [[form set-form!] (hooks/use-state {})]
     (hooks/use-effect
      (fn [] (set-form! (or editing {})) js/undefined)
-     #js [visible?])
+     [visible?])
     [antd/modal {:open visible?
                  :title (if editing "编辑字典数据" "新增字典数据")
                  :on-ok #(on-ok form)
@@ -257,7 +257,7 @@
        (when dict-type
          (rf/dispatch [:dicts/fetch-data {:dict_type (:dict_type dict-type)}]))
        js/undefined)
-     #js [(:dict_type dict-type)])
+     [(:dict_type dict-type)])
     (if dict-type
       [:div {:style {:marginTop 24}}
        [data-header {:dict-type dict-type

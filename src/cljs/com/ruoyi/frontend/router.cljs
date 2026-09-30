@@ -28,7 +28,7 @@
         "monitor/datasource" :datasource
         "monitor/integrant" :integrant
         "monitor/swagger" :swagger
-        "tool/build" :build
+        "monitor/build" :build
         "system/user/profile" :profile
         ;; 业务模块的路由登记在标记之前(bb new-module 自动插入;标记行请保留)
         ;; [new-module] routes

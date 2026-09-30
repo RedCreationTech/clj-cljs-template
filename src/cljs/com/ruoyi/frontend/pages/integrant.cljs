@@ -93,11 +93,11 @@
          :onClick #(on-select k)}
      [:rect {:x -75 :y -16 :width 150 :height 32
              :rx 4 :ry 4
-             :fill (if (= k selected) "#1677ff" "#fff")
-             :stroke (if (= k selected) "#1677ff" "#d9d9d9")}]
+             :fill (if (= k selected) "#1677ff" "var(--app-bg)")
+             :stroke (if (= k selected) "#1677ff" "var(--app-border)")}]
      [:text {:x (if function? -18 0) :y 4 :textAnchor "middle"
-             :fill (if (= k selected) "#fff" "#333")
-             :fontSize 11}
+             :fontSize 11
+             :fill (if (= k selected) "#fff" "var(--app-text-primary)")}
       k]
      (when function?
        [dep-graph-fn-toggle k active? on-toggle])]))
@@ -116,7 +116,7 @@
         height layer-height]
     [:svg {:width width :height height
            :className "integrant-dep-graph"
-           :style {:border "1px solid #f0f0f0" :background "var(--app-fill-light)" :borderRadius 4}}
+           :style {:border "1px solid var(--app-border-light)" :background "var(--app-fill-light)" :borderRadius 4}}
      [:defs
       [:marker {:id "ig-arrow" :markerWidth 8 :markerHeight 8
                 :refX 7 :refY 4 :orient "auto" :markerUnits "strokeWidth"}

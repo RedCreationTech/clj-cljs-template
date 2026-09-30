@@ -290,13 +290,17 @@
 
 (rf/reg-fx :api/batch-delete-users
            (fn [ids]
-             (doseq [id ids]
-               (users-api/delete-user id
-                                      (fn [result]
-                                        (when (= 200 (:code result))
-                                          (antd/success! "删除成功")))
-                                      (fn [_])))
-             (rf/dispatch [:users/fetch {}])))
+             ;; 逐个删除是异步的,刷新必须等全部回调返回,否则列表会停在删除前的数据
+             (let [remaining (volatile! (count ids))
+                   done! (fn [] (when (zero? (vswap! remaining dec))
+                                  (rf/dispatch [:users/fetch {}])))]
+               (doseq [id ids]
+                 (users-api/delete-user id
+                                        (fn [result]
+                                          (when (= 200 (:code result))
+                                            (antd/success! "删除成功"))
+                                          (done!))
+                                        (fn [_] (done!)))))))
 
 (rf/reg-fx :api/change-user-status
            (fn [[user-id status]]

@@ -37,6 +37,8 @@
                  (fn [db [_ items]]
                    (assoc-in db [:fb :items] items)))
 
+;; ─── 表单模板 ──────────────────────────────────────────────────────
+
 (rf/reg-event-db :form-template/set-list
                  (fn [db [_ data]]
                    (let [items (if (sequential? data) data (:rows data []))]

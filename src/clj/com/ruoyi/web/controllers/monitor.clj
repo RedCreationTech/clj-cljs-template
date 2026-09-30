@@ -239,18 +239,20 @@
 (defn integrant-info
   "返回 Integrant 静态配置、依赖图与运行时系统摘要。"
   [_ _]
-  (let [cfg (config/system-config {})
-        graph (ig/dependency-graph cfg)
-        order (vec (dep/topo-sort graph))
-        deps (into {} (map (fn [k] [(sanitize-key k) (mapv sanitize-key (dep/immediate-dependencies graph k))])) order)
-        dents (into {} (map (fn [k] [(sanitize-key k) (mapv sanitize-key (dep/immediate-dependents graph k))])) order)
-        sys @integrant-state/system
-        system-summary (into {} (map (fn [k] [(sanitize-key k) (summarize-system-value (get sys k))])) order)]
-    (ok {:config (sanitize-value cfg)
-         :order (mapv sanitize-key order)
-         :dependencies deps
-         :dependents dents
-         :system system-summary})))
+  ;; 用启动时展开好的那份配置:按当前 profile 现读会让环境变量缺省值(如空 PORT)展开失败
+  (if-let [cfg @config/active-config]
+    (let [graph (ig/dependency-graph cfg)
+          order (vec (dep/topo-sort graph))
+          deps (into {} (map (fn [k] [(sanitize-key k) (mapv sanitize-key (dep/immediate-dependencies graph k))])) order)
+          dents (into {} (map (fn [k] [(sanitize-key k) (mapv sanitize-key (dep/immediate-dependents graph k))])) order)
+          sys @integrant-state/system
+          system-summary (into {} (map (fn [k] [(sanitize-key k) (summarize-system-value (get sys k))])) order)]
+      (ok {:config (sanitize-value cfg)
+           :order (mapv sanitize-key order)
+           :dependencies deps
+           :dependents dents
+           :system system-summary}))
+    (ok 503 "系统尚未启动,没有可用的 Integrant 配置" nil)))
 
 (defn- format-trace-log [idx log]
   (let [error? (contains? log :error)

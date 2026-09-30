@@ -38,7 +38,9 @@
 (defn create-dept!
   "创建部门。"
   [{:keys [query-fn db] :as ctx} params]
-  (let [parent-id (:parent_id params 0)
+  (let [;; 未选上级即顶级部门：key 存在但值为 nil 时 (:parent_id params 0) 会返回 nil，
+        ;; 落库后该部门挂在任何节点之下，树形列表里再也看不到它
+        parent-id (or (:parent_id params) 0)
         params (-> {:parent_id nil :ancestors nil :dept_name nil :order_num nil
                     :leader nil :phone nil :email nil :status nil :create_by nil}
                    (merge params)

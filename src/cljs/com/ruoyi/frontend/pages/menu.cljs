@@ -89,7 +89,7 @@
 
 ;; ─── 工具栏 ────────────────────────────────────────────────────────
 
-(defn- toolbar []
+(defn- toolbar [{:keys [on-toggle-expands]}]
   [page-toolbar/page-toolbar
    {:style {:padding "8px 22px 10px 22px"}
     :left [page-toolbar/toolbar-left
@@ -104,6 +104,7 @@
                                          :label "保存排序"}]
            [page-toolbar/toolbar-button {:kind :import
                                          :icon (r/as-element [:> ColumnHeightOutlined])
+                                         :on-click on-toggle-expands
                                          :label "展开/折叠"}]]
     :right [page-toolbar/toolbar-right
             [page-toolbar/round-tool-button {:title "搜索"
@@ -173,7 +174,7 @@
 
 ;; ─── 菜单编辑弹窗字段片段 ──────────────────────────────────────────────
 
-(defn- menu-basic-fields []
+(defn- menu-basic-fields [{:keys [icon on-icon]}]
   [:<>
    [antd/form-item {:label "上级菜单" :name "parent_id"}
     [antd/tree-select {:style {:width "100%"}
@@ -186,8 +187,11 @@
      [antd/radio {:value "M"} "目录"]
      [antd/radio {:value "C"} "菜单"]
      [antd/radio {:value "F"} "按钮"]]]
-   [antd/form-item {:label "菜单图标" :name "icon"}
-    [icon-picker/icon-picker {:placeholder "选择图标"}]]
+   ;; 图标选择器是自定义组件，antd Form.Item 注入不进 value/onChange，这里显式受控
+   [antd/form-item {:label "菜单图标"}
+    [icon-picker/icon-picker {:placeholder "选择图标"
+                              :value icon
+                              :on-change on-icon}]]
    [antd/form-item {:label "菜单名称" :name "menu_name" :required true}
     [antd/input {:placeholder "请输入菜单名称"}]]
    [antd/form-item {:label "显示排序" :name "order_num"}
@@ -219,13 +223,15 @@
         editing @(rf/subscribe [:menus/editing])
         form-data @(rf/subscribe [:menus/form-data])
         [form] (antd/form-use-form)
-        [menu-type set-menu-type!] (hooks/use-state "M")]
+        [menu-type set-menu-type!] (hooks/use-state "M")
+        [icon set-icon!] (hooks/use-state nil)]
     (hooks/use-effect
      (fn []
        (when visible?
          (let [initial (merge {:menu_type "M" :order_num 0 :status "0" :visible "0" :is_frame "0" :is_cache "0"} form-data)]
            (.setFieldsValue form (clj->js initial))
-           (set-menu-type! (:menu_type initial "M"))))
+           (set-menu-type! (:menu_type initial "M"))
+           (set-icon! (:icon initial))))
        js/undefined)
      [visible? form-data])
     [antd/modal {:title (if editing "修改菜单" "新增菜单")
@@ -239,12 +245,13 @@
                  :wrapperCol {:span 16}
                  :preserve false
                  :onFinish (fn [values]
-                             (rf/dispatch [:menus/submit (js->clj values :keywordize-keys true)]))
+                             (rf/dispatch [:menus/submit
+                                           (assoc (js->clj values :keywordize-keys true) :icon icon)]))
                  :initialValues (clj->js (merge {:menu_type "M" :order_num 0 :status "0" :visible "0" :is_frame "0" :is_cache "0"} form-data))
                  :onValuesChange (fn [changed _]
                                    (when-let [t (goog.object/get changed "menu_type")]
                                      (set-menu-type! t)))}
-      (menu-basic-fields)
+      (menu-basic-fields {:icon icon :on-icon set-icon!})
       (when (not= menu-type "F")
         (menu-route-fields))
       (when (not= menu-type "M")
@@ -271,34 +278,32 @@
    [])
   (let [items @(rf/subscribe [:menus/items])
         loading? @(rf/subscribe [:menus/loading?])
-        [expanded-keys set-expanded-keys!] (hooks/use-state :pending)
+        ;; nil 表示用户还没手动折叠过，此时始终跟随数据全展开
+        [expanded-keys set-expanded-keys!] (hooks/use-state nil)
         tree-data (build-menu-tree items 0)
-        expandable-ids (expandable-menu-ids tree-data)]
-    (hooks/use-effect
-     (fn []
-       (when (= expanded-keys :pending)
-         (set-expanded-keys! expandable-ids))
-       js/undefined)
-     [items])
+        all-ids (expandable-menu-ids tree-data)
+        current-expanded (or expanded-keys all-ids)]
     [:div {:style {:padding "0 12px 24px 12px"}}
      [:div {:style {:background "var(--app-bg)"
                     :minHeight "calc(100vh - 214px)"
                     :padding "10px 8px 24px 8px"}}
       [search-bar]
-      [toolbar]
+      [toolbar {:on-toggle-expands #(set-expanded-keys!
+                                     (if (= (count current-expanded) (count all-ids))
+                                       []
+                                       all-ids))}]
       [antd/table {:scroll #js {:x 1180}
                    :rowKey "menu_id"
                    :loading loading?
                    :columns (menu-columns)
                    :dataSource (clj->js tree-data)
                    :pagination false
-                   :expandedRowKeys (clj->js (if (= expanded-keys :pending) expandable-ids expanded-keys))
+                   :expandedRowKeys (clj->js current-expanded)
                    :onExpand (fn [expanded? ^js record]
-                               (let [id (.-menu_id record)
-                                     current (set (if (= expanded-keys :pending) expandable-ids expanded-keys))]
+                               (let [id (.-menu_id record)]
                                  (set-expanded-keys!
                                   (vec (if expanded?
-                                         (conj current id)
-                                         (disj current id))))))
+                                         (conj (set current-expanded) id)
+                                         (disj (set current-expanded) id))))))
                    :childrenColumnName "children"}]]
      [edit-modal]]))

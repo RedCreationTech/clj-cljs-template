@@ -23,7 +23,7 @@ const cases = [
   { path: '/monitor/cache', text: '缓存名称' },
   { path: '/monitor/datasource', text: '连接池' },
   { path: '/monitor/swagger', text: 'Swagger' },
-  { path: '/tool/build', text: '表单' },
+  { path: '/monitor/build', text: '表单' },
   { path: '/monitor/integrant', text: 'Integrant' },
   // 新增业务模块后在此追加 { path, text }
 ];

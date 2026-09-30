@@ -4,7 +4,6 @@
    ["@ant-design/icons" :refer [CheckOutlined ColumnHeightOutlined DeleteOutlined EditOutlined
                                 PlusOutlined ReloadOutlined SearchOutlined]]
    [com.ruoyi.frontend.antd :as antd]
-   [com.ruoyi.frontend.components.dept-tree-select :refer [dept-tree-select]]
    [com.ruoyi.frontend.components.page-search :as page-search]
    [com.ruoyi.frontend.components.page-toolbar :as page-toolbar]
    [com.ruoyi.frontend.perm :as perm]
@@ -24,6 +23,24 @@
                  (if (seq children)
                    (assoc d :children children)
                    d))))))
+
+(defn- dept-tree-options
+  "部门树 → antd TreeSelect 的 treeData（上级部门选择器用）。"
+  [nodes]
+  (mapv (fn [d]
+          (let [node {:title (:dept_name d) :value (:dept_id d) :key (:dept_id d)}]
+            (if-let [children (seq (:children d))]
+              (assoc node :children (dept-tree-options children))
+              node)))
+        nodes))
+
+(defn- expandable-dept-ids
+  "树中所有有子节点的部门 id，用于展开状态。"
+  [nodes]
+  (->> nodes
+       (filter #(seq (:children %)))
+       (mapcat #(cons (:dept_id %) (expandable-dept-ids (:children %))))
+       vec))
 
 ;; ─── 工具栏 ────────────────────────────────────────────────────────
 
@@ -55,7 +72,7 @@
                                                   (set-status! nil)
                                                   (rf/dispatch [:depts/fetch {}]))}]]]]))
 
-(defn- toolbar []
+(defn- toolbar [{:keys [on-toggle-expands]}]
   [page-toolbar/page-toolbar
    {:left [page-toolbar/toolbar-left
            [page-toolbar/toolbar-button {:perm "system:dept:add"
@@ -69,6 +86,7 @@
                                          :label "保存排序"}]
            [page-toolbar/toolbar-button {:kind :import
                                          :icon (r/as-element [:> ColumnHeightOutlined])
+                                         :on-click on-toggle-expands
                                          :label "展开/折叠"}]]
     :right [page-toolbar/toolbar-right
             [page-toolbar/round-tool-button {:title "搜索"
@@ -118,6 +136,7 @@
   (let [visible? @(rf/subscribe [:depts/modal-visible?])
         editing @(rf/subscribe [:depts/editing])
         form-data @(rf/subscribe [:depts/form-data])
+        items @(rf/subscribe [:depts/items])
         [form] (antd/form-use-form)]
     (hooks/use-effect
      (fn []
@@ -138,8 +157,12 @@
                              (rf/dispatch [:depts/submit (js->clj values :keywordize-keys true)]))
                  :initialValues (clj->js (merge {:order_num 0 :status "0"} form-data))}
       [antd/form-item {:label "上级部门" :name "parent_id"}
-       [dept-tree-select {:placeholder "选择上级部门（空为顶级）"
-                          :allow-clear? true}]]
+       ;; 用原生 TreeSelect：Form.Item 只会给 antd 控件注入 value/onChange/id
+       [antd/tree-select {:style {:width "100%"}
+                          :placeholder "选择上级部门（空为顶级）"
+                          :allowClear true
+                          :treeDefaultExpandAll true
+                          :treeData (clj->js (dept-tree-options (build-dept-tree items 0)))}]]
       [antd/form-item {:label "部门名称" :name "dept_name"
                        :rules [{:required true :message "请输入部门名称"}]}
        [antd/input {:placeholder "请输入部门名称"}]]
@@ -166,15 +189,29 @@
    [])
   (let [items @(rf/subscribe [:depts/items])
         loading? @(rf/subscribe [:depts/loading?])
-        tree-data (build-dept-tree items 0)]
+        ;; nil 表示用户还没手动折叠过：数据是异步到达的，defaultExpandAllRows 只看首次渲染，
+        ;; 所以展开状态必须自己管
+        [expanded-keys set-expanded-keys!] (hooks/use-state nil)
+        tree-data (build-dept-tree items 0)
+        all-ids (expandable-dept-ids tree-data)
+        current-expanded (or expanded-keys all-ids)]
     [:div
      [search-bar]
-     [toolbar]
+     [toolbar {:on-toggle-expands #(set-expanded-keys!
+                                    (if (= (count current-expanded) (count all-ids))
+                                      []
+                                      all-ids))}]
      [antd/table {:scroll #js {:x "max-content"} :rowKey "dept_id"
                   :loading loading?
                   :columns (dept-columns)
                   :dataSource (clj->js tree-data)
                   :pagination false
-                  :defaultExpandAllRows true
+                  :expandedRowKeys (clj->js current-expanded)
+                  :onExpand (fn [expanded? ^js record]
+                              (let [id (.-dept_id record)]
+                                (set-expanded-keys!
+                                 (vec (if expanded?
+                                        (conj (set current-expanded) id)
+                                        (disj (set current-expanded) id))))))
                   :childrenColumnName "children"}]
      [edit-modal]]))

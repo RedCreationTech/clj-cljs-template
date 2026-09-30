@@ -13,8 +13,8 @@
    :dict "system/dict"
    :config "system/config"
    :notice "system/notice"
-   :oper-log "system/operlog/operlog"
-   :login-log "system/operlog/logininfor"
+   :oper-log "monitor/operlog"
+   :login-log "monitor/logininfor"
    :online "monitor/online"
    :job "monitor/job"
    :server "monitor/server"
@@ -22,7 +22,7 @@
    :datasource "monitor/datasource"
    :integrant "monitor/integrant"
    :swagger "monitor/swagger"
-   :build "tool/build"
+   :build "monitor/build"
    :profile "system/user/profile"
    :dashboard "dashboard"
    ;; [new-module] menu-keys
@@ -38,15 +38,15 @@
    :dict ["首页" "系统管理" "字典管理"]
    :config ["首页" "系统管理" "参数设置"]
    :notice ["首页" "系统管理" "通知公告"]
-   :oper-log ["首页" "系统管理" "日志管理" "操作日志"]
-   :login-log ["首页" "系统管理" "日志管理" "登录日志"]
+   :oper-log ["首页" "系统监控" "操作日志"]
+   :login-log ["首页" "系统监控" "登录日志"]
    :online ["首页" "系统监控" "在线用户"]
    :job ["首页" "系统监控" "定时任务"]
    :server ["首页" "系统监控" "服务监控"]
    :cache ["首页" "系统监控" "缓存监控"]
-   :datasource ["首页" "系统监控" "连接池监视"]
-   :build ["首页" "系统工具" "表单构建"]
-   :swagger ["首页" "系统工具" "系统接口"]
+   :datasource ["首页" "系统监控" "数据监控"]
+   :build ["首页" "系统监控" "表单构建"]
+   :swagger ["首页" "系统监控" "系统接口"]
    :profile ["首页" "个人中心"]
    ;; [new-module] breadcrumbs
    })

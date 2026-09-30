@@ -21,3 +21,11 @@
   [options]
   (-> (config/read-config system-filename options)
       (with-default-migration-dir (System/getenv))))
+
+;; 启动时展开好的那份配置,供监控页展示运行时依赖图(而不是按别的 profile 再读一遍)
+(defonce active-config (atom nil))
+
+(defn remember-active-config!
+  [cfg]
+  (reset! active-config cfg)
+  cfg)

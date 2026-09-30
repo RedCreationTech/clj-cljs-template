@@ -52,10 +52,10 @@
     ;; prod 下密钥不安全时在创建任何组件之前就失败
     (secrets/verify! (:profile opts) (System/getenv))
     ((or (:start params) (:start defaults) (fn [])))
-    (->> (config/system-config opts)
-         (ig/expand)
-         (ig/init)
-         (reset! system))))
+    (let [cfg (-> (config/system-config opts) ig/expand)]
+      ;; 监控页展示的就是真正跑起来的那份配置,不能请求时按别的 profile 再读一遍
+      (config/remember-active-config! cfg)
+      (->> cfg ig/init (reset! system)))))
 
 (defn -main [& _]
   (try

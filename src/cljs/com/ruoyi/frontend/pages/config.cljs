@@ -58,7 +58,7 @@
   (let [[form set-form!] (hooks/use-state {})]
     (hooks/use-effect
      (fn [] (set-form! (or editing {})) js/undefined)
-     #js [visible?])
+     [visible?])
     [antd/modal {:open visible?
                  :title (if editing "编辑参数" "新增参数")
                  :on-ok #(on-ok form)

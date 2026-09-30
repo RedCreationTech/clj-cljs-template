@@ -117,7 +117,7 @@
                     :userSelect "none" :fontSize 13}
             :on-drag-start (fn [e]
                              (set! (.-effectAllowed (.-dataTransfer e)) "copyMove")
-                             (.setData (.-dataTransfer e) "text/plain" (str (:type comp))))}
+                             (.setData (.-dataTransfer e) "text/plain" (name (:type comp))))}
       [:span {:style {:color "var(--app-text-regular)"}} (:label comp)]])])
 
 ;; ─── 设计画布 ──────────────────────────────────────────────────────
@@ -242,30 +242,29 @@
   (let [items @(rf/subscribe [:fb/items])
         selected-id @(rf/subscribe [:fb/selected-id])
         selected-item (first (filter #(= (:id %) selected-id) items))]
-    (fn []
-      [:div
-       [:div {:style {:display "flex" :justifyContent "space-between" :alignItems "center" :marginBottom 16}}
-        [antd/space
-         [antd/button {:icon (r/as-element [:> EyeOutlined])}
-          "预览"]
-         [antd/button {:icon (r/as-element [:> CodeOutlined])
-                       :onClick #(rf/dispatch [:fb/toggle-code])
-                       :disabled (empty? items)}
-          "生成代码"]
-         [perm/when-allowed ["tool:build:add" "tool:build:edit"]
-          [antd/button {:icon (r/as-element [:> SaveOutlined])
-                        :onClick #(rf/dispatch [:form-template/open-save-modal])}
-           "保存模板"]]
-         [antd/button {:icon (r/as-element [:> FolderOpenOutlined])
-                       :onClick #(rf/dispatch [:form-template/open-load-drawer-and-fetch])}
-          "加载模板"]
-         [antd/button {:icon (r/as-element [:> ClearOutlined])
-                       :onClick #(rf/dispatch [:fb/clear])}
-          "清空"]]]
-       [:div {:style {:display "flex" :border "1px solid var(--ant-color-border-secondary, #f0f0f0)" :borderRadius 8 :overflow "hidden"}}
-        [palette-panel]
-        [design-canvas]
-        [prop-editor selected-item]]
-       [code-preview-modal]
-       [save-template-modal]
-       [load-template-drawer]])))
+    [:div
+     [:div {:style {:display "flex" :justifyContent "space-between" :alignItems "center" :marginBottom 16}}
+      [antd/space
+       [antd/button {:icon (r/as-element [:> EyeOutlined])}
+        "预览"]
+       [antd/button {:icon (r/as-element [:> CodeOutlined])
+                     :onClick #(rf/dispatch [:fb/toggle-code])
+                     :disabled (empty? items)}
+        "生成代码"]
+       [perm/when-allowed ["tool:build:add" "tool:build:edit"]
+        [antd/button {:icon (r/as-element [:> SaveOutlined])
+                      :onClick #(rf/dispatch [:form-template/open-save-modal])}
+         "保存模板"]]
+       [antd/button {:icon (r/as-element [:> FolderOpenOutlined])
+                     :onClick #(rf/dispatch [:form-template/open-load-drawer-and-fetch])}
+        "加载模板"]
+       [antd/button {:icon (r/as-element [:> ClearOutlined])
+                     :onClick #(rf/dispatch [:fb/clear])}
+        "清空"]]]
+     [:div {:style {:display "flex" :border "1px solid var(--ant-color-border-secondary, #f0f0f0)" :borderRadius 8 :overflow "hidden"}}
+      [palette-panel]
+      [design-canvas]
+      [prop-editor selected-item]]
+     [code-preview-modal]
+     [save-template-modal]
+     [load-template-drawer]]))

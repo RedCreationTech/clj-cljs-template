@@ -25,6 +25,12 @@
     :else (when-let [msg (if ok (errors/business-message result) (errors/error-message result))]
             (rf/dispatch [:api/error msg]))))
 
+(defn- prune-nils
+  "去掉 GET 查询参数里值为 nil 的项。ajax 会把 nil 序列化成字符串 \"null\",后端只把空串当作未填写,
+   \"null\" 会被当成真实筛选条件,导致下拉框没选时列表查不出任何数据。JSON 请求体里的 null 是有效值,不动。"
+  [params]
+  (reduce-kv (fn [m k v] (if (nil? v) m (assoc m k v))) {} params))
+
 (defn request
   "发起 HTTP 请求。默认从 app-db 读取令牌;传 :token 可显式指定(如登出时);
    :silent? true 时失败不弹统一提示(后台续期、登出等);
@@ -45,7 +51,8 @@
                           (on-error result)))}
             (if body
               {:body body}
-              {:params params :format (ajax/json-request-format)})))))
+              {:params (if (= method :get) (prune-nils params) params)
+               :format (ajax/json-request-format)})))))
 
 (defn- save-blob!
   "让浏览器把 blob 存成文件。"

@@ -3,5 +3,6 @@
   (:require
    [com.ruoyi.frontend.subs.config]
    [com.ruoyi.frontend.subs.core]
+   [com.ruoyi.frontend.subs.formbuilder]
    [com.ruoyi.frontend.subs.monitor]
    [com.ruoyi.frontend.subs.system]))

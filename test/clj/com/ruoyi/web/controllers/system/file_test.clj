@@ -6,12 +6,13 @@
    [com.ruoyi.web.controllers.system.file :as file]))
 
 (defn- temp-dir
-  "创建临时目录，返回 java.io.File 对象。"
+  "创建临时目录，返回 java.io.File 对象。
+   取规范化路径：控制器返回的是 canonical file，macOS 的 /var 临时目录会解析成 /private/var。"
   []
   (let [dir (io/file (System/getProperty "java.io.tmpdir")
                      (str "file-test-" (System/currentTimeMillis)))]
     (.mkdirs dir)
-    dir))
+    (.getCanonicalFile dir)))
 
 (defn- clean-dir!
   "递归删除目录及其内容。"
