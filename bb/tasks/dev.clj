@@ -4,7 +4,8 @@
    [babashka.fs :as fs]
    [babashka.process :as p]
    [clojure.string :as str]
-   [tasks.util :as u]))
+   [tasks.util :as u]
+   [tasks.vendor :as vendor]))
 
 (defn- backend-cmd []
   (let [{:keys [ns-name]} (u/project)]
@@ -12,11 +13,6 @@
 
 (defn- frontend-cmd []
   [(u/npx-cmd) "shadow-cljs" "watch" "app"])
-
-(defn- ensure-npm-deps! []
-  (when-not (fs/exists? "node_modules")
-    (u/info "首次运行:npm install")
-    (u/exec! [(or (u/exe "npm") (u/fail! "找不到 npm")) "install"])))
 
 (defn- reset-sqlite! []
   (doseq [f ["ruoyi.db" "ruoyi.db-journal"]]
@@ -60,7 +56,7 @@
       (if backend-only?
         (do (banner http-port nrepl-port)
             (watch-until-exit! [["后端" backend]]))
-        (let [_ (ensure-npm-deps!)
+        (let [_ (vendor/ensure-npm-deps!)
               ready (promise)
               frontend (u/start! "[frontend] " (frontend-cmd) {}
                                  #(when (re-find #"Build completed" %) (deliver ready true)))]
@@ -71,7 +67,7 @@
 (defn backend! [] (u/exec! (backend-cmd)))
 
 (defn frontend! []
-  (ensure-npm-deps!)
+  (vendor/ensure-npm-deps!)
   (u/exec! (frontend-cmd)))
 
 (defn test!
@@ -120,7 +116,7 @@
   (let [base (or (System/getenv "BASE_URL") "http://localhost:3000")]
     (when-not (u/http-ok? (str base "/api/health"))
       (u/fail! "后端未运行:先在另一个终端执行 bb dev(或 bb backend),再运行 bb e2e"))
-    (ensure-npm-deps!)
+    (vendor/ensure-npm-deps!)
     (u/exec! (into [(u/npx-cmd) "playwright" "test"] args))))
 
 (defn roundtrip!

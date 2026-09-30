@@ -15,6 +15,7 @@
 - **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟。改了任务名或参数，要同步改 CI。
 - **新增业务模块用 `bb new-module`**（见 README「新增业务模块」）。源码里的 `;; [new-module] <tag>` 注释是脚手架的登记点（`system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs`），**不要删除或改写这些标记行**；重构这些文件时把标记保留在对应集合的末尾。改动脚手架模板（`bb/tasks/scaffold/*.clj`）后，至少生成一个模块跑一遍 lint / fmt:check / 生成的测试 / `bb cljs:check`（CI 的 scaffold 任务会做完整检查）。
 - **生产密钥**：prod profile 下 `JWT_SECRET`（≥32 字符）与 `COOKIE_SECRET`（16 字节）缺失或为内置默认值时拒绝启动（`com.ruoyi.infra.secrets`）；dev/test 用默认值即可，不要把真实密钥写进仓库。
+- **前端编译前必须打 `node_modules` 补丁**：Quill/Parchment 的 static super 会被 Closure Compiler 编译坏（公告富文本渲染不出来），补丁表在 `bb/tasks/vendor.clj`，由 `bb release` / `bb cljs:check` / `bb dev` / `bb e2e` 自动执行。手动跑 shadow-cljs 或 `npm install` 之后要先 `bb patch:vendor`；升级 quill/parchment 时补丁命中数对不上会直接失败，需要重新核对补丁表或确认上游已修复后删除。
 
 ## Non-Interactive Shell Commands
 

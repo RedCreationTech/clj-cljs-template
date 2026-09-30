@@ -5,7 +5,8 @@
  :tasks
  {:requires ([tasks.dev :as dev]
              [tasks.lint :as lint]
-             [tasks.util :as u])
+             [tasks.util :as u]
+             [tasks.vendor :as vendor])
 
   ;; ── 开发 ──────────────────────────────────────────────
   dev              {:doc  "一键启动后端(3000 / nREPL 7000)+ 前端 watch;--reset-db 清空本地库,--backend-only 只起后端"
@@ -56,9 +57,13 @@
 
   ;; ── 构建 ──────────────────────────────────────────────
   release          {:doc  "前端生产构建(resources/public/js);编译 warning 视为错误"
-                    :task (u/exec! [(u/npx-cmd) "shadow-cljs" "release" "app" "--config-merge" u/strict-cljs])}
+                    :task (do (vendor/patch-quill!)
+                              (u/exec! [(u/npx-cmd) "shadow-cljs" "release" "app" "--config-merge" u/strict-cljs]))}
   cljs:check       {:doc  "前端快速编译检查(不压缩,warning 视为错误;CI 脚手架冒烟用)"
-                    :task (u/exec! [(u/npx-cmd) "shadow-cljs" "compile" "app" "--config-merge" u/strict-cljs])}
+                    :task (do (vendor/patch-quill!)
+                              (u/exec! [(u/npx-cmd) "shadow-cljs" "compile" "app" "--config-merge" u/strict-cljs]))}
+  patch:vendor     {:doc  "给 node_modules 里的 Quill/Parchment 打 static-super 补丁(npm install 后自动跑,也可手动)"
+                    :task (vendor/patch-quill!)}
   uberjar          {:doc  "前端 release + 后端 uberjar(target/*-standalone.jar)"
                     :depends [release]
                     :override-builtin true

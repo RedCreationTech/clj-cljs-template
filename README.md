@@ -192,9 +192,11 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | 覆盖率 | `bb coverage` → `target/coverage/index.html` |
 | 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束） |
 | 格式化 | `bb fmt`（cljfmt 修改）/ `bb fmt:check`（只检查） |
-| 构建 | `bb release`（前端）、`bb uberjar`（前端 + 后端 jar）、`bb cljs:check`（快速编译检查） |
+| 构建 | `bb release`（前端）、`bb uberjar`（前端 + 后端 jar）、`bb cljs:check`（快速编译检查）、`bb patch:vendor`（给 node_modules 打补丁，见下） |
 | 与 CI 相同的快速检查 | `bb ci`（lint + fmt:check + test + test:cljs） |
 | 其它 | `bb new-module`、`bb rename`、`bb docs`（重新生成架构文档 HTML）、`bb clean` |
+
+**第三方依赖补丁**：公告正文用的富文本编辑器（`react-quill-new` → Quill 2 / Parchment 3）依赖 ES class 静态方法里的 `super.create()`，而 Closure Compiler v20250407 之后会把它编译成 `Parent.create()`、丢掉 `this`，于是静态方法永远拿到父类 Blot 的 `tagName`——轻则 link/image 变成 `<span>`，重则抛 `[Parchment] Blot definition missing tagName`，公告编辑弹窗整个渲染不出来（dev 与 release 都中招）。`bb/tasks/vendor.clj` 在前端编译之前把 `node_modules` 里那 12 处改写成等价的 `Parent.create.call(this, ...)`，编译器就不会再动它。`bb release` / `bb cljs:check` 会自动打，`bb dev` / `bb frontend` / `bb e2e` 通过 `ensure-npm-deps!` 打，也可以手动 `bb patch:vendor`；补丁是幂等的，但 `npm install` 重装依赖后需要重打（所以别绕过 bb 直接跑 shadow-cljs）。命中数量与预期不符时任务会直接失败并提示：要么依赖升级了需要核对补丁表，要么上游已修复可以删掉本补丁。
 
 REPL 热重载助手在 `env/dev/clj/user.clj`：`(user/rd)` 重载领域层，`(user/rroutes)` 重载路由，`(user/rr)` 重启 Integrant 系统，`(user/reset-db)` 重建数据库。详见 `AGENTS.md`。
 
