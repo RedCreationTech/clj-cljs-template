@@ -99,6 +99,7 @@
        "   [" ns-root ".frontend.antd :as antd]\n"
        "   [" ns-root ".frontend.components.page-search :as page-search]\n"
        "   [" ns-root ".frontend.components.page-toolbar :as page-toolbar]\n"
+       "   [" ns-root ".frontend.components.pagination :as pagination]\n"
        "   [" ns-root ".frontend.i18n :as i18n]\n"
        "   [" ns-root ".frontend.perm :as perm]\n"
        "   [re-frame.core :as rf]\n"
@@ -213,9 +214,9 @@
        "     [toolbar]\n"
        "     [antd/table {:rowKey \"id\" :loading loading? :columns (columns) :dataSource (clj->js items)\n"
        "                  :scroll #js {:x \"max-content\"}\n"
-       "                  :pagination #js {:current page :pageSize size :total total :showSizeChanger true\n"
-       "                                   :showTotal (fn [t] (i18n/tr \"共 {0} 条\" t))\n"
-       "                                   :onChange (fn [p s] (rf/dispatch [:" module "/fetch {:page p :size s}]))}}]\n"
+       "                  :pagination (pagination/table-pagination\n"
+       "                               {:total total :page page :page-size size\n"
+       "                                :on-change #(rf/dispatch [:" module "/fetch {:page % :size %2}])})}]\n"
        "     [edit-modal modal]]))\n"))
 
 (defn page [ctx]
