@@ -23,6 +23,11 @@
                  (on-success (:body result))
                  (on-error result)))}))
 
+(defn download-user-import-template
+  "下载用户导入的 CSV 模板(带令牌)。"
+  []
+  (t/download! "/system/user/importTemplate" "user_import_template.csv"))
+
 (defn import-users-csv
   "导入用户CSV。"
   [file on-success on-error]

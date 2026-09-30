@@ -10,6 +10,7 @@
    [com.ruoyi.frontend.pages.user.columns :as columns]
    [com.ruoyi.frontend.pages.user.dept-tree :as dept-tree]
    [com.ruoyi.frontend.pages.user.form-modal :as form-modal]
+   [com.ruoyi.frontend.pages.user.import-modal :as import-modal]
    [com.ruoyi.frontend.pages.user.search :as search]
    [re-frame.core :as rf]
    [reagent.hooks :as hooks]))
@@ -238,6 +239,7 @@
                     :pagination false}]]
       [pagination-bar total page page-size]
       [form-modal/form-modal (form-modal-props)]
+      [import-modal/import-modal]
       [reset-password-modal]
       [auth-role-modal]
       [detail-drawer]]]))

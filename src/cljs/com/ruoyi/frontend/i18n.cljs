@@ -106,6 +106,13 @@
    "删除" "Delete"
    "导入" "Import"
    "导出" "Export"
+   "用户导入" "Import Users"
+   "下载模板" "Template"
+   "选择文件" "Choose File"
+   "尚未选择文件" "No file selected"
+   "取消" "Cancel"
+   "导入完成：成功 {0} 条，失败 {1} 条" "Import finished: {0} ok, {1} failed"
+   "导入失败" "Import failed"
    "共 {0} 条" "Total {0}"})
 
 (def ^:private dictionaries {:en-US en-US})

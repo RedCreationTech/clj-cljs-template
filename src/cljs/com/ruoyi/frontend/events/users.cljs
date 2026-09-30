@@ -6,6 +6,7 @@
    [com.ruoyi.frontend.api.posts :as posts-api]
    [com.ruoyi.frontend.api.roles :as roles-api]
    [com.ruoyi.frontend.api.users :as users-api]
+   [com.ruoyi.frontend.i18n :as i18n]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :users/set-list
@@ -51,13 +52,15 @@
              (impexp-api/import-users-csv file
                                           (fn [r]
                                             (rf/dispatch [:users/set-import-loading false])
-                                            (when (= 200 (:code r))
-                                              (antd/success! (str "导入完成：成功 " (:success (:data r)) " 条，失败 " (:failed (:data r)) " 条"))
-                                              (rf/dispatch [:users/close-import])
-                                              (rf/dispatch [:users/fetch {}])))
+                                            (if (= 200 (:code r))
+                                              (let [{:keys [success failed]} (:data r)]
+                                                (antd/success! (i18n/tr "导入完成：成功 {0} 条，失败 {1} 条" success failed))
+                                                (rf/dispatch [:users/close-import])
+                                                (rf/dispatch [:users/fetch-with-params]))
+                                              (antd/error! (or (:msg r) (i18n/tr "导入失败")))))
                                           (fn [_]
                                             (rf/dispatch [:users/set-import-loading false])
-                                            (antd/error! "导入失败")))))
+                                            (antd/error! (i18n/tr "导入失败"))))))
 
 (rf/reg-event-fx :users/export
                  (fn [{:keys [db]} _]
