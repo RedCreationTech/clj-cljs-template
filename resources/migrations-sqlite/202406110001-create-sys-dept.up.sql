@@ -10,9 +10,9 @@ CREATE TABLE sys_dept (
   status CHAR(1) DEFAULT '0',
   del_flag CHAR(1) DEFAULT '0',
   create_by VARCHAR(64) DEFAULT '',
-  create_time TEXT DEFAULT CURRENT_TIMESTAMP,
+  create_time TEXT DEFAULT (datetime('now','localtime')),
   update_by VARCHAR(64) DEFAULT '',
-  update_time TEXT DEFAULT CURRENT_TIMESTAMP
+  update_time TEXT DEFAULT (datetime('now','localtime'))
 );
 --;;
 CREATE INDEX idx_sys_dept_parent_id ON sys_dept(parent_id);

@@ -1,4 +1,6 @@
 (ns com.ruoyi.test-utils
+  "走真实 ring handler 的集成测试助手:启动/停止系统,以及按 HTTP 动词发请求。
+   名字用大写是为了在读测试时一眼看出请求方法,参数顺序固定为 app path 数据 headers。"
   (:require
    [byte-streams :as bs]
    [clojure.data.json :as json]
@@ -23,7 +25,9 @@
       :response
       (update :body (fnil bs/to-string ""))))
 
-(defn GET [app path params headers]
+(defn GET
+  "GET 请求:`params` 是查询参数(字符串键,和 URL 上看到的一致),没有请求体。"
+  [app path params headers]
   (-> (p/session app)
       (p/request path
                  :request-method :get
@@ -32,7 +36,9 @@
                  :params params)
       (get-response)))
 
-(defn PUT [app path body headers]
+(defn PUT
+  "PUT 请求:`body` 是 JSON 请求体(EDN 会先转成 JSON 字符串),不接查询参数。"
+  [app path body headers]
   (-> (p/session app)
       (p/request path
                  :request-method :put

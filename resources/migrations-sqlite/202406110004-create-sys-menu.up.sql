@@ -15,9 +15,9 @@ CREATE TABLE sys_menu (
   perms VARCHAR(100) DEFAULT NULL,
   icon VARCHAR(100) DEFAULT '#',
   create_by VARCHAR(64) DEFAULT '',
-  create_time TEXT DEFAULT CURRENT_TIMESTAMP,
+  create_time TEXT DEFAULT (datetime('now','localtime')),
   update_by VARCHAR(64) DEFAULT '',
-  update_time TEXT DEFAULT CURRENT_TIMESTAMP,
+  update_time TEXT DEFAULT (datetime('now','localtime')),
   remark VARCHAR(500) DEFAULT ''
 );
 --;;

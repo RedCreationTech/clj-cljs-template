@@ -8,9 +8,9 @@ CREATE TABLE sys_job (
   concurrent CHAR(1) DEFAULT '1',
   status CHAR(1) DEFAULT '0',
   create_by VARCHAR(64) DEFAULT '',
-  create_time TEXT DEFAULT CURRENT_TIMESTAMP,
+  create_time TEXT DEFAULT (datetime('now','localtime')),
   update_by VARCHAR(64) DEFAULT '',
-  update_time TEXT DEFAULT CURRENT_TIMESTAMP,
+  update_time TEXT DEFAULT (datetime('now','localtime')),
   remark VARCHAR(500) DEFAULT ''
 );
 --;;
@@ -22,7 +22,7 @@ CREATE TABLE sys_job_log (
   job_message VARCHAR(500) DEFAULT '',
   status CHAR(1) DEFAULT '0',
   exception_info VARCHAR(4000) DEFAULT '',
-  create_time TEXT DEFAULT CURRENT_TIMESTAMP
+  create_time TEXT DEFAULT (datetime('now','localtime'))
 );
 --;;
 CREATE INDEX idx_sys_job_status ON sys_job(status);

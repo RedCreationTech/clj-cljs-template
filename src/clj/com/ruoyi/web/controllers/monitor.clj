@@ -21,7 +21,7 @@
 
 (defn- format-instant [^Instant inst]
   (when inst
-    (let [ldt (LocalDateTime/ofInstant inst (ZoneId/of "Asia/Shanghai"))]
+    (let [ldt (LocalDateTime/ofInstant inst (ZoneId/systemDefault))]
       (.format ldt (DateTimeFormatter/ofPattern "yyyy-MM-dd HH:mm:ss")))))
 
 (defn- get-computer-name []
@@ -181,6 +181,13 @@
              :server {:os (get-os-info)
                       :jvm (get-jvm-info)}})))
 
+(defn- db-product
+  "从 JDBC 元数据读数据库产品名与版本(部署可能是 SQLite 也可能是 MySQL,不要写死)。"
+  [^javax.sql.DataSource ds]
+  (with-open [conn (.getConnection ds)]
+    (let [^java.sql.DatabaseMetaData md (.getMetaData conn)]
+      (str (.getDatabaseProductName md) " " (.getDatabaseProductVersion md)))))
+
 (defn datasource-info
   "获取 HikariCP 数据源监控信息。读不到池信息属于意外错误,交给异常中间件走 5xx,
    不把异常信息拼进响应给前端。"
@@ -190,7 +197,7 @@
     (let [^HikariDataSource ds datasource
           pool (.getHikariPoolMXBean ds)]
       (res/ok {:db_name (some-> (.getJdbcUrl ds) (str/replace "jdbc:" ""))
-               :db_version "SQLite"
+               :db_version (db-product ds)
                :active_connections (.getActiveConnections pool)
                :idle_connections (.getIdleConnections pool)
                :total_connections (.getTotalConnections pool)

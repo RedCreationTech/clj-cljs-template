@@ -3,9 +3,7 @@
   (:require
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
-   [com.ruoyi.infra.db :as db]
-   [next.jdbc :as jdbc]
-   [next.jdbc.result-set :as rs]))
+   [com.ruoyi.infra.db :as db]))
 
 (defn- fake-db
   "构造一个带有伪数据库元数据的 db 规格。"
@@ -66,29 +64,3 @@
     (is (= "SELECT NOW() FROM t" (db/adapt-sql (fake-db "MySQL") "SELECT datetime('now') FROM t")))
     (is (= "SELECT NOW() FROM t" (db/adapt-sql (fake-db "PostgreSQL") "SELECT NOW() FROM t"))
         "未知数据库类型原样返回")))
-
-(deftest test-paginate-query
-  (testing "分页查询适配"
-    (let [calls (atom [])]
-      (with-redefs [jdbc/execute! (fn [db sql-vec opts]
-                                    (swap! calls conj {:db db :sql sql-vec :opts opts})
-                                    [{:id 1}])]
-        (let [db (fake-db "SQLite")
-              result (db/paginate-query db "SELECT * FROM sys_user WHERE status = :status" {:status "0"} 2 10)]
-          (is (= [{:id 1}] result))
-          (is (= 1 (count @calls)))
-          (let [{:keys [sql opts]} (first @calls)
-                called-db (:db (first @calls))]
-            (is (= (:connectable db) called-db))
-            (is (= ["0"] (rest sql)))
-            (is (str/starts-with? (first sql) "SELECT * FROM sys_user WHERE status = :status LIMIT 10 OFFSET 10"))
-            (is (= rs/as-unqualified-kebab-maps (:builder-fn opts)))))))
-    (let [calls (atom [])]
-      (with-redefs [jdbc/execute! (fn [db sql-vec opts]
-                                    (swap! calls conj {:db db :sql sql-vec :opts opts})
-                                    [{:id 2}])]
-        (let [db (fake-db "MySQL")
-              result (db/paginate-query db "SELECT * FROM sys_user" {} 1 20)]
-          (is (= [{:id 2}] result))
-          (is (str/starts-with? (first (:sql (first @calls))) "SELECT * FROM sys_user LIMIT 20 OFFSET 0"))
-          (is (= "MySQL" (-> (first @calls) :db (.getMetaData) (.getDatabaseProductName)))))))))

@@ -4,9 +4,9 @@ CREATE TABLE sys_dict_type (
   dict_type VARCHAR(100) NOT NULL,
   status CHAR(1) DEFAULT '0',
   create_by VARCHAR(64) DEFAULT '',
-  create_time TEXT DEFAULT CURRENT_TIMESTAMP,
+  create_time TEXT DEFAULT (datetime('now','localtime')),
   update_by VARCHAR(64) DEFAULT '',
-  update_time TEXT DEFAULT CURRENT_TIMESTAMP,
+  update_time TEXT DEFAULT (datetime('now','localtime')),
   remark VARCHAR(500) DEFAULT ''
 );
 --;;
@@ -23,9 +23,9 @@ CREATE TABLE sys_dict_data (
   is_default CHAR(1) DEFAULT 'N',
   status CHAR(1) DEFAULT '0',
   create_by VARCHAR(64) DEFAULT '',
-  create_time TEXT DEFAULT CURRENT_TIMESTAMP,
+  create_time TEXT DEFAULT (datetime('now','localtime')),
   update_by VARCHAR(64) DEFAULT '',
-  update_time TEXT DEFAULT CURRENT_TIMESTAMP,
+  update_time TEXT DEFAULT (datetime('now','localtime')),
   remark VARCHAR(500) DEFAULT ''
 );
 --;;

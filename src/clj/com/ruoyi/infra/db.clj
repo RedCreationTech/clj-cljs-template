@@ -5,8 +5,7 @@
    [clojure.tools.logging :as log]
    [com.ruoyi.infra.datasource :as ds]
    [migratus.core]
-   [next.jdbc :as jdbc]
-   [next.jdbc.result-set :as rs]))
+   [next.jdbc :as jdbc]))
 
 ;; ─── 数据库类型检测 ──────────────────────────────────────────────────────
 
@@ -25,11 +24,6 @@
           (str/includes? (str/lower-case product-name) "mysql") :mysql
           :else :unknown))
       (catch Exception _ :unknown))))
-
-(defn- connectable
-  "提取可用于 JDBC 执行的数据源或连接。"
-  [db]
-  (or (:connectable db) db))
 
 (defn last-insert-id
   "获取最近一次插入的自增 ID，自动适配 SQLite/MySQL。
@@ -114,21 +108,6 @@
       :mysql (sqlite->mysql sql)
       :sqlite sql
       sql)))
-
-;; ─── 分页查询 ──────────────────────────────────────────────────────
-
-(defn paginate-query
-  "分页查询适配。"
-  [db sql params page-num page-size]
-  (let [db-type (detect-db-type db)
-        offset (* (dec page-num) page-size)
-        paginated-sql (case db-type
-                        :mysql (str sql " LIMIT " page-size " OFFSET " offset)
-                        :sqlite (str sql " LIMIT " page-size " OFFSET " offset)
-                        (str sql " LIMIT " page-size " OFFSET " offset))]
-    (jdbc/execute! (connectable db)
-                   (into [paginated-sql] (vals params))
-                   {:builder-fn rs/as-unqualified-kebab-maps})))
 
 ;; ─── 运行时数据库热切换 ──────────────────────────────────────────────
 

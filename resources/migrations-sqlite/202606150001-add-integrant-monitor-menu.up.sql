@@ -1,6 +1,6 @@
 UPDATE sys_menu
 SET order_num = 11,
-    update_time = CURRENT_TIMESTAMP
+    update_time = datetime('now','localtime')
 WHERE menu_id = 20;
 --;;
 INSERT OR IGNORE INTO sys_menu (menu_id, menu_name, parent_id, order_num, path, component, menu_type, visible, status, perms, icon)
