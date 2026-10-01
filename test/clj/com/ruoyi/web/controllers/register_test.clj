@@ -2,7 +2,8 @@
   "用户注册控制器测试。"
   (:require
    [clojure.test :refer [deftest is testing]]
-   [com.ruoyi.web.controllers.register :as register]))
+   [com.ruoyi.web.controllers.register :as register]
+   [com.ruoyi.web.controller-test-helper :as eh]))
 
 (def mock-user-service
   "模拟用户领域服务，支持注册成功场景所需的查询。"
@@ -60,7 +61,7 @@
       (is (= "注册账号已存在" (get-in response [:body :msg]))))))
 
 (deftest test-register-exception
-  (testing "创建用户时抛出异常"
+  (testing "创建用户时抛出的意外异常走 5xx 通用文案"
     (let [service (assoc mock-user-service :query-fn
                          (fn [q _p]
                            (case q
@@ -68,7 +69,8 @@
                              :create-user! (throw (RuntimeException. "数据库错误"))
                              :last-insert-rowid {:last_insert_rowid 1}
                              nil)))
-          response (register! service {:username "newuser" :password "123456"})]
-      (is (= 200 (:status response)))
-      (is (= 500 (get-in response [:body :code])))
-      (is (= "注册失败" (get-in response [:body :msg])) "不把内部异常信息返回给客户端"))))
+          response (eh/call register/register {:user-service service :auth-config enabled}
+                            {:body-params {:username "newuser" :password "123456"}})]
+      (is (= 500 (:status response)))
+      (is (= {:code 500 :msg "服务器内部错误,请稍后重试"} (:body response))
+          "异常细节只进服务端日志"))))

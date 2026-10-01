@@ -3,6 +3,7 @@
   (:require
    [clojure.test :refer [deftest is testing]]
    [com.ruoyi.infra.scheduler :as scheduler-core]
+   [com.ruoyi.web.controller-test-helper :as eh]
    [com.ruoyi.web.controllers.job :as job]))
 
 (def ^:private test-job
@@ -87,8 +88,8 @@
                                  :job_group "DEFAULT"
                                  :invoke_target "com.ruoyi.task/test-job"
                                  :cron_expression "invalid"}}
-          response (job/create-job mock-service request)]
-      (is (= 200 (:status response)))
+          response (eh/call job/create-job mock-service request)]
+      (is (= 200 (:status response)) "业务失败仍是 HTTP 200")
       (is (= 500 (get-in response [:body :code])))
       (is (= "cron 表达式不合法" (get-in response [:body :msg]))))))
 

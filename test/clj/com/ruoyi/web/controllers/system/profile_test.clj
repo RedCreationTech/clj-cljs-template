@@ -4,7 +4,8 @@
    [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing]]
    [com.ruoyi.infra.security :as security]
-   [com.ruoyi.web.controllers.system.profile :as profile])
+   [com.ruoyi.web.controllers.system.profile :as profile]
+   [com.ruoyi.web.controller-test-helper :as eh])
   (:import
    [java.nio.file Files]
    [java.nio.file.attribute FileAttribute]))
@@ -120,9 +121,10 @@
           request {:identity {:user-id 1}
                    :body-params {:old_password ""
                                  :new_password "newpass123"}}
-          response (profile/change-password {:user-service user-service} request)]
-      (is (map? response))
-      (is (= 500 (get-in response [:body :code]))))))
+          response (eh/call profile/change-password {:user-service user-service} request)]
+      (is (= 200 (:status response)) "业务失败仍是 HTTP 200")
+      (is (= 500 (get-in response [:body :code])))
+      (is (= "旧密码和新密码不能为空" (get-in response [:body :msg]))))))
 
 (deftest test-change-password-wrong-old
   (testing "修改密码时旧密码错误"
@@ -130,6 +132,7 @@
           request {:identity {:user-id 1}
                    :body-params {:old_password "wrongpass"
                                  :new_password "newpass123"}}
-          response (profile/change-password {:user-service user-service} request)]
-      (is (map? response))
-      (is (= 500 (get-in response [:body :code]))))))
+          response (eh/call profile/change-password {:user-service user-service} request)]
+      (is (= 200 (:status response)) "业务失败仍是 HTTP 200")
+      (is (= 500 (get-in response [:body :code])))
+      (is (= "旧密码错误" (get-in response [:body :msg]))))))

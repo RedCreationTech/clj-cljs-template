@@ -2,7 +2,8 @@
   "岗位领域服务。"
   (:require
    [com.ruoyi.domain.paging :as paging]
-   [com.ruoyi.infra.db :as db]))
+   [com.ruoyi.infra.db :as db]
+   [com.ruoyi.infra.errors :as errors]))
 
 (defn list-posts
   "查询岗位列表(分页,返回 {:rows :total})。"
@@ -30,6 +31,8 @@
                                  params)))
 
 (defn delete-post!
-  "删除岗位。"
+  "删除岗位。已分配给用户的岗位删不掉,把中文原因抛给异常中间件(HTTP 200 + {:code 500 :msg})。"
   [{:keys [query-fn]} post-id]
+  (when (pos? (:total (query-fn :count-users-by-post {:post_id post-id})))
+    (errors/fail! "该岗位已分配给用户,不能删除"))
   (query-fn :delete-post! {:post_id post-id}))

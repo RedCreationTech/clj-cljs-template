@@ -18,7 +18,9 @@ test('个人中心：头像上传后档案与顶栏同步换图', async ({ page 
   await expect(page.getByText('个人信息').first()).toBeVisible();
 
   const circle = page.locator('#avatar-upload + div');
-  const before = await circle.locator('img').getAttribute('src');
+  // 干净库里 admin 没有头像,头像位置显示昵称首字,不能假定一定有 <img>
+  const imgBefore = circle.locator('img');
+  const before = (await imgBefore.count()) > 0 ? await imgBefore.getAttribute('src') : null;
 
   await page.evaluate(async (b64) => {
     const res = await fetch(`data:image/png;base64,${b64}`);
@@ -40,7 +42,9 @@ test('个人中心：头像上传后档案与顶栏同步换图', async ({ page 
 
   const img = circle.locator('img');
   await expect(img).toBeVisible({ timeout: 20000 });
-  await expect(img).not.toHaveAttribute('src', before ?? '');
+  const after = await img.getAttribute('src');
+  expect(after).toMatch(/^\/api\/common\/avatar\/\d+_e2e-avatar\.png$/);
+  expect(after).not.toBe(before);
 
   await expect(page.locator('.ant-layout-header .ant-avatar img, .ant-layout-header .ant-avatar-image').first())
     .toBeVisible({ timeout: 20000 });

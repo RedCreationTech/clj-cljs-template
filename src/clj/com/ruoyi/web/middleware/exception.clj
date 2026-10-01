@@ -1,6 +1,16 @@
 (ns com.ruoyi.web.middleware.exception
+  "所有异常的出口。领域 / 控制器不要把异常包成响应,抛带 :type 的 ex-info 就行
+   (业务错误用 `com.ruoyi.infra.errors/fail!`),由这里统一渲染:
+
+     :system.exception/business  200 + {:code 500 :msg}   业务规则不通过,消息原样给前端
+     :system.exception/not-found 404、unauthorized 401、forbidden 403、internal 500
+     其它未注册类型               500 + 通用文案
+
+   业务错误必须回 HTTP 200:前端 transport 按 body 的 :code 判断成败,
+   控制器历来也是这么返回的(见 com.ruoyi.web.response/fail)。"
   (:require
    [clojure.tools.logging :as log]
+   [com.ruoyi.infra.errors :as errors]
    [com.ruoyi.infra.json :as json]
    [reitit.ring.middleware.exception :as exception]))
 
@@ -37,12 +47,22 @@
                {:code status
                 :msg  (user-message status exception)}))})
 
+(defn business-handler
+  "业务规则不通过 → 前端约定的失败响应:HTTP 200 + {:code 500 :msg},与控制器 fail 完全一致。
+   消息是领域层写的中文提示,可以直接展示;意外错误不会走到这里(它们没有 business 类型)。"
+  [^Exception exception _request]
+  (log/debug exception "业务校验未通过")
+  {:status  200
+   :headers {"content-type" "application/json;charset=utf-8"}
+   :body    (json/write-str {:code 500
+                             :msg  (or (not-empty (ex-message exception)) "操作失败")})})
+
 (def wrap-exception
   (exception/create-exception-middleware
    (merge
     exception/default-handlers
-    {:system.exception/internal     (partial handler "internal exception" 500)
-     :system.exception/business     (partial handler "bad request" 400)
+    {errors/business-type          business-handler
+     :system.exception/internal     (partial handler "internal exception" 500)
      :system.exception/not-found    (partial handler "not found" 404)
      :system.exception/unauthorized (partial handler "unauthorized" 401)
      :system.exception/forbidden    (partial handler "forbidden" 403)

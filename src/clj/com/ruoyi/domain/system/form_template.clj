@@ -1,7 +1,8 @@
 (ns com.ruoyi.domain.system.form-template
   "表单模板领域服务。"
   (:require
-   [com.ruoyi.infra.db :as db]))
+   [com.ruoyi.infra.db :as db]
+   [com.ruoyi.infra.errors :as errors]))
 
 (defn list-form-templates
   "查询表单模板列表。"
@@ -22,7 +23,7 @@
   "创建表单模板，返回自增ID。"
   [{:keys [query-fn db]} params]
   (when (find-form-template-by-key {:query-fn query-fn} (:form_key params))
-    (throw (ex-info "表单key已存在" {:form_key (:form_key params)})))
+    (errors/fail! "表单key已存在" {:form_key (:form_key params)}))
   (db/insert-and-get-id! query-fn db :create-form-template!
                          (merge {:form_name nil :form_key nil :schema_json nil :remark nil :create_by nil} params)))
 
@@ -33,7 +34,7 @@
         new-key (:form_key params)
         existing (when new-key (find-form-template-by-key {:query-fn query-fn} new-key))]
     (when (and existing (not= (:id existing) id))
-      (throw (ex-info "表单key已存在" {:form_key new-key})))
+      (errors/fail! "表单key已存在" {:form_key new-key}))
     (query-fn :update-form-template!
               (merge {:id id :form_name nil :form_key nil :schema_json nil :remark nil :update_by nil} params))))
 

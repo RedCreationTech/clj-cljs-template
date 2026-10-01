@@ -5,19 +5,10 @@
    [com.ruoyi.domain.paging :as paging]
    [com.ruoyi.infra.cron :as cron]
    [com.ruoyi.infra.db :as db]
+   [com.ruoyi.infra.errors :as errors]
    [com.ruoyi.infra.scheduler :as scheduler-core]
    [com.ruoyi.web.controllers.params :as params]
-   [ring.util.response :as response]))
-
-(defn- ok
-  ([data] (ok 200 "操作成功" data))
-  ([code msg data]
-   (-> (response/response {:code code :msg msg :data data})
-       (response/content-type "application/json"))))
-
-(defn- fail [msg]
-  (-> (response/response {:code 500 :msg msg})
-      (response/content-type "application/json")))
+   [com.ruoyi.web.response :as res]))
 
 (defn- current-user-name [request]
   (get-in request [:identity :user-name] ""))
@@ -27,81 +18,69 @@
 
 (defn list-jobs
   [{:keys [query-fn]} request]
-  (ok (paging/paginate query-fn :list-jobs :count-jobs
-                       {:job_name nil :job_group nil :status nil}
-                       (params/query request))))
+  (res/ok (paging/paginate query-fn :list-jobs :count-jobs
+                           {:job_name nil :job_group nil :status nil}
+                           (params/query request))))
 
 (defn get-job
   [{:keys [query-fn]} request]
   (let [job-id (parse-long (get-in request [:path-params :id]))]
     (if-let [job (query-fn :find-job-by-id {:job_id job-id})]
-      (ok job)
-      (fail "任务不存在"))))
+      (res/ok job)
+      (res/fail "任务不存在"))))
 
 (defn- validate-job! [job]
   (when-not (cron/valid? (:cron_expression job))
-    (throw (ex-info "cron 表达式不合法" {})))
+    (errors/fail! "cron 表达式不合法"))
   (when-not (scheduler-core/invoke-target-allowed? (:invoke_target job))
-    (throw (ex-info "调用目标不合法或不在允许命名空间内" {}))))
+    (errors/fail! "调用目标不合法或不在允许命名空间内")))
 
 (defn create-job
   [{:keys [query-fn db]} request]
-  (try
-    (let [params (-> {:job_name nil :job_group nil :invoke_target nil :cron_expression nil
-                      :misfire_policy nil :concurrent nil :status nil :remark nil :create_by nil}
-                     (merge (body-params request))
-                     (assoc :create_by (current-user-name request)))
-          _ (validate-job! params)
-          id (db/insert-and-get-id! query-fn db :create-job! params :last-insert-job-id :job_id)]
-      (when-let [job (query-fn :find-job-by-id {:job_id id})]
-        (scheduler-core/schedule-job! job))
-      (ok {:job_id id}))
-    (catch Exception e
-      (fail (.getMessage e)))))
+  (let [params (-> {:job_name nil :job_group nil :invoke_target nil :cron_expression nil
+                    :misfire_policy nil :concurrent nil :status nil :remark nil :create_by nil}
+                   (merge (body-params request))
+                   (assoc :create_by (current-user-name request)))
+        _ (validate-job! params)
+        id (db/insert-and-get-id! query-fn db :create-job! params :last-insert-job-id :job_id)]
+    (when-let [job (query-fn :find-job-by-id {:job_id id})]
+      (scheduler-core/schedule-job! job))
+    (res/ok {:job_id id})))
 
 (defn update-job
   [{:keys [query-fn]} request]
-  (try
-    (let [job-id (parse-long (get-in request [:path-params :id]))
-          params (-> {:job_name nil :job_group nil :invoke_target nil :cron_expression nil
-                      :misfire_policy nil :concurrent nil :status nil :remark nil :update_by nil}
-                     (merge (body-params request))
-                     (assoc :job_id job-id)
-                     (assoc :update_by (current-user-name request)))
-          _ (validate-job! params)]
-      (query-fn :update-job! params)
-      (when-let [job (query-fn :find-job-by-id {:job_id job-id})]
-        (scheduler-core/reschedule-job! job))
-      (ok "更新成功"))
-    (catch Exception e
-      (fail (.getMessage e)))))
+  (let [job-id (parse-long (get-in request [:path-params :id]))
+        params (-> {:job_name nil :job_group nil :invoke_target nil :cron_expression nil
+                    :misfire_policy nil :concurrent nil :status nil :remark nil :update_by nil}
+                   (merge (body-params request))
+                   (assoc :job_id job-id)
+                   (assoc :update_by (current-user-name request)))
+        _ (validate-job! params)]
+    (query-fn :update-job! params)
+    (when-let [job (query-fn :find-job-by-id {:job_id job-id})]
+      (scheduler-core/reschedule-job! job))
+    (res/ok "更新成功")))
 
 (defn delete-job
   [{:keys [query-fn]} request]
-  (try
-    (let [job-id (parse-long (get-in request [:path-params :id]))
-          job (query-fn :find-job-by-id {:job_id job-id})]
-      (query-fn :delete-job! {:job_id job-id})
-      (when job
-        (scheduler-core/unschedule-job! job-id (:job_group job)))
-      (ok "删除成功"))
-    (catch Exception e
-      (fail (.getMessage e)))))
+  (let [job-id (parse-long (get-in request [:path-params :id]))
+        job (query-fn :find-job-by-id {:job_id job-id})]
+    (query-fn :delete-job! {:job_id job-id})
+    (when job
+      (scheduler-core/unschedule-job! job-id (:job_group job)))
+    (res/ok "删除成功")))
 
 (defn list-job-logs
   [{:keys [query-fn]} request]
-  (ok (paging/paginate query-fn :list-job-logs :count-job-logs
-                       {:job_name nil :job_group nil :status nil}
-                       (params/query request))))
+  (res/ok (paging/paginate query-fn :list-job-logs :count-job-logs
+                           {:job_name nil :job_group nil :status nil}
+                           (params/query request))))
 
 (defn execute-job
   [{:keys [query-fn]} request]
-  (try
-    (let [job-id (parse-long (get-in request [:path-params :id]))]
-      (query-fn :execute-job! {:job_id job-id})
-      (ok "执行成功"))
-    (catch Exception e
-      (fail (.getMessage e)))))
+  (let [job-id (parse-long (get-in request [:path-params :id]))]
+    (query-fn :execute-job! {:job_id job-id})
+    (res/ok "执行成功")))
 
 (defn change-status
   "修改任务状态。"
@@ -117,17 +96,17 @@
       (if (= "0" status)
         (scheduler-core/resume-job! job-id (:job_group job))
         (scheduler-core/pause-job! job-id (:job_group job))))
-    (ok "状态修改成功")))
+    (res/ok "状态修改成功")))
 
 (defn run-once
   "立即执行一次任务。"
   [_ request]
   (let [job-id (parse-long (get-in request [:path-params :id]))]
     (scheduler-core/trigger-job! job-id "DEFAULT")
-    (ok (str "任务 " job-id " 已触发执行"))))
+    (res/ok (str "任务 " job-id " 已触发执行"))))
 
 (defn clean-logs
   "清空任务日志。"
   [{:keys [query-fn]} _]
   (query-fn :clean-job-logs! {})
-  (ok "日志已清空"))
+  (res/ok "日志已清空"))

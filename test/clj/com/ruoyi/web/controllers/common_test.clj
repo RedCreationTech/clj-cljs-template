@@ -3,7 +3,8 @@
   (:require
    [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing use-fixtures]]
-   [com.ruoyi.web.controllers.common :as common])
+   [com.ruoyi.web.controllers.common :as common]
+   [com.ruoyi.web.controller-test-helper :as eh])
   (:import
    [java.io File]
    [java.nio.file Files]))
@@ -72,12 +73,12 @@
         (finally (.delete source))))))
 
 (deftest test-upload-exception
-  (testing "上传复制失败时返回异常信息"
-    (let [response (common/upload (ctx) {:params {:file {:tempfile (io/file "/nonexistent/path.txt")
-                                                         :filename "x.txt"}}})]
-      (is (= 200 (:status response)))
-      (is (= 500 (get-in response [:body :code])))
-      (is (string? (get-in response [:body :msg]))))))
+  (testing "写盘失败是意外错误:走 5xx 通用文案,不把文件系统信息回给前端"
+    (let [response (eh/call common/upload (ctx) {:params {:file {:tempfile (io/file "/nonexistent/path.txt")
+                                                                 :filename "x.txt"}}})]
+      (is (= 500 (:status response)))
+      (is (= {:code 500 :msg "服务器内部错误,请稍后重试"} (:body response))
+          "只回通用文案:文件路径之类的细节留在服务端日志"))))
 
 (deftest test-upload-creates-directory
   (testing "上传目录不存在时自动创建"

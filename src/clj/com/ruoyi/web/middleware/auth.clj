@@ -12,7 +12,7 @@
    [com.ruoyi.domain.system.permission :as permission]
    [com.ruoyi.infra.online :as online]
    [com.ruoyi.infra.security :as security]
-   [ring.util.response :as response]))
+   [com.ruoyi.web.response :as res]))
 
 (defn wrap-jwt-auth
   "解析 Bearer 令牌并校验会话:签名与有效期通过、且会话仍在线时,
@@ -22,13 +22,6 @@
     (let [claims (some-> (security/extract-token request) security/parse-token)
           identity (when (and claims (online/active? (:jti claims))) claims)]
       (handler (cond-> request identity (assoc :identity identity))))))
-
-(defn deny
-  "401 / 403 响应(HTTP 状态与业务码一致,前端据此跳登录页或提示无权限)。"
-  [status msg]
-  (-> (response/response {:code status :msg msg})
-      (response/status status)
-      (response/content-type "application/json")))
 
 (defn request-permissions
   "当前请求用户的权限集合;query-fn 来自 wrap-base 注入的 [:components :query-fn]。"
@@ -41,9 +34,9 @@
   [{:keys [auth? perms]} request]
   (cond
     (not (or auth? perms)) nil
-    (nil? (:identity request)) (deny 401 "未登录或令牌已过期")
+    (nil? (:identity request)) (res/deny 401 "未登录或令牌已过期")
     (and perms (not (permission/permitted? (request-permissions request) perms)))
-    (deny 403 "没有操作权限")
+    (res/deny 403 "没有操作权限")
     :else nil))
 
 (def authorize

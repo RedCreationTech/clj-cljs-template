@@ -15,9 +15,10 @@
       (let [response (health/healthcheck! {:datasource :ds} {})]
         (is (= 200 (:status response)))
         (is (= "up" (get-in response [:body :db :status]))))))
-  (testing "数据库不可用返回 503"
+  (testing "数据库不可用返回 503,异常细节只进日志"
     (with-redefs [jdbc/execute-one! (fn [_ _] (throw (Exception. "Connection refused")))]
       (let [response (health/healthcheck! {:datasource :ds} {})]
         (is (= 503 (:status response)))
         (is (= "down" (get-in response [:body :app :status])))
-        (is (= "Connection refused" (get-in response [:body :db :message])))))))
+        (is (not (contains? (:db (:body response)) :message))
+            "/api/health 不带鉴权,不能把 JDBC 异常信息(主机、路径、SQL)回给调用方")))))

@@ -4,6 +4,7 @@
    [clojure.data.csv :as csv]
    [clojure.java.io :as io]
    [clojure.string :as str]
+   [clojure.tools.logging :as log]
    [com.ruoyi.domain.system.config :as config-service]
    [com.ruoyi.domain.system.dept :as dept-service]
    [com.ruoyi.domain.system.dict :as dict-service]
@@ -11,18 +12,12 @@
    [com.ruoyi.domain.system.post :as post-service]
    [com.ruoyi.domain.system.role :as role-service]
    [com.ruoyi.domain.system.user :as user-service]
+   [com.ruoyi.infra.errors :as errors]
+   [com.ruoyi.web.response :as res]
    [com.ruoyi.web.controllers.system.user :as user-ctrl]
    [ring.util.response :as response]))
 
-(defn- ok
-  ([data] (ok 200 "操作成功" data))
-  ([code msg data]
-   (-> (response/response {:code code :msg msg :data data})
-       (response/content-type "application/json"))))
-
-(defn- fail [msg]
-  (-> (response/response {:code 500 :msg msg})
-      (response/content-type "application/json")))
+(def ^:private csv-bom "\uFEFF")
 
 (defn- parse-int [v]
   (when (and v (not (str/blank? (str v))))
@@ -51,44 +46,48 @@
     (with-open [reader (io/reader tempfile :encoding "UTF-8")]
       (doall (csv/read-csv reader)))))
 
+(defn- row-failure-msg
+  "导入结果里的行失败提示:业务校验给中文原因,意外错误(数据库等)只说导入不了,细节进日志。"
+  [^Exception e]
+  (if (= errors/business-type (:type (ex-data e)))
+    (ex-message e)
+    (do (log/warn e "导入用户失败") "数据有误,无法导入")))
+
+(defn- import-one!
+  "导入一行:业务规则不通过(用户名为空、账号重复)把提示收进这一行的结果里,
+   让一次导入的其它行继续跑;整体失败(没选文件、CSV 读不出来)仍然抛给异常中间件。"
+  [user-service identity headers row]
+  (try
+    (let [user (csv-row->user headers row)]
+      (when (str/blank? (:user_name user))
+        (errors/fail! "用户名不能为空"))
+      (when (str/blank? (:nick_name user))
+        (errors/fail! "用户昵称不能为空"))
+      (user-service/create-user! user-service
+                                 (assoc user
+                                        :password "123456"
+                                        :roles []
+                                        :posts []
+                                        :create_by (:user-name identity "")))
+      {:user_name (:user_name user) :status "success"})
+    (catch Exception e
+      {:user_name (first row) :status "failed" :msg (row-failure-msg e)})))
+
 (defn import-users
   "批量导入用户（multipart CSV）。"
   [{:keys [user-service]} request]
-  (try
-    (let [multipart-params (:multipart-params request)
-          file (get multipart-params "file")
-          identity (:identity request)
-          _ (when (or (nil? file) (str/blank? (:filename file "")))
-              (throw (Exception. "请选择要上传的文件")))
-          rows (read-csv-rows file)
+  (let [file (get-in request [:multipart-params "file"])
+        identity (:identity request)]
+    (when (or (nil? file) (str/blank? (:filename file "")))
+      (errors/fail! "请选择要上传的文件"))
+    (let [rows (read-csv-rows file)
           headers (mapv str/trim (first rows))
-          data-rows (rest rows)
-          default-password "123456"
-          results (mapv (fn [row]
-                          (try
-                            (let [user (csv-row->user headers row)]
-                              (when (str/blank? (:user_name user))
-                                (throw (Exception. "用户名不能为空")))
-                              (when (str/blank? (:nick_name user))
-                                (throw (Exception. "用户昵称不能为空")))
-                              (user-service/create-user! user-service
-                                                         (assoc user
-                                                                :password default-password
-                                                                :roles []
-                                                                :posts []
-                                                                :create_by (:user-name identity "")))
-                              {:user_name (:user_name user) :status "success"})
-                            (catch Exception e
-                              {:user_name (first row) :status "failed" :msg (.getMessage e)})))
-                        data-rows)
-          success-count (count (filter #(= "success" (:status %)) results))
-          failed-count (count (filter #(= "failed" (:status %)) results))]
-      (ok {:total (count results)
-           :success success-count
-           :failed failed-count
-           :details results}))
-    (catch Exception e
-      (fail (.getMessage e)))))
+          results (mapv #(import-one! user-service identity headers %) (rest rows))
+          counted (fn [s] (count (filter #(= s (:status %)) results)))]
+      (res/ok {:total   (count results)
+               :success (counted "success")
+               :failed  (counted "failed")
+               :details results}))))
 
 (defn- user->csv-row
   "将用户映射转换为 CSV 行向量。"
@@ -108,63 +107,41 @@
        (remove str/blank?)
        (mapv parse-long)))
 
+(defn- csv-response
+  "CSV 文本 → 下载响应;带 BOM,Excel 打开才是 UTF-8。"
+  [filename header rows]
+  (let [out (java.io.StringWriter.)]
+    (csv/write-csv out (cons header rows) :separator \, :quote \")
+    (-> (response/response (str csv-bom out))
+        (response/header "Content-Type" "text/csv; charset=utf-8")
+        (response/header "Content-Disposition" (str "attachment; filename=" filename)))))
+
 (defn export-users
   "导出用户为 CSV 文件（带数据权限过滤）。"
   [{:keys [user-service]} request]
-  (try
-    (let [raw (:query-params request)
-          params (assoc (user-ctrl/list-params user-service request) :page-num 1 :page-size 10000)
-          result (user-service/list-users user-service params)
-          selected-ids (set (parse-id-list (get raw "ids")))
-          rows (cond->> (:rows result)
-                 (seq selected-ids) (filter #(contains? selected-ids (:user_id %))))
-          header ["user_name" "nick_name" "email" "phonenumber" "sex" "status" "dept_id" "remark"]
-          csv-lines (mapv user->csv-row rows)
-          output (java.io.StringWriter.)]
-      (csv/write-csv output (cons header csv-lines)
-                     :separator \, :quote \")
-      (let [csv-str (str output)
-            bom "\uFEFF"
-            content (str bom csv-str)]
-        (-> (response/response content)
-            (response/header "Content-Type" "text/csv; charset=utf-8")
-            (response/header "Content-Disposition" "attachment; filename=users.csv"))))
-    (catch Exception e
-      (fail (.getMessage e)))))
+  (let [selected-ids (set (parse-id-list (get-in request [:query-params "ids"])))
+        params (assoc (user-ctrl/list-params user-service request) :page-num 1 :page-size 10000)
+        rows (cond->> (:rows (user-service/list-users user-service params))
+               (seq selected-ids) (filter #(contains? selected-ids (:user_id %))))]
+    (csv-response "users.csv"
+                  ["user_name" "nick_name" "email" "phonenumber" "sex" "status" "dept_id" "remark"]
+                  (mapv user->csv-row rows))))
 
 (defn import-template
   "下载用户导入模板。"
   [_ _]
-  (let [header ["user_name" "nick_name" "email" "phonenumber" "sex" "status" "dept_id" "remark"]
-        sample ["admin" "管理员" "admin@ruoyi.vip" "13800138000" "0" "0" "1" ""]
-        output (java.io.StringWriter.)]
-    (csv/write-csv output [header sample] :separator \, :quote \")
-    (let [csv-str (str output)
-          bom "\uFEFF"
-          content (str bom csv-str)]
-      (-> (response/response content)
-          (response/header "Content-Type" "text/csv; charset=utf-8")
-          (response/header "Content-Disposition" "attachment; filename=user_import_template.csv")))))
+  (csv-response "user_import_template.csv"
+                ["user_name" "nick_name" "email" "phonenumber" "sex" "status" "dept_id" "remark"]
+                [["admin" "管理员" "admin@ruoyi.vip" "13800138000" "0" "0" "1" ""]]))
 
 ;; ─── 通用导出函数 ──────────────────────────────────────────────────────
 
 (defn- generic-export
   "通用导出函数。"
   [list-fn service params header csv-fn filename _request]
-  (try
-    (let [result (list-fn service (merge {:page-num 1 :page-size 10000} params))
-          rows (if (sequential? result) result (:rows result []))
-          csv-lines (mapv csv-fn rows)
-          output (java.io.StringWriter.)]
-      (csv/write-csv output (cons header csv-lines) :separator \, :quote \")
-      (let [csv-str (str output)
-            bom "\uFEFF"
-            content (str bom csv-str)]
-        (-> (response/response content)
-            (response/header "Content-Type" "text/csv; charset=utf-8")
-            (response/header "Content-Disposition" (str "attachment; filename=" filename)))))
-    (catch Exception e
-      (fail (.getMessage e)))))
+  (let [result (list-fn service (merge {:page-num 1 :page-size 10000} params))
+        rows (if (sequential? result) result (:rows result []))]
+    (csv-response filename header (mapv csv-fn rows))))
 
 (defn export-roles
   "导出角色数据。"

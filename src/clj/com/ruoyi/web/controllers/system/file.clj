@@ -3,6 +3,7 @@
   (:require
    [clojure.java.io :as io]
    [com.ruoyi.infra.files :as files]
+   [com.ruoyi.web.response :as res]
    [ring.util.response :as response])
   (:import
    [java.util Date]))
@@ -10,12 +11,6 @@
 (defn- ensure-dir! [upload-config]
   (let [dir (io/file (files/upload-dir upload-config))]
     (when-not (.exists dir) (.mkdirs dir))))
-
-(defn- ok
-  ([data] (ok 200 "操作成功" data))
-  ([code msg data]
-   (-> (response/response {:code code :msg msg :data data})
-       (response/content-type "application/json"))))
 
 (defn- file-entries [^java.io.File dir]
   (when (.exists dir)
@@ -31,19 +26,17 @@
   "获取上传文件列表。修改时间给 java.util.Date,由 infra.json 统一编码成本地 yyyy-MM-dd HH:mm:ss。"
   [{:keys [upload-config]} _]
   (ensure-dir! upload-config)
-  (ok (file-entries (io/file (files/upload-dir upload-config)))))
+  (res/ok (file-entries (io/file (files/upload-dir upload-config)))))
 
 (defn upload-file
-  "上传文件:先按 :upload-config 校验类型与大小;文件名只保留安全字符,同名不覆盖。"
+  "上传文件:先按 :upload-config 校验类型与大小;文件名只保留安全字符,同名不覆盖。
+   写盘失败属于意外错误,交给异常中间件走 5xx,不把异常信息返回给前端。"
   [{:keys [upload-config]} request]
   (let [{:keys [tempfile filename] :as file} (get-in request [:params :file])]
     (if-let [err (files/upload-error (files/policy upload-config) file)]
-      (ok 400 err nil)
-      (try
-        (let [target (files/store! (files/upload-dir upload-config) tempfile filename)]
-          (ok {:name (.getName target) :size (.length target)}))
-        (catch Exception e
-          (ok 500 (.getMessage e) nil))))))
+      (res/ok 400 err nil)
+      (let [target (files/store! (files/upload-dir upload-config) tempfile filename)]
+        (res/ok {:name (.getName target) :size (.length target)})))))
 
 (defn- existing-file [upload-config request]
   (let [f (files/resolve-in (files/upload-dir upload-config)
@@ -57,11 +50,11 @@
     (-> (response/response file)
         (response/header "Content-Disposition" (str "attachment; filename=\"" (.getName file) "\""))
         (response/content-type "application/octet-stream"))
-    (ok 404 "文件不存在" nil)))
+    (res/ok 404 "文件不存在" nil)))
 
 (defn delete-file
   "删除文件(只能是上传目录里的文件)。"
   [{:keys [upload-config]} request]
   (if-let [file (existing-file upload-config request)]
-    (do (.delete file) (ok "删除成功"))
-    (ok 404 "文件不存在" nil)))
+    (do (.delete file) (res/ok "删除成功"))
+    (res/ok 404 "文件不存在" nil)))

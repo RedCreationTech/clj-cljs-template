@@ -2,6 +2,7 @@
   "岗位控制器测试。"
   (:require
    [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.web.controller-test-helper :as eh]
    [com.ruoyi.web.controllers.system.post :as post]))
 
 (def admin-identity
@@ -14,6 +15,7 @@
                           :create-post! [{:post_id 2}]
                           :last-insert-rowid {:last_insert_rowid 2}
                           :update-post! nil
+                          :count-users-by-post {:total 0}
                           :delete-post! nil
                           []))})
 
@@ -57,6 +59,13 @@
     (let [request {:path-params {:id "1"}}
           response (post/delete-post {:post-service mock-post-service} request)]
       (is (map? response)))))
+
+(deftest test-delete-assigned-post
+  (testing "已分配给用户的岗位:删除被拒,中文原因原样回到前端"
+    (let [service {:query-fn (fn [q _p] (case q :count-users-by-post {:total 2} nil))}
+          response (eh/call post/delete-post {:post-service service} {:path-params {:id "2"}})]
+      (is (= 200 (:status response)))
+      (is (= {:code 500 :msg "该岗位已分配给用户,不能删除"} (:body response))))))
 
 (deftest test-change-status
   (testing "修改岗位状态"

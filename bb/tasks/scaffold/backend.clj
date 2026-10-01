@@ -44,32 +44,28 @@
 
 (defn controller [{:keys [ns-root module label service-arg]}]
   (str "(ns " ns-root ".web.controllers." module "\n"
-       "  \"" label "控制器(bb new-module 生成):请求 ↔ 领域服务,统一 {:code :msg :data} 信封。\"\n"
+       "  \"" label "控制器(bb new-module 生成):请求 ↔ 领域服务,响应统一走 com.ruoyi.web.response。\n"
+       "   业务规则不通过由领域层抛 errors/fail! 业务异常,异常中间件会转成 HTTP 200 + {:code 500 :msg} 带上中文原因;\n"
+       "   这里不要写 try/catch,意外错误交给中间件出 5xx 通用文案。\"\n"
        "  (:require\n"
        "   [" ns-root ".domain." module " :as svc]\n"
-       "   [ring.util.response :as response]))\n\n"
-       "(defn- ok [data]\n"
-       "  (-> (response/response {:code 200 :msg \"操作成功\" :data data})\n"
-       "      (response/content-type \"application/json\")))\n\n"
-       "(defn- fail [msg]\n"
-       "  (-> (response/response {:code 500 :msg msg})\n"
-       "      (response/content-type \"application/json\")))\n\n"
+       "   [" ns-root ".web.response :as res]))\n\n"
        "(defn- user-name [request] (get-in request [:identity :user-name] \"\"))\n\n"
        "(defn- path-id [request] (get-in request [:parameters :path :id]))\n\n"
        "(defn list-page [{:keys [" service-arg "]} request]\n"
-       "  (ok (svc/list-page " service-arg " (get-in request [:parameters :query]))))\n\n"
+       "  (res/ok (svc/list-page " service-arg " (get-in request [:parameters :query]))))\n\n"
        "(defn get-one [{:keys [" service-arg "]} request]\n"
        "  (if-let [row (svc/find-by-id " service-arg " (path-id request))]\n"
-       "    (ok row)\n"
-       "    (fail \"记录不存在\")))\n\n"
+       "    (res/ok row)\n"
+       "    (res/fail \"记录不存在\")))\n\n"
        "(defn create [{:keys [" service-arg "]} request]\n"
-       "  (ok {:id (svc/create! " service-arg " (get-in request [:parameters :body]) (user-name request))}))\n\n"
+       "  (res/ok {:id (svc/create! " service-arg " (get-in request [:parameters :body]) (user-name request))}))\n\n"
        "(defn update-one [{:keys [" service-arg "]} request]\n"
        "  (svc/update! " service-arg " (path-id request) (get-in request [:parameters :body]) (user-name request))\n"
-       "  (ok \"更新成功\"))\n\n"
+       "  (res/ok \"更新成功\"))\n\n"
        "(defn delete-one [{:keys [" service-arg "]} request]\n"
        "  (svc/delete! " service-arg " (path-id request))\n"
-       "  (ok \"删除成功\"))\n"))
+       "  (res/ok \"删除成功\"))\n"))
 
 (defn- body-entry [{:keys [col type required?]}]
   (let [schema (get-in m/types [type :malli])]

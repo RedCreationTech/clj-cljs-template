@@ -2,6 +2,7 @@
   "异常处理中间件测试。"
   (:require
    [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.infra.errors :as errors]
    [com.ruoyi.infra.json :as json]
    [com.ruoyi.web.middleware.exception :as exception]))
 
@@ -50,15 +51,19 @@
       (is (= "ok" (:body response))))))
 
 (deftest test-wrap-exception-business-exception
-  (testing "业务异常映射为 400"
-    (let [ex (ex-info "参数错误" {:type :system.exception/business})
+  (testing "业务异常按前端约定回 HTTP 200 + {:code 500 :msg},不泄露内部字段"
+    (is (= errors/business-type (:type (ex-data (try (errors/fail! "x") (catch Exception e e)))))
+        "fail! 抛的异常带中间件认的 :type")
+    (let [ex (ex-info "登录账号不能重复" {:type              errors/business-type
+                                  :user_name "admin"})
           handler (wrap-handler (make-throwing-handler ex))
-          response (handler {:uri "/api/users"})]
-      (is (= 400 (:status response)))
-      (let [body (parse-json-body response)]
-        (is (= "bad request" (:message body)))
-        (is (= {:code 400 :msg "参数错误"} (select-keys body [:code :msg])))
-        (is (= "/api/users" (:uri body)))))))
+          response (handler {:uri "/api/users"})
+          body (parse-json-body response)]
+      (is (= 200 (:status response)) "业务失败不是 HTTP 错误")
+      (is (= {:code 500 :msg "登录账号不能重复"} body)
+          "body 形状与控制器 fail 完全一致,不多带字段")
+      (is (not (contains? body :uri)) "不回显请求路径")
+      (is (not (contains? body :exception)) "不回显异常类名"))))
 
 (deftest test-wrap-exception-not-found-exception
   (testing "资源不存在异常映射为 404"

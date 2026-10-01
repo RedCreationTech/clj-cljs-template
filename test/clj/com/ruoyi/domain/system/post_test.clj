@@ -2,19 +2,21 @@
   "岗位领域服务测试。"
   (:require
    [clojure.test :refer [deftest is testing]]
-   [com.ruoyi.domain.system.post :as post]))
+   [com.ruoyi.domain.system.post :as post]
+   [com.ruoyi.infra.errors :as errors]))
 
 (def mock-posts
   [{:post_id 1 :post_code "ceo" :post_name "董事长" :post_sort 1 :status "0"}
    {:post_id 2 :post_code "cto" :post_name "技术总监" :post_sort 2 :status "0"}])
 
-(defn- mock-query-fn [query-name _params]
+(defn- mock-query-fn [query-name params]
   (case query-name
     :list-posts mock-posts
     :find-post-by-id (first mock-posts)
     :create-post! [{:post_id 3}]
     :last-insert-rowid {:last_insert_rowid 3}
     :update-post! nil
+    :count-users-by-post (if (= 2 (:post_id params)) {:total 1} {:total 0})
     :delete-post! nil
     []))
 
@@ -46,6 +48,15 @@
   (testing "删除岗位"
     (let [result (post/delete-post! mock-service 1)]
       (is (nil? result)))))
+
+(deftest test-delete-assigned-post
+  (testing "已分配给用户的岗位删不掉,并且带上中文原因"
+    (let [error (try
+                  (post/delete-post! mock-service 2)
+                  :no-error
+                  (catch Exception e e))]
+      (is (= errors/business-type (:type (ex-data error))))
+      (is (= "该岗位已分配给用户,不能删除" (ex-message error))))))
 
 (deftest test-find-post-by-id-not-found
   (testing "查询不存在的岗位"

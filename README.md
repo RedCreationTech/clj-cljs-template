@@ -60,9 +60,10 @@
 ├── src/clj/com/ruoyi/           # 后端
 │   ├── core.clj                 # 入口：密钥校验 → 加载 edge / domain / routes → 启动 Integrant
 │   ├── config.clj               # 读取 system.edn（aero）
-│   ├── infra/                   # 基础设施：db 抽象、clock(:now 本地时间)、kv(共享键值)、json(统一编码)、security(JWT)、secrets、online(会话)、login-guard(限流)、files、cache、scheduler
+│   ├── infra/                   # 基础设施：db 抽象、clock(:now 本地时间)、kv(共享键值)、json(统一编码)、errors(业务错误)、security(JWT)、secrets、online(会话)、login-guard(限流)、files、cache、scheduler
 │   ├── domain/                  # 领域服务（system/*：user, role, menu, dept, ...）
 │   ├── web/handler.clj          # Ring handler / 路由器 / SPA fallback
+│   ├── web/response.clj         # 统一响应形状（ok / fail / deny）
 │   ├── web/middleware/          # auth、operlog、exception、formats、core
 │   ├── web/routes/              # Reitit 路由（api.clj 聚合）
 │   └── web/controllers/         # 控制器（请求 <-> 领域服务）
@@ -294,6 +295,7 @@ Swagger UI：http://localhost:3000/api
 
 - 后端分层：`route -> controller -> domain(service) -> HugSQL query -> db`；组件全部在 `system.edn` 装配。
 - API 契约：响应信封 `{:code :msg :data}`，分页 `{:total :rows}`，参数 `page`/`size`，字段 snake_case（详见 C4 文档 §6.6）；列表接口用 `controllers.params/query` 读查询参数（字符串键 → 关键字键，空串视为未填），领域层用 `domain.paging/paginate` 配对 `LIMIT/OFFSET` 列表与 `count-*` 查询。
+- 错误处理：业务规则不通过由领域层抛 `(errors/fail! "中文原因")`（`ex-info`，`{:type :system.exception/business}`），`web/middleware/exception` 把它转成 **HTTP 200 + `{:code 500 :msg}`**，前端照现有契约弹出这条 `msg`；控制器只负责判断直接返回响应（`web/response` 的 `ok` / `fail` / `deny`，`deny` 用于 401/403 状态码与业务码一致的场景），**不要写 try/catch 吞异常**，意外错误（数据库、IO）由中间件出 5xx 通用文案，细节只进服务端日志。单元测试用 `test/clj/com/ruoyi/web/controller_test_helper.clj` 的 `call` / `business-msg` 走真实中间件断言响应形状。
 - 权限：新接口在路由数据里声明 `:auth?` / `:perms`，对应按钮菜单（F）写进迁移；前端按钮加 `:perm` 或包 `perm/when-allowed`。前端只负责显隐，拦截以后端为准。
 - 接口失败由 `api.transport` 统一提示（403、5xx、网络断开、业务码非 200）并复位 loading（`events.common/stop-all-loading` 把 app-db 里各模块的 `:loading?` 清掉，请求失败后表格不会一直转圈），调用方的 `on-error` 只做收尾，不要再各自弹「网络错误」；上传用 `t/request` 的 `:body`，带令牌下载用 `t/download!`。
 - 每个 namespace ≤ 500 行、函数 ≤ 50 行（`bb check` 检查 src / env / test / bb / scripts）；超限时拆分。
@@ -303,7 +305,7 @@ Swagger UI：http://localhost:3000/api
 - 前端状态统一 re-frame；组件局部状态用 Hooks，不用 `reagent/atom`；分页参数固定 `page` / `size`。
 - 列表页一律服务端分页：模块在 app-db 存 `:query-params`（含 `:page` / `:size`），取数走 `events.common/fetch-with-query`，表格的 `:pagination` 只用 `components/pagination` 的 `table-pagination`（服务端）/ `client-pagination`（本地翻页），不要在页面里手写（`bb lint:pagination` 检查）。
 - 前端界面文案用 `(i18n/tr "中文原文")` 包裹、英文译文加到 `i18n.cljs`（外壳与通用组件已完成，业务页面可逐步迁移）；localStorage 只通过 `storage` 命名空间访问；内联样式的颜色用 `var(--app-*)` 变量（见 `resources/public/css/app.css`），暗色主题才能自动适配。
-- 中文 docstring 描述职责、参数与返回值。
+- 中文 docstring 描述职责、参数与返回值；docstring 紧跟函数名、在参数向量之前（`(defn f "doc" [args] …)`），里面不要写裸双引号。
 - 更多 antd 6 适配与坑位清单见 `AGENTS.md`。
 
 ## 许可

@@ -18,6 +18,8 @@
 - **第三方服务密钥同样只走环境变量**：导览旁白的 MiMo TTS 密钥（`bb video:narrate`）只从 `MIMO_API_KEY` 或 gitignore 掉的 `target/tour/mimo.key` 读取，请求失败时不要把密钥写进任何报错、任务参数或仓库文件。
 - **配置只走 `system.edn` + 环境变量，不要在读到配置的代码里再读 `System/getenv`**：环境相关项在 `resources/system.edn` 用 `#env`/`#profile` 声明，跨方言兜底（迁移目录、连接池）与 prod 体检由 `com.ruoyi.config` 的纯函数（`with-default-migration-dir` / `with-dialect-pool` / `prod-warnings`）在 `system-config` 里统一处理后交给 Integrant，新增这类规则请在这里加纯函数并补 `config_test`，不要在控制器里读环境变量。连接池：SQLite 强制单连接，MySQL 默认 10（`DB_MAX_ACTIVE` 可覆盖）；定时任务用内存 JobStore，多实例部署时非主实例设 `SCHEDULER_ENABLED=false`；启动迁移可用 `MIGRATE_ON_INIT=false` 关闭。
 - **5xx 响应不能带内部信息**：`web.middleware.exception/handler` 对 5xx 只回 `{:code :msg}`（通用文案），异常类名、URI、`ex-data`、堆栈只进服务端日志；4xx 才保留异常消息与 `ex-data` 便于前端定位。给响应加字段前先确认不会泄露路径、SQL、依赖版本等。
+- **错误只有一种抛法、响应只有一种形状**：业务规则不通过一律在**领域层** `(errors/fail! "中文原因")`（`com.ruoyi.infra.errors`，抛 `{:type :system.exception/business}` 的 `ex-info`），异常中间件的 `business-handler` 转成 HTTP 200 + `{:code 500 :msg}`，与 RuoYi 前端契约一致；控制器只用 `com.ruoyi.web.response` 的 `ok`（单参是 `:data`，`msg` 固定「操作成功」；`(res/ok code msg)` 才是文案）、`fail`、`deny`（401/403，状态码=业务码），**不要在控制器里 try/catch 把异常拼进响应**，也不要再各自 `defn- ok/fail/deny`。唯一例外：CSV 逐行导入要收集每行结果（`import_export/row-failure-msg` 区分 business 与意外错误）。单元测试直接传带 `:upload-config` 等的 context，用 `test/clj/com/ruoyi/web/controller_test_helper.clj` 的 `call`/`business-msg` 经真实中间件断言响应，别只测裸返回值。写唯一性校验时先加 `find-*-by-key` 查询（共用 SQL），领域层查重后再入库，让重复键错误也有中文提示，而不是 JDBC 的 `Unique constraint` 文本。
+- **函数 docstring 紧跟名字、在参数向量之前**（`(defn f "doc" [args] …)`，`defmacro`/`defmethod` 同理）；写反了 clj-kondo 会报 Misplaced docstring / Unused value。`ns` 的 docstring 若多行，结尾用 `"` 而不是 `")`，否则 `(:require …)` 被挤出 ns 表单、运行期才报 ClassNotFoundException。docstring 里**不要写裸双引号**（例如举例 `(errors/fail! "原因")`），字符串会提前结束、命名空间解析失败而 clj-kondo 只报 "Can't parse"；举例用无反引号的 `errors/fail!`，或用「」。
 - **前端编译前必须打 `node_modules` 补丁**：Quill/Parchment 的 static super 会被 Closure Compiler 编译坏（公告富文本渲染不出来），补丁表在 `bb/tasks/vendor.clj`，由 `bb release` / `bb cljs:check` / `bb dev` / `bb e2e` 自动执行。手动跑 shadow-cljs 或 `npm install` 之后要先 `bb patch:vendor`；升级 quill/parchment 时补丁命中数对不上会直接失败，需要重新核对补丁表或确认上游已修复后删除。
 
 ## Non-Interactive Shell Commands
@@ -586,6 +588,7 @@ npm run test:e2e:report                  # 查看 HTML 报告
 - `search.spec.js` — 角色、岗位、参数列表的搜索条件生效
 - `user-import.spec.js` — 用户导入弹窗：打开、下载 CSV 模板、提交导入、列表出现导入的用户
 - `profile.spec.js` — 个人中心头像上传（换图后档案与顶栏同步）、缓存监控「清空」命中 `/system/cache/clear`
+- `error-message.spec.js` — 业务失败的端到端契约：领域层 `errors/fail!` 的中文原因回到前端（HTTP 200 + `{:code 500 :msg}`），响应里不出现异常类名/SQL 等内部信息；用「参数键名重复」做例子，干净库可跑
 - `header.spec.js` — 顶部菜单搜索跳转、通知铃铛未读数与已读（按用户记录，刷新后不再显示）
 - `auth-helper.js` — 登录/登出公共辅助
 - `<module>.spec.js` — `bb new-module` 为每个生成的模块写的新增/修改/删除用例

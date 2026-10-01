@@ -8,11 +8,16 @@
   [{:config_id 1 :config_name "主框架页-默认皮肤" :config_key "sys.index.skinName" :config_value "skin-blue" :config_type "Y"}
    {:config_id 2 :config_name "用户管理-账号初始密码" :config_key "sys.user.initPassword" :config_value "123456" :config_type "Y"}])
 
-(defn- mock-query-fn [query-name _params]
+(defn- by-key
+  "按 config_key 精确命中,模拟唯一索引的查询语义。"
+  [params]
+  (first (filter #(= (:config_key %) (:config_key params)) mock-configs)))
+
+(defn- mock-query-fn [query-name params]
   (case query-name
     :list-configs mock-configs
     :find-config-by-id (first mock-configs)
-    :find-config-by-key (first mock-configs)
+    :find-config-by-key (by-key params)
     :create-config! [{:config_id 3}]
     :last-insert-rowid {:last_insert_rowid 3}
     :update-config! nil
@@ -53,6 +58,24 @@
   (testing "删除参数"
     (let [result (config/delete-config! mock-service 1)]
       (is (nil? result)))))
+
+(deftest test-create-config-duplicate-key
+  (testing "键名重复时给出中文提示,而不是让数据库的唯一索引报错冒给用户"
+    (let [ex (try (config/create-config! mock-service {:config_key "sys.index.skinName"})
+                  (catch Exception e e))]
+      (is (= "参数键名已存在" (ex-message ex)))
+      (is (= :system.exception/business (:type (ex-data ex)))))))
+
+(deftest test-update-config-key-unchanged
+  (testing "修改参数时键名没换,不算重复"
+    (let [result (config/update-config! mock-service {:config_id 1 :config_key "sys.index.skinName" :config_value "x"})]
+      (is (nil? result)))))
+
+(deftest test-update-config-key-conflict
+  (testing "把键名改成别人已占用的键 -> 拒绝"
+    (let [ex (try (config/update-config! mock-service {:config_id 2 :config_key "sys.index.skinName"})
+                  (catch Exception e e))]
+      (is (= "参数键名已存在" (ex-message ex))))))
 
 (deftest test-find-config-by-id-not-found
   (testing "查询不存在的参数"

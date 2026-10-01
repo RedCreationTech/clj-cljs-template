@@ -2,7 +2,8 @@
   "用户管理控制器测试。"
   (:require
    [clojure.test :refer [deftest is testing]]
-   [com.ruoyi.web.controllers.system.user :as user]))
+   [com.ruoyi.web.controllers.system.user :as user]
+   [com.ruoyi.web.controller-test-helper :as eh]))
 
 (def admin-identity
   {:user-id 1 :user-name "admin" :roles [1]})
@@ -117,11 +118,12 @@
       (is (= 200 (:status response))))))
 
 (deftest test-delete-user
-  (testing "删除用户"
+  (testing "admin 用户不能删除,领域层的中文原因要原样回到前端"
     (let [request {:path-params {:id "1"} :identity admin-identity}
-          response (user/delete-user {:user-service mock-user-service} request)]
-      (is (map? response))
-      (is (= 200 (:status response))))))
+          response (eh/call user/delete-user {:user-service mock-user-service} request)]
+      (is (= 200 (:status response)) "业务失败仍是 HTTP 200")
+      (is (= 500 (get-in response [:body :code])))
+      (is (= "admin 用户不能删除" (get-in response [:body :msg]))))))
 
 (deftest test-change-status
   (testing "修改用户状态"

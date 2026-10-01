@@ -5,6 +5,7 @@
    [com.ruoyi.domain.paging :as paging]
    [com.ruoyi.domain.system.data-scope :as data-scope]
    [com.ruoyi.infra.db :as db]
+   [com.ruoyi.infra.errors :as errors]
    [com.ruoyi.infra.security :as security]))
 
 (defn- dept-with-children
@@ -49,7 +50,7 @@
   (when-let [existing (and (seq user-name)
                            (query-fn :find-user-by-name {:user_name user-name}))]
     (when (not= (:user_id existing) current-user-id)
-      (throw (ex-info "登录账号不能重复" {:user_name user-name})))))
+      (errors/fail! "登录账号不能重复" {:user_name user-name}))))
 
 (defn create-user!
   "创建新用户，自动加密密码。"
@@ -101,7 +102,7 @@
   [{:keys [query-fn]} user-id]
   (let [user (query-fn :find-user-by-id {:user_id user-id})]
     (when (or (= 1 user-id) (= "admin" (:user_name user)))
-      (throw (ex-info "admin 用户不能删除" {:user_id user-id})))
+      (errors/fail! "admin 用户不能删除" {:user_id user-id}))
     (query-fn :delete-user! {:user_id user-id})))
 
 (defn get-user-roles

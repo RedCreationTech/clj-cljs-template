@@ -2,7 +2,8 @@
   "导入导出控制器测试。"
   (:require
    [clojure.test :refer [deftest is testing]]
-   [com.ruoyi.web.controllers.system.import-export :as ie]))
+   [com.ruoyi.web.controllers.system.import-export :as ie]
+   [com.ruoyi.web.controller-test-helper :as eh]))
 
 (defn- temp-csv-file [content]
   (let [file (java.io.File/createTempFile "test" ".csv")]
@@ -103,8 +104,10 @@
 (deftest test-import-users-empty-file
   (testing "未上传文件时导入失败"
     (let [request {:multipart-params {} :identity {:user_name "admin"}}
-          response (ie/import-users {:user-service mock-user-service} request)]
-      (is (= 500 (get-in response [:body :code]))))))
+          response (eh/call ie/import-users {:user-service mock-user-service} request)]
+      (is (= 200 (:status response)) "业务失败仍是 HTTP 200")
+      (is (= 500 (get-in response [:body :code])))
+      (is (= "请选择要上传的文件" (get-in response [:body :msg]))))))
 
 (deftest test-export-users
   (testing "导出用户 CSV"

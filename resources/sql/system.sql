@@ -243,6 +243,10 @@ SELECT COUNT(*) AS total FROM sys_post WHERE 1=1
 -- :name find-post-by-id :? :1
 SELECT * FROM sys_post WHERE post_id = :post_id
 
+-- :name count-users-by-post :? :1
+-- :doc 统计岗位已分配的用户数(删除岗位前的业务校验)
+SELECT COUNT(*) AS total FROM sys_user_post WHERE post_id = :post_id
+
 -- :name create-post! :! :n
 INSERT INTO sys_post (post_code, post_name, post_sort, status, create_by, create_time, remark)
 VALUES (:post_code, :post_name, :post_sort, :status, :create_by, :now, :remark)
@@ -270,6 +274,9 @@ ORDER BY dict_id
 
 -- :name find-dict-type-by-id :? :1
 SELECT * FROM sys_dict_type WHERE dict_id = :dict_id
+
+-- :name find-dict-type-by-key :? :1
+SELECT * FROM sys_dict_type WHERE dict_type = :dict_type
 
 -- :name create-dict-type! :! :n
 INSERT INTO sys_dict_type (dict_name, dict_type, status, create_by, create_time, remark)

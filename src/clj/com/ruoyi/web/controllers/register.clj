@@ -2,15 +2,9 @@
   "用户自助注册。默认关闭(:auth-config :register-enabled?)。
    只接受用户名与密码,其余字段一律忽略:新用户不带任何角色、岗位与部门,需要管理员分配权限。"
   (:require
-   [clojure.tools.logging :as log]
    [com.ruoyi.domain.system.user :as user-service]
    [com.ruoyi.web.controllers.auth :as auth]
-   [ring.util.response :as response]))
-
-(defn- ok
-  ([msg] (ok 200 msg))
-  ([code msg] (-> (response/response {:code code :msg msg})
-                  (response/content-type "application/json"))))
+   [com.ruoyi.web.response :as res]))
 
 (defn- new-user
   "注册用户的完整字段(HugSQL 要求参数齐全);不接受请求里的任何其它字段。"
@@ -29,16 +23,13 @@
     (not (<= 5 (count (str password)) 20)) [400 "密码长度须在 5~20 个字符之间"]))
 
 (defn register
-  "用户注册。"
+  "用户注册。参数校验不通过回对应的业务码;意外错误(数据库等)不在这里吞掉,
+   由异常中间件走 5xx 通用文案,细节只进服务端日志。"
   [{:keys [user-service auth-config]} request]
   (let [{:keys [username password] :as body} (:body-params request)]
     (if-let [[code msg] (invalid-reason (auth/config-of auth-config) body)]
-      (ok code msg)
+      (res/ok code msg)
       (if (user-service/find-user-by-name user-service username)
-        (ok 500 "注册账号已存在")
-        (try
-          (user-service/create-user! user-service (new-user username password))
-          (ok "注册成功")
-          (catch Exception e
-            (log/error e "注册失败")
-            (ok 500 "注册失败")))))))
+        (res/fail "注册账号已存在")
+        (do (user-service/create-user! user-service (new-user username password))
+            (res/ok 200 "注册成功"))))))

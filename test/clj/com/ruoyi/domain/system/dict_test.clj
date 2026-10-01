@@ -12,10 +12,16 @@
   [{:dict_code 1 :dict_sort 1 :dict_label "男" :dict_value "0" :dict_type "sys_user_sex"}
    {:dict_code 2 :dict_sort 2 :dict_label "女" :dict_value "1" :dict_type "sys_user_sex"}])
 
-(defn- mock-query-fn [query-name _params]
+(defn- by-type
+  "按 dict_type 精确命中,模拟唯一索引的查询语义。"
+  [params]
+  (first (filter #(= (:dict_type %) (:dict_type params)) mock-dict-types)))
+
+(defn- mock-query-fn [query-name params]
   (case query-name
     :list-dict-types mock-dict-types
     :find-dict-type-by-id (first mock-dict-types)
+    :find-dict-type-by-key (by-type params)
     :list-dict-data mock-dict-data
     :find-dict-data-by-id (first mock-dict-data)
     :create-dict-type! [{:dict_id 3}]
@@ -67,6 +73,23 @@
   (testing "删除字典类型"
     (let [result (dict/delete-dict-type! mock-service 1)]
       (is (nil? result)))))
+
+(deftest test-create-dict-type-duplicate
+  (testing "字典类型重复时给中文提示,而不是把唯一索引的数据库错误丢给前端"
+    (let [ex (try (dict/create-dict-type! mock-service {:dict_name "重复" :dict_type "sys_user_sex"})
+                  (catch Exception e e))]
+      (is (= "字典类型已存在" (ex-message ex)))
+      (is (= :system.exception/business (:type (ex-data ex)))))))
+
+(deftest test-update-dict-type-key-unchanged
+  (testing "改名字不改 dict_type 不算重复")
+  (is (nil? (dict/update-dict-type! mock-service {:dict_id 1 :dict_type "sys_user_sex" :dict_name "性别"}))))
+
+(deftest test-update-dict-type-key-conflict
+  (testing "把 dict_type 改成别人占用的键 -> 拒绝"
+    (let [ex (try (dict/update-dict-type! mock-service {:dict_id 1 :dict_type "sys_normal_disable"})
+                  (catch Exception e e))]
+      (is (= "字典类型已存在" (ex-message ex))))))
 
 (deftest test-create-dict-data
   (testing "创建字典数据"

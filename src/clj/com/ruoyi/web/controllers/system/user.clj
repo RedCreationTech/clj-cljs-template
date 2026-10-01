@@ -6,22 +6,10 @@
    [clojure.string :as str]
    [com.ruoyi.domain.system.data-scope :as data-scope]
    [com.ruoyi.domain.system.user :as user-service]
-   [ring.util.response :as response]))
-
-(defn- ok
-  ([data] (ok 200 "操作成功" data))
-  ([code msg data]
-   (-> (response/response {:code code :msg msg :data data})
-       (response/content-type "application/json"))))
-
-(defn- fail [msg]
-  (-> (response/response {:code 500 :msg msg})
-      (response/content-type "application/json")))
+   [com.ruoyi.web.response :as res]))
 
 (defn- out-of-scope []
-  (-> (response/response {:code 403 :msg "没有权限访问该用户的数据"})
-      (response/status 403)
-      (response/content-type "application/json")))
+  (res/deny 403 "没有权限访问该用户的数据"))
 
 (defn- parse-int [v]
   (when-not (str/blank? (str v)) (parse-long (str v))))
@@ -51,7 +39,7 @@
    (let [scope (request-scope user-service request)
          user (user-service/find-user-by-id user-service user-id)]
      (cond
-       (nil? user) (fail "用户不存在")
+       (nil? user) (res/fail "用户不存在")
        (not (data-scope/allows? scope user)) (out-of-scope)
        (and extra-dept (not (data-scope/allows? scope {:dept_id extra-dept}))) (out-of-scope)
        :else (f user)))))
@@ -66,12 +54,12 @@
   "查询用户列表(按数据范围过滤;选中部门时包含其下级部门)。"
   [{:keys [user-service]} request]
   (let [result (user-service/list-users user-service (list-params user-service request))]
-    (ok {:total (:total result) :rows (:rows result)})))
+    (res/ok {:total (:total result) :rows (:rows result)})))
 
 (defn get-user
   "获取用户详情。"
   [{:keys [user-service]} request]
-  (with-user-in-scope user-service request (path-id request) ok))
+  (with-user-in-scope user-service request (path-id request) res/ok))
 
 (defn- validate-new-user [params]
   (cond
@@ -88,11 +76,9 @@
                        :create_by (operator request) :roles [] :posts []}
                       (:body-params request))]
     (cond
-      (validate-new-user params) (fail (validate-new-user params))
+      (validate-new-user params) (res/fail (validate-new-user params))
       (not (data-scope/allows? (request-scope user-service request) params)) (out-of-scope)
-      :else (try
-              (ok (str "创建成功: " (user-service/create-user! user-service params)))
-              (catch Exception e (fail (.getMessage e)))))))
+      :else (res/ok (str "创建成功: " (user-service/create-user! user-service params))))))
 
 (defn update-user
   "更新用户(只改提交的字段,密码为空表示不修改)。"
@@ -101,14 +87,12 @@
         body (:body-params request)]
     (with-user-in-scope user-service request user-id (:dept_id body)
       (fn [_]
-        (try
-          (user-service/update-user! user-service
-                                     (cond-> (merge (dissoc body :roles :posts :user_name)
-                                                    {:user-id user-id :update_by (operator request)})
-                                       (:roles body) (assoc :roles (:roles body))
-                                       (:posts body) (assoc :posts (:posts body))))
-          (ok "更新成功")
-          (catch Exception e (fail (.getMessage e))))))))
+        (user-service/update-user! user-service
+                                   (cond-> (merge (dissoc body :roles :posts :user_name)
+                                                  {:user-id user-id :update_by (operator request)})
+                                     (:roles body) (assoc :roles (:roles body))
+                                     (:posts body) (assoc :posts (:posts body))))
+        (res/ok "更新成功")))))
 
 (defn delete-user
   "删除用户。"
@@ -116,10 +100,8 @@
   (let [user-id (path-id request)]
     (with-user-in-scope user-service request user-id
       (fn [_]
-        (try
-          (user-service/delete-user! user-service user-id)
-          (ok "删除成功")
-          (catch Exception e (fail (.getMessage e))))))))
+        (user-service/delete-user! user-service user-id)
+        (res/ok "删除成功")))))
 
 (defn change-status
   "修改用户状态。"
@@ -130,7 +112,7 @@
         (user-service/update-user! user-service {:user-id user-id
                                                  :status (get-in request [:path-params :status])
                                                  :update_by (operator request)})
-        (ok "状态修改成功")))))
+        (res/ok "状态修改成功")))))
 
 (defn reset-password
   "重置用户密码(未提交新密码时重置为 123456)。"
@@ -142,14 +124,14 @@
         (user-service/update-user! user-service {:user-id user-id
                                                  :password (if (str/blank? password) "123456" password)
                                                  :update_by (operator request)})
-        (ok "密码重置成功")))))
+        (res/ok "密码重置成功")))))
 
 (defn auth-role
   "获取用户角色列表。"
   [{:keys [user-service]} request]
   (let [user-id (path-id request)]
     (with-user-in-scope user-service request user-id
-      (fn [_] (ok (user-service/get-user-roles user-service user-id))))))
+      (fn [_] (res/ok (user-service/get-user-roles user-service user-id))))))
 
 (defn update-auth-role
   "分配用户角色。"
@@ -159,4 +141,4 @@
     (with-user-in-scope user-service request user-id
       (fn [_]
         (user-service/update-user-roles! user-service {:user-id user-id :role-ids role-ids})
-        (ok "角色分配成功")))))
+        (res/ok "角色分配成功")))))

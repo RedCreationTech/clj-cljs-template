@@ -6,8 +6,8 @@
    [com.ruoyi.domain.system.data-scope :as data-scope]
    [com.ruoyi.integrant.state :as integrant-state]
    [com.ruoyi.integrant.trace :as trace]
+   [com.ruoyi.web.response :as res]
    [integrant.core :as ig]
-   [ring.util.response :as response]
    [weavejester.dependency :as dep])
   (:import
    [com.sun.management OperatingSystemMXBean]
@@ -18,12 +18,6 @@
    [java.nio.file FileStore Files]
    [java.time Instant LocalDateTime ZoneId]
    [java.time.format DateTimeFormatter]))
-
-(defn- ok
-  ([data] (ok 200 "操作成功" data))
-  ([code msg data]
-   (-> (response/response {:code code :msg msg :data data})
-       (response/content-type "application/json"))))
 
 (defn- format-instant [^Instant inst]
   (when inst
@@ -147,11 +141,11 @@
 (defn server-info
   "获取服务器信息。"
   [_ _]
-  (ok {:cpu (get-cpu-info)
-       :mem (get-memory-info)
-       :jvm (get-jvm-info)
-       :sys (get-os-info)
-       :disk (get-disk-info)}))
+  (res/ok {:cpu (get-cpu-info)
+           :mem (get-memory-info)
+           :jvm (get-jvm-info)
+           :sys (get-os-info)
+           :disk (get-disk-info)}))
 
 (defn dashboard-stats
   "首页仪表盘统计聚合接口，返回用户数、在线数、日志数、任务数、最近操作和系统信息。"
@@ -173,40 +167,39 @@
                               :business_type nil :status nil
                               :begin_time nil :end_time nil
                               :page_size 5 :offset 0})]
-    (ok {:userCount (or user-count 0)
-         :onlineCount (or online-count 0)
-         :operLogCount (or oper-log-count 0)
-         :jobTotal job-total
-         :jobRunning job-running
-         :recentOps (mapv (fn [op]
-                            {:title (:title op)
-                             :oper_name (:oper_name op)
-                             :oper_time (:oper_time op)
-                             :business_type (:business_type op)})
-                          recent-ops)
-         :server {:os (get-os-info)
-                  :jvm (get-jvm-info)}})))
+    (res/ok {:userCount (or user-count 0)
+             :onlineCount (or online-count 0)
+             :operLogCount (or oper-log-count 0)
+             :jobTotal job-total
+             :jobRunning job-running
+             :recentOps (mapv (fn [op]
+                                {:title (:title op)
+                                 :oper_name (:oper_name op)
+                                 :oper_time (:oper_time op)
+                                 :business_type (:business_type op)})
+                              recent-ops)
+             :server {:os (get-os-info)
+                      :jvm (get-jvm-info)}})))
 
 (defn datasource-info
-  "获取 HikariCP 数据源监控信息。"
+  "获取 HikariCP 数据源监控信息。读不到池信息属于意外错误,交给异常中间件走 5xx,
+   不把异常信息拼进响应给前端。"
   [{:keys [datasource]} _]
-  (try
-    (if (instance? HikariDataSource datasource)
-      (let [pool (.getHikariPoolMXBean ^HikariDataSource datasource)]
-        (ok {:db_name (some-> (.getJdbcUrl ^HikariDataSource datasource) (str/replace "jdbc:" ""))
-             :db_version "SQLite"
-             :active_connections (.getActiveConnections pool)
-             :idle_connections (.getIdleConnections pool)
-             :total_connections (.getTotalConnections pool)
-             :threads_awaiting_connection (.getThreadsAwaitingConnection pool)
-             :max_connections (.getMaximumPoolSize datasource)
-             :min_idle (.getMinimumIdle datasource)
-             :connection_timeout (.getConnectionTimeout datasource)
-             :idle_timeout (.getIdleTimeout datasource)
-             :max_lifetime (.getMaxLifetime datasource)}))
-      (ok {:db_name "unknown" :db_version "unknown" :active_connections 0}))
-    (catch Exception e
-      (ok {:status "error" :message (.getMessage e)}))))
+  (if-not (instance? HikariDataSource datasource)
+    (res/ok {:db_name "unknown" :db_version "unknown" :active_connections 0})
+    (let [^HikariDataSource ds datasource
+          pool (.getHikariPoolMXBean ds)]
+      (res/ok {:db_name (some-> (.getJdbcUrl ds) (str/replace "jdbc:" ""))
+               :db_version "SQLite"
+               :active_connections (.getActiveConnections pool)
+               :idle_connections (.getIdleConnections pool)
+               :total_connections (.getTotalConnections pool)
+               :threads_awaiting_connection (.getThreadsAwaitingConnection pool)
+               :max_connections (.getMaximumPoolSize ds)
+               :min_idle (.getMinimumIdle ds)
+               :connection_timeout (.getConnectionTimeout ds)
+               :idle_timeout (.getIdleTimeout ds)
+               :max_lifetime (.getMaxLifetime ds)}))))
 
 ;; ─── Integrant config → system 监控 ─────────────────────────────────
 
@@ -247,12 +240,12 @@
           dents (into {} (map (fn [k] [(sanitize-key k) (mapv sanitize-key (dep/immediate-dependents graph k))])) order)
           sys @integrant-state/system
           system-summary (into {} (map (fn [k] [(sanitize-key k) (summarize-system-value (get sys k))])) order)]
-      (ok {:config (sanitize-value cfg)
-           :order (mapv sanitize-key order)
-           :dependencies deps
-           :dependents dents
-           :system system-summary}))
-    (ok 503 "系统尚未启动,没有可用的 Integrant 配置" nil)))
+      (res/ok {:config (sanitize-value cfg)
+               :order (mapv sanitize-key order)
+               :dependencies deps
+               :dependents dents
+               :system system-summary}))
+    (res/ok 503 "系统尚未启动,没有可用的 Integrant 配置" nil)))
 
 (defn- format-trace-log [idx log]
   (let [error? (contains? log :error)
@@ -275,11 +268,11 @@
   (let [key-str (:key path-params)
         enabled? (boolean (:enabled body-params))]
     (trace/set-active! key-str enabled?)
-    (ok {:active (trace/active? key-str)
-         :logs (format-trace-logs (trace/logs key-str))})))
+    (res/ok {:active (trace/active? key-str)
+             :logs (format-trace-logs (trace/logs key-str))})))
 
 (defn integrant-trace-logs
   "获取某个函数组件的追踪日志。"
   [_ {:keys [path-params]}]
-  (ok {:active (trace/active? (:key path-params))
-       :logs (format-trace-logs (trace/logs (:key path-params)))}))
+  (res/ok {:active (trace/active? (:key path-params))
+           :logs (format-trace-logs (trace/logs (:key path-params)))}))
