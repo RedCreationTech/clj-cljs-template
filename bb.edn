@@ -59,9 +59,9 @@
   check            {:doc  "规模约束:命名空间 ≤500 行、函数 ≤50 行"
                     :task (lint/constraints!)}
   fmt              {:doc  "cljfmt 格式化全部源码(规则见 .cljfmt.edn)"
-                    :task (u/exec! (into (u/clojure-cmd) ["-M:fmt" "fix" "src" "test" "env" "bb" "scripts"]))}
+                    :task (u/exec! (into (u/clojure-cmd) ["-M:fmt" "fix" "src" "test" "env" "bb" "scripts" "build.clj"]))}
   fmt:check        {:doc  "cljfmt 只检查不修改(CI 用)"
-                    :task (u/exec! (into (u/clojure-cmd) ["-M:fmt" "check" "src" "test" "env" "bb" "scripts"]))}
+                    :task (u/exec! (into (u/clojure-cmd) ["-M:fmt" "check" "src" "test" "env" "bb" "scripts" "build.clj"]))}
 
   ;; ── 构建 ──────────────────────────────────────────────
   release          {:doc  "前端生产构建(resources/public/js);编译 warning 视为错误"
