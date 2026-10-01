@@ -251,7 +251,9 @@ test('12｜个性化：语言、主题与个人中心', async ({ page }) => {
 
   await t.say(page, '头像就是一张图：点圆圈弹出选文件，上传成功再重新拉一次档案。');
   await t.step(page, '选一张 PNG 提交，头像立刻换成上传的图。', async () => {
-    const before = await page.locator('#avatar-upload + div img').getAttribute('src');
+    // 干净库里 admin 没有头像，圆圈位置显示的是昵称首字而不是 <img>，不能假定一定存在
+    const imgBefore = page.locator('#avatar-upload + div img');
+    const before = (await imgBefore.count()) > 0 ? await imgBefore.getAttribute('src') : null;
     const buffer = await makeAvatarPng(page.context());
     const [chooser] = await Promise.all([
       page.waitForEvent('filechooser'),
