@@ -5,12 +5,13 @@
    [byte-streams :as bs]
    [clojure.data.json :as json]
    [com.ruoyi.core :as core]
-   [integrant.repl.state :as state]
    [peridot.core :as p]))
 
 (defn system-state
+  "运行中的系统 map。测试和开发期助手读同一个 atom(com.ruoyi.integrant.state/system),
+   没有第二份 integrant.repl 状态 —— 装配只经 core/start-app。"
   []
-  (or @core/system state/system))
+  @core/system)
 
 (defn system-fixture
   []

@@ -180,3 +180,101 @@
       (do (doseq [p problems] (println "  ✖" p))
           (u/fail! "分页约定未通过:服务端分页用 pagination/table-pagination,本地翻页用 client-pagination"))
       (println "✔ 分页约定通过:" (count files) "个页面表格的分页属性都来自 components/pagination"))))
+
+;; ─── 开发期助手(env/dev/clj)──────────────────────────────────────
+
+(def dev-helpers-dir "env/dev/clj")
+
+(def second-state-holder
+  "integrant.repl 自己有一个 atom 存系统 map,而装配只发生在 core/start-app 写的
+   com.ruoyi.integrant.state/system 上。两处状态迟早不同步:一边重启完能查库,另一边读到 nil。
+   只认代码里的引用(require 向量、全限定调用),注释/docstring 里提到它是在解释为什么不用。"
+  #"\[[\s]*integrant\.repl|\(integrant\.repl/|integrant\.repl\.state/")
+
+(defn- clj-files [dir]
+  (->> (fs/glob dir "**.clj") (map str) sort))
+
+(defn- source-problems
+  "env/dev/clj、test/clj 里不再出现 integrant.repl(系统状态只有一份)。"
+  []
+  (for [dir [dev-helpers-dir "test/clj"]
+        f (clj-files dir)
+        :let [hits (keep (fn [[i line]]
+                           (when (re-find second-state-holder line) (inc i)))
+                         (map-indexed vector (str/split-lines (slurp f))))]
+        :when (seq hits)]
+    (str f ":" (str/join "," hits) " 又引入了第二份系统状态(integrant.repl)")))
+
+(def integrant-method-override
+  "覆盖 Integrant 生命周期方法(:handler/ring 这种自己模块的键不算覆盖,是唯一定义)。"
+  #"\(\s*defmethod\s+(?:ig|integrant\.core)/(?:init-key|halt-key!)\s+")
+
+(def upstream-method-capture
+  "抓住上游(库里原本那个)Integrant 方法,再把自己的 defmethod 装上去。
+   热重载会重新抓一次,这次抓到的是本 ns 刚装上的那个 —— com.ruoyi.integrant.trace 的事故:
+   连接池每重载一次多套一层代理,监控页解不到 Hikari,老代理抱着已关闭的池,请求全部 401。"
+  #"\(\s*get-method\s+(?:ig|integrant\.core)/(?:init-key|halt-key!)\s+")
+
+(def runtime-identity-definition
+  "`defonce` 交出去的是运行期身份(atom、注册表、上游方法清单):组件 init 时抓住的就是那个对象本身,
+   卸载重载会换成新对象,系统继续引用旧的那份。"
+  #"\(\s*defonce\s+")
+
+(defn- ns-symbol [path]
+  (-> path (str/replace #"\.clj$" "") (str/replace #"^src/clj/" "") (str/replace "/" ".") symbol))
+
+(defn- declared-exclusions
+  "读出 com.ruoyi.dev/reload-exclusions 里登记的命名空间(清单本身只有一份,不要再抄)。"
+  []
+  (let [f (str dev-helpers-dir "/com/ruoyi/dev.clj")]
+    (when-not (fs/exists? f) (u/fail! "找不到开发期助手:" f))
+    (let [text (slurp f)
+          i (str/index-of text "(def reload-exclusions")]
+      (when-not i (u/fail! "com.ruoyi.dev 里没有 reload-exclusions"))
+      (let [form (subs text i)
+            start (str/index-of form "[")
+            end (str/index-of form "]")]
+        (when-not (and start end (< start end))
+          (u/fail! "读不出 reload-exclusions 的向量,格式变了(检查 " f ")"))
+        (let [v (read-string (subs form start (inc end)))]
+          (when-not (and (vector? v) (every? symbol? v))
+            (u/fail! "reload-exclusions 必须是符号向量,元素是命名空间:" v))
+          v)))))
+
+(defn- src-facts []
+  (for [f (clj-files "src/clj")
+        :let [text (slurp f)]]
+    {:ns        (ns-symbol f)
+     :override? (boolean (re-find integrant-method-override text))
+     :capture?  (boolean (re-find upstream-method-capture text))
+     :defonce?  (boolean (re-find runtime-identity-definition text))}))
+
+(defn- reload-hygiene-problems
+  "reload-exclusions 与源码互相咬合:危险的必须登记,登记的必须仍然危险。"
+  []
+  (let [declared (set (declared-exclusions))
+        facts (src-facts)
+        by-ns (into {} (map (juxt :ns identity)) facts)
+        dangerous (->> facts (keep (fn [{:keys [override? capture? ns]}]
+                                     (when (and override? capture?) ns))) set)]
+    (concat
+     (for [ns-sym (sort (remove declared dangerous))]
+       (str ns-sym " 覆盖 Integrant 生命周期方法又抓取上游实现:热重载会再套一层代理,"
+            "运行中的组件抱着旧对象 —— 必须登记进 com.ruoyi.dev/reload-exclusions"))
+     (for [ns-sym (sort (remove (set (keys by-ns)) declared))]
+       (str "reload-exclusions 登记的 " ns-sym " 在 src/clj 下没有对应文件(改名或删掉了?)"))
+     (for [ns-sym (sort (filter (set (keys by-ns)) declared))
+           :let [{:keys [override? capture? defonce?]} (get by-ns ns-sym)]
+           :when (not (or override? capture? defonce?))]
+       (str ns-sym " 登记在 reload-exclusions 里,但既没有 defonce 的运行期身份,也不覆盖 Integrant 方法,"
+            "热重载它换不掉任何东西 —— 可以从清单里移除")))))
+
+(defn dev-hygiene!
+  "开发期约定:系统状态只有一份,热重载保护表跟得上源码。"
+  []
+  (let [problems (concat (source-problems) (reload-hygiene-problems))]
+    (if (seq problems)
+      (do (doseq [p problems] (println "  ✖" p))
+          (u/fail! "开发期约定检查未通过(" (count problems) " 处):状态只能有一份,reload-exclusions 要跟得上源码"))
+      (println "✔ 开发期约定通过:没有第二份系统状态;"
+               (count (declared-exclusions)) "个不参与热重载的命名空间与 src/clj 对得上"))))

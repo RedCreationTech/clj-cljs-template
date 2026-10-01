@@ -48,12 +48,14 @@
                     :task (u/exec! (into (u/clojure-cmd) ["-M:coverage"]))}
 
   ;; ── 质量 ──────────────────────────────────────────────
-  lint             {:doc  "全部静态检查:clj-kondo + 迁移文件 + 规模约束 + 分页约定"
-                    :depends [lint:kondo lint:migrations check lint:pagination]}
+  lint             {:doc  "全部静态检查:clj-kondo + 迁移文件 + 规模约束 + 分页约定 + 开发期约定"
+                    :depends [lint:kondo lint:migrations check lint:pagination lint:dev]}
   lint:kondo       {:doc  "clj-kondo,warning 即失败"
                     :task (lint/kondo!)}
   lint:pagination  {:doc  "页面表格的 :pagination 必须来自 components/pagination"
                     :task (lint/pagination-conventions!)}
+  lint:dev         {:doc  "开发期约定:系统状态只有一份,reload-exclusions 与源码对得上"
+                    :task (lint/dev-hygiene!)}
   lint:migrations  {:doc  "两套迁移成对、有 down、--;; 分隔正确、无对方方言"
                     :task (lint/migrations!)}
   check            {:doc  "规模约束:命名空间 ≤500 行、函数 ≤50 行"

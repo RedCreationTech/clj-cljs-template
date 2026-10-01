@@ -16,10 +16,15 @@
 ;; dynamic-atoms: {keyword <atom-of-actual-fn>}
 
 (defn register-dynamic!
-  "注册一个动态代理组件。返回的函数会实时去取 atom 里的实际实现。"
+  "注册一个动态代理组件。返回的函数会实时去取 atom 里的实际实现。
+
+   同一个键只用同一个 atom:系统 halt/init 之后(开发期 restart、swap-db!)老组件里持有的
+   还是上一代代理函数,如果每次都换新 atom,老引用就永远停在已经关闭的那个连接池上
+   (在线会话写不进去,请求全部 401)。复用 atom 并换成新实现,任何一代代理都指向最新实现。"
   [k f]
-  (let [a (atom f)]
+  (let [a (or (get @dynamic-atoms k) (atom f))]
     (swap! dynamic-atoms assoc k a)
+    (reset! a f)
     (fn [& args]
       (apply @a args))))
 
@@ -42,31 +47,45 @@
 ;; 这样运行时可以通过 swap-db! 热切换底层连接池，
 ;; 所有已持有引用的服务无需重新初始化。
 
-(def ^:private original-conn-init
+;; 三个 original-* 必须用 defonce 抓:热重载(refresh / restart)会重新加载本 ns,
+;; 用 def 第二次抓到的就是下面自己定义的 defmethod,于是每重载一次就多套一层
+;; DelegatingDataSource 与 query-fn 代理 —— 连接池被套到最里层,监控页的
+;; get-delegate 拿到的还是代理而不是 HikariDataSource,数据源监控再次显示 unknown,
+;; 并且旧代理继续持有已经关闭的那个池。
+(defonce ^:private original-conn-init
   (get-method ig/init-key :db.sql/connection))
 
 (defmethod ig/init-key :db.sql/connection
   [k pool-spec]
   (let [real-ds (original-conn-init k pool-spec)]
-    (ds/delegating-datasource real-ds)))
+    ;; 已经包过一层就不要再包:嵌套代理会让监控页解包解不到 Hikari(显示 unknown),
+    ;; 也会让 swap-db! 只换掉最外面那层的底层池,里层继续用已经关闭的池。
+    (if (ds/swappable? real-ds)
+      real-ds
+      (ds/delegating-datasource real-ds))))
 
 ;; 覆盖 halt-key! 以正确关闭 DelegatingDataSource（conman 只认 HikariDataSource）
-(def ^:private original-conn-halt
+(defonce ^:private original-conn-halt
   (get-method ig/halt-key! :db.sql/connection))
 
 (defmethod ig/halt-key! :db.sql/connection
   [k conn]
-  (if (com.ruoyi.infra.datasource/swappable? conn)
-    (do (when-let [delegate (com.ruoyi.infra.datasource/get-delegate conn)]
-          (when (instance? com.zaxxer.hikari.HikariDataSource delegate)
-            (when-not (.isClosed ^com.zaxxer.hikari.HikariDataSource delegate)
-              (.close ^com.zaxxer.hikari.HikariDataSource delegate))))
+  (if (ds/swappable? conn)
+    (do (ds/close-pool! conn)
+        (ds/deregister! conn)
         nil)
     (original-conn-halt k conn)))
 
+(defmethod ig/halt-key! :db.sql/query-fn
+  [_ _]
+  ;; 追踪登记里的 :original 是挂在即将关闭的连接池上的查询函数;系统重启后 stop!
+  ;; 会把它装回共享的动态 atom,于是所有请求都打到已经关闭的池上。停用时直接丢弃。
+  (swap! registry dissoc "db.sql/query-fn" :db.sql/query-fn)
+  nil)
+
 ;; ─── db.sql/query-fn: 动态代理 ─────────────────────────────────────
 
-(def ^:private original-query-fn-init
+(defonce ^:private original-query-fn-init
   (get-method ig/init-key :db.sql/query-fn))
 
 (defonce ^{:doc "query-fn 加载的 SQL 文件(swap-db! 换库后按同一份清单重新绑定)。"}

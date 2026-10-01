@@ -11,7 +11,7 @@
 ## 任务入口与质量门禁
 
 - **所有任务走 babashka**：`bb tasks` 列出全部任务；不要再写 Makefile / shell 脚本，新任务加到 `bb.edn`，实现放 `bb/tasks/*.clj`（跨平台，Windows 也能跑）。
-- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`）、`bb lint:migrations`、`bb check`、`bb lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`，见「Frontend 组件规范」§11b）；格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
+- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`）、`bb lint:migrations`、`bb check`、`bb lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`，见「Frontend 组件规范」§11b）、`bb lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 跟得上源码，见「后端热重载」）；这些都是内部步骤，不是独立任务名。格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
 - **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟。改了任务名或参数，要同步改 CI。
 - **新增业务模块用 `bb new-module`**（见 README「新增业务模块」）。源码里的 `;; [new-module] <tag>` 注释是脚手架的登记点（`system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs`），**不要删除或改写这些标记行**；重构这些文件时把标记保留在对应集合的末尾。改动脚手架模板（`bb/tasks/scaffold/*.clj`）后，至少生成一个模块跑一遍 lint / fmt:check / 生成的测试 / `bb cljs:check`（CI 的 scaffold 任务会做完整检查）。
 - **生产密钥**：prod profile 下 `JWT_SECRET`（≥32 字符）与 `COOKIE_SECRET`（16 字节）缺失或为内置默认值时拒绝启动（`com.ruoyi.infra.secrets`）；dev/test 用默认值即可，不要把真实密钥写进仓库。
@@ -48,32 +48,43 @@ cp -rf source dest          # NOT: cp -r source dest
 
 ## 后端热重载 (nREPL)
 
-后端运行时通过 nREPL 端口 7000 热重载代码，**无需重启进程**：
+**系统状态只有一份**：`com.ruoyi.integrant.state/system`（`com.ruoyi.core/system` 是它的别名），
+`core/start-app` 写的就是它，测试与开发期助手读的也是它。`integrant.repl` 已从依赖里移除，
+`bb lint:dev` 会拦住任何再次引入第二份状态的改动。
 
-**修改任何 `.clj` 文件后，必须连接 nREPL 并执行相应 reload 命令让修改在运行中的后端生效。** 常规领域/控制器/服务逻辑优先用 `(user/rd)`，路由或系统结构相关变更按下方规则使用 `(user/rroutes)` / `(user/rr)`。
+助手都在 `env/dev/clj/com/ruoyi/dev.clj`，`user.clj` 只挂手敲用的短名字。连上 nREPL（`bb dev` 默认 7000，
+macOS 上 7000 被 Control Center 占用时用 `NREPL_PORT=7200 bb dev`）：
+
+| 命令 | 作用 | 实测（2026-10-01，M 系列 macOS，JVM 已起） |
+|------|------|-------------------------------------------|
+| `(user/rd)` | 只重载磁盘上改过的命名空间，不重建组件 | 无改动 0 ns / 12 ms；改一个领域叶子 22 ns / 1.2 s；改 `web.response` 连带 27 个控制器/路由 1.0 s，重载完 `(req …)` 立刻看到新文案 |
+| `(user/rr)` | refresh 源码 → halt（**不 halt nREPL**）→ init | 130~150 ms（20 个组件 halt+init，冷 JVM 后第一次约 200 ms），REPL 和 3000 端口都还在；重启整个进程约 40 s |
+| `(user/rs)` | profile、组件数、连接池实时数字 | 20 个组件 + `sqlite:ruoyi.db` / 驱动版本，不是 unknown |
+| `(user/q :find-user-by-name {:user_name "admin"})` | 在运行中的库上跑一条命名查询 | 打的是原始 SQL，不经领域层脱敏，别把结果直接回给前端 |
+| `(user/req :get "/system/post" :params {:page 1 :size 2})` | 进程内打真实接口，完整走认证/权限/异常/分页中间件 | 路径不带 `/api`（助手补前缀），列表路由是 `/system/post` 而不是 `/system/post/list`，写错会被 `{id}` 路由接住变成 malli 强制转换错误；返回解析过的 body，看 `:code` / `:data`；令牌真签、会话临时登记进 `sys_online` 用完删掉，所以 `:perms` 真的生效 |
+| `(user/ra)` | 与 `rd` 是同一个函数（老手敲习惯的别名） | 待重载集合本来就是派生的，没有「只重载一部分」的清单可言 |
+
+**修改任何 `.clj` 文件后，必须连上 nREPL 跑重载命令，让运行中的后端用上新代码。**
 
 ```bash
-# 单模块重载（最快，推荐日常开发）
-clj-nrepl-eval -p 7000 '(user/rd)'          # 重载域服务
-clj-nrepl-eval -p 7000 '(user/rroutes)'     # 重载路由（需 rr 生效）
-clj-nrepl-eval -p 7000 '(user/ra)'          # 重载所有命名空间
-
-# 全局重载（较慢，结构变更时使用）
-clj-nrepl-eval -p 7000 '(user/rr)'          # 完全重启系统 (halt → prep → go)
-
-# 数据库操作
-clj-nrepl-eval -p 7000 '(user/reset-db)'    # 重置数据库（清空重建）
-clj-nrepl-eval -p 7000 '(user/migrate)'     # 运行迁移
+clj-nrepl-eval -p 7200 '(user/rd)'          # 日常改逻辑
+clj-nrepl-eval -p 7200 '(user/rr)'          # 改 .sql / system.edn / 路由数据
+clj-nrepl-eval -p 7200 '(user/rs)'          # 看状态
+clj-nrepl-eval -p 7200 '(user/reset-db)'    # 清空重建开发库
+clj-nrepl-eval -p 7200 '(user/migrate)'     # 跑待处理迁移
 ```
 
-**何时需要重启（`(user/rr)`）：**
-- HugSQL `.sql` 文件变更（查询缓存在启动时加载）
-- `resources/system.edn` 配置变更
-- Integrant 组件结构变更
-
-**何时只需重载（`(user/rd)`）：**
-- 控制器、服务、域逻辑变更
-- 路由定义变更（需 `(user/rr)` 才能生效）
+- **不要再抄重载清单**：待重载集合由 tools.namespace 按文件时间戳从源码本身派生；
+  `com.ruoyi.dev/reload-exclusions` 只登记「卸载重载会换掉运行期身份」的命名空间
+  （`com.ruoyi.integrant.trace` / `com.ruoyi.integrant.state` / `com.ruoyi.infra.datasource`，
+  为什么是这三个见该 var 的 docstring）。新增这类 ns 时 `bb lint:dev` 会要求登记；
+  清单里出现不存在的、或已经不再危险的 ns 同样直接失败。
+- `(user/rd)` 如果发现改到的 ns 里有被组件抓住的可变容器（atom / ref / agent / volatile!）换了对象，
+  会自动补一次 halt+init，返回 `{:reloaded n :reset [...]}` —— 不需要手工换成 `(user/rr)`。
+- **何时用 `(user/rr)`**：HugSQL `.sql` 变更、`resources/system.edn` 变更、路由数据 / Integrant 组件结构变更。
+- **何时必须重启进程**（`bb dev` / `bb backend`）：改 `env/dev/clj` 里的助手本身（它们不在扫描目录里，
+  免得重载把正在使用的函数换掉而 `user` 的短名字还指着旧那份），或改 `reload-exclusions` 里那三个 ns。
+- `(user/rr)` 报 `BindException: Address already in use` 说明端口没释放，停掉 `bb dev` 重新起。
 
 ## Frontend 组件规范
 
@@ -521,29 +532,36 @@ bb dev --backend-only  # 只起后端(或分别 bb backend / bb frontend)
 
 #### Backend (Clojure) — nREPL hot-reload, no restart needed
 
-After editing any `.clj` file, connect to the running nREPL and run the matching reload command so the live backend uses the new code. Prefer `(user/rd)` for normal domain/controller/service changes; use `(user/rroutes)` / `(user/rr)` when routes or system wiring require it.
+There is **one** Integrant state holder: `com.ruoyi.integrant.state/system` (aliased by
+`com.ruoyi.core/system`). `core/start-app` writes it, the tests and the dev helpers read it; `integrant.repl`
+is no longer a dependency and `bb lint:dev` fails if a second holder comes back.
+
+After editing any `.clj` file, connect to the running nREPL and reload so the live backend uses the new code.
+`(user/rd)` handles everything under `src/clj` (the set is derived from file timestamps, not from a hand-copied
+list); `(user/rr)` additionally rebuilds the components.
+
+| Helper | What it does | Measured cost |
+|--------|--------------|---------------|
+| `(user/rd)` | Reload only the namespaces that changed on disk; no component reset. Automatically does one halt+init extra when a reloaded ns swapped a mutable container (atom / ref / agent / volatile!) that components captured — result reports `{:reloaded n :reset [...]}` (observed for `controllers.system.cache`) | 0 ns / 12 ms idle; 22 ns / 1.2 s for a domain leaf; 27 ns / 1.0 s for `web.response` + every controller that requires it |
+| `(user/ra)` | Same as `rd` (kept as a mnemonic; there is no separate "reload everything" list any more) | |
+| `(user/rr)` | refresh source → halt **all components except `:nrepl/server`** → `ig/init` from a freshly read `system.edn` | 130~150 ms for 20 components (first call after a cold JVM ~200 ms), REPL and port 3000 both stay up (a full process restart is ~40 s) |
+| `(user/rs)` | Live state: profile, component count, Hikari/SQLite pool numbers | |
+| `(user/q :find-user-by-name {:user_name "admin"})` | Named HugSQL query against the running DB (raw SQL row, no domain-layer redaction — don't return it to the browser) | |
+| `(user/req :get "/system/post" :params {:page 1 :size 2})` | In-process request through the real ring handler: auth, perms, exception and pagination middleware all run. Token is really signed and the session is registered in `sys_online` for the duration, so `:perms` actually applies | |
 
 ```bash
-# After editing .clj files:
-clj-nrepl-eval -p 7000 '(user/rd)'          # Reload domain services (fastest)
-clj-nrepl-eval -p 7000 '(user/rroutes)'     # Reload routes (needs system reset to apply)
-clj-nrepl-eval -p 7000 '(user/ra)'          # Reload all namespaces
-clj-nrepl-eval -p 7000 '(user/rr)'          # Full Integrant reset (halt + go)
+clj-nrepl-eval -p 7200 '(user/rd)'          # routine logic changes
+clj-nrepl-eval -p 7200 '(user/rr)'          # .sql / system.edn / route data changes
+clj-nrepl-eval -p 7200 '(user/rs)'          # look at the running system
 ```
 
-Available helpers (defined in `env/dev/clj/user.clj`):
+Do not add hand-copied ns lists back. If a new namespace overrides an Integrant lifecycle method *and* captures
+the upstream implementation (`get-method ig/init-key`), it holds runtime identity that unload/reload would replace:
+register it in `com.ruoyi.dev/reload-exclusions`, and `bb lint:dev` enforces both directions (missing entries,
+entries whose file is gone, entries that are no longer dangerous).
 
-| Helper | Short | What it reloads |
-|--------|-------|-----------------|
-| `reload-domain` | `rd` | Domain services (user, role, menu, dept, dict, config, log, permission, data-scope) |
-| `reload-middleware` | `rm` | Ring middleware (auth, exception, operlog, core) |
-| `reload-routes` | `rroutes` | Route definitions (needs `rr` to apply) |
-| `reload-controllers` | — | Web controllers |
-| `reload-infra` | — | Security, online, login-guard（`infra.kv` 定义了协议，改它之后用 `rr`，单独 reload 会让已装配的存储失效） |
-| `reload-all` | `ra` | All of the above |
-| `reload-system` | `rr` | Full system reset (halt → prep → go) |
-
-**Note**: Route changes require a full system reset (`rr`) because routes are compiled once at startup. If `(user/rr)` fails with `BindException: Address already in use` (Undertow can't rebind), stop `bb dev` / `bb backend` and start it again.
+**Note**: if `(user/rr)` fails with `BindException: Address already in use`, Undertow did not release the port —
+stop `bb dev` / `bb backend` and start it again.
 
 #### Frontend (ClojureScript) — shadow-cljs auto-compiles
 
@@ -555,10 +573,18 @@ Available helpers (defined in `env/dev/clj/user.clj`):
 
 ### When to Restart (not just reload)
 
-- HugSQL `.sql` file changes (queries are cached at startup)
+`(user/rr)` covers these without leaving the JVM:
+
+- HugSQL `.sql` file changes (queries are read again by `rr`)
 - `resources/system.edn` config changes
-- Integrant component structure changes
-- After these, run `clj-nrepl-eval -p 7000 '(user/rr)'` or restart the process
+- Route data / Integrant component structure changes
+
+Only a process restart (`bb dev` / `bb backend`) covers:
+
+- The dev helpers themselves (`env/dev/clj`: `user.clj`, `dev.clj` — they are deliberately outside the refresh
+  scan dirs, so reloading them while the REPL is using them would leave `rd`/`rr`/`q` pointing at the old code)
+- The three namespaces in `com.ruoyi.dev/reload-exclusions` (`integrant.trace`, `integrant.state`,
+  `infra.datasource`), which hold runtime identity the system keeps referencing
 
 ### Build Uberjar
 

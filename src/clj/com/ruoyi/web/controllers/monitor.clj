@@ -193,7 +193,7 @@
   "取出真正的 HikariCP 连接池:装配给路由的是支持热切换的代理 DataSource,
    不解包的话 instance? 永远为假,数据源监控只能显示 unknown。"
   [datasource]
-  (let [target (or (ds/get-delegate datasource) datasource)]
+  (let [target (ds/unwrap datasource)]
     (when (instance? HikariDataSource target)
       ^HikariDataSource target)))
 

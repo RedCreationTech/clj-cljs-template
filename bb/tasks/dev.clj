@@ -9,7 +9,10 @@
 
 (defn- backend-cmd []
   (let [{:keys [ns-name]} (u/project)]
-    (into (u/clojure-cmd) ["-M:dev" "-m" (str ns-name ".core")])))
+    ;; -e 先加载 user:它记录 tools.namespace 的时间基准并给出 (user/rd) (user/rr) 这些短名字,
+    ;; 连上 nREPL 就能直接用,不用先 require 一次。
+    (into (u/clojure-cmd) ["-M:dev" "-e" "(require 'user)"
+                           "-m" (str ns-name ".core")])))
 
 (defn- frontend-cmd []
   [(u/npx-cmd) "shadow-cljs" "watch" "app"])

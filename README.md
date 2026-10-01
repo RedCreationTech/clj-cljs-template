@@ -196,7 +196,7 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | 功能导览录像 | `bb video:tour`（需后端 + `bb release` + ffmpeg）→ `target/tour/tour.mp4`，14 段约 16 分 56 秒（含文件管理、生产部署与 babashka 工程链），左侧常驻目录、内嵌章节与烧录台词；只重新合成用 `bb video:tour --compose-only` |
 | 导览旁白配音 | `bb video:narrate`（默认小米 MiMo TTS，密钥 `export MIMO_API_KEY=…` 或写进 `target/tour/mimo.key`，不要把密钥提交进仓库）：逐句合成 273 句台词，剪掉每句首尾静音，按烧录字幕的时刻排一条整片音轨（装不下就最多提速 1.3 倍追字幕，两句之间留 0.2 秒空隙，追不上才会舍弃），画面流 copy 所以字幕/章节/目录带不变，可反复执行；语音缓存于 `target/tour/narration/`（剪静音的副本在 `narration/trimmed/`），改哪句只重合成哪句，`--force` 会连同缓存一起重灌（会计费）。没网或没额度时用离线兜底 `bb video:narrate --provider say`，只补缓存用 `--only 分镜号` |
 | 覆盖率 | `bb coverage` → `target/coverage/index.html` |
-| 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束）+ `lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`） |
+| 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束）+ `lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`）+ `lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 与源码对得上） |
 | 格式化 | `bb fmt`（cljfmt 修改）/ `bb fmt:check`（只检查） |
 | 构建 | `bb release`（前端）、`bb uberjar`（前端 + 后端 jar）、`bb cljs:check`（快速编译检查）、`bb patch:vendor`（给 node_modules 打补丁，见下） |
 | 与 CI 相同的快速检查 | `bb ci`（lint + fmt:check + test + test:cljs） |
@@ -204,7 +204,7 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 
 **第三方依赖补丁**：公告正文用的富文本编辑器（`react-quill-new` → Quill 2 / Parchment 3）依赖 ES class 静态方法里的 `super.create()`，而 Closure Compiler v20250407 之后会把它编译成 `Parent.create()`、丢掉 `this`，于是静态方法永远拿到父类 Blot 的 `tagName`——轻则 link/image 变成 `<span>`，重则抛 `[Parchment] Blot definition missing tagName`，公告编辑弹窗整个渲染不出来（dev 与 release 都中招）。`bb/tasks/vendor.clj` 在前端编译之前把 `node_modules` 里那 12 处改写成等价的 `Parent.create.call(this, ...)`，编译器就不会再动它。`bb release` / `bb cljs:check` 会自动打，`bb dev` / `bb frontend` / `bb e2e` 通过 `ensure-npm-deps!` 打，也可以手动 `bb patch:vendor`；补丁是幂等的，但 `npm install` 重装依赖后需要重打（所以别绕过 bb 直接跑 shadow-cljs）。命中数量与预期不符时任务会直接失败并提示：要么依赖升级了需要核对补丁表，要么上游已修复可以删掉本补丁。
 
-REPL 热重载助手在 `env/dev/clj/user.clj`：`(user/rd)` 重载领域层，`(user/rroutes)` 重载路由，`(user/rr)` 重启 Integrant 系统，`(user/reset-db)` 重建数据库。详见 `AGENTS.md`。
+REPL 助手在 `env/dev/clj/com/ruoyi/dev.clj`，`env/dev/clj/user.clj` 只挂短名字：`(user/rd)` 重载改过的命名空间（待重载集合由 tools.namespace 从文件时间戳派生，没有手抄清单；改到被组件抓住的可变容器时会自动补一次 halt+init），`(user/rr)` 重启系统且 nREPL 不断开（实测 20 个组件 136 ms，重启进程约 40 s），`(user/rs)` 看运行中的 profile/组件/连接池，`(user/q :find-user-by-name {:user_name "admin"})` 在运行中的库上跑命名查询，`(user/req :get "/system/post" :params {:page 1 :size 2})` 在进程内打真实接口（认证、权限、分页、异常中间件全都走），`(user/reset-db)` 重建数据库。详见 `AGENTS.md`「后端热重载」。
 
 ---
 
@@ -245,7 +245,7 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 
 | 任务 | 内容 |
 |------|------|
-| lint | `bb lint`（clj-kondo、迁移检查、规模约束、分页约定）+ `bb fmt:check` |
+| lint | `bb lint`（clj-kondo、迁移检查、规模约束、分页约定、开发期约定）+ `bb fmt:check` |
 | test-sqlite | `bb test` + `bb db:roundtrip` |
 | test-mysql | MySQL 8.4 service 上 `bb test:mysql` + `bb db:roundtrip` |
 | e2e | `bb test:cljs` → `bb release`（warning 即失败）→ 启动后端 → `bb e2e`，失败时上传报告与后端日志 |
