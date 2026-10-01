@@ -13,7 +13,8 @@
    [babashka.process :as p]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [tasks.util :as u]))
+   [tasks.util :as u]
+   [tasks.vendor :as vendor]))
 
 (def out-dir "target/tour")
 
@@ -213,6 +214,8 @@
       (u/info "跳过录制,直接用 " out-dir "/results 里已有的分镜视频重新合成")
       (do (when-not (u/http-ok? (str base "/api/health"))
             (u/fail! "后端未运行:先 bb dev(或 bb backend),再跑 bb video:tour"))
+          (vendor/ensure-npm-deps!)
+          (vendor/ensure-browsers!)
           (u/exec! (into [(u/npx-cmd) "playwright" "test" "--config" "playwright.tour.config.js"]
                          playwright-args))))
     (let [segs (segments)]

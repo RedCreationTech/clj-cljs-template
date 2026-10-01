@@ -95,3 +95,10 @@
     (u/info "首次运行:npm install")
     (u/exec! [(or (u/exe "npm") (u/fail! "找不到 npm")) "install"]))
   (patch-quill!))
+
+(defn ensure-browsers!
+  "确认 Playwright 的 Chromium 在位。浏览器装在系统缓存目录(macOS 是 ~/Library/Caches/ms-playwright),
+   那是可以被清理掉的:缓存一空,每条用例都起不来浏览器,而导览录像要到第 8 分钟才炸,前面 7 段白录。
+   已装好时这条命令只是本地检查,不联网、不覆盖正在使用的二进制。"
+  []
+  (u/exec! [(u/npx-cmd) "playwright" "install" "chromium"]))

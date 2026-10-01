@@ -120,6 +120,7 @@
     (when-not (u/http-ok? (str base "/api/health"))
       (u/fail! "后端未运行:先在另一个终端执行 bb dev(或 bb backend),再运行 bb e2e"))
     (vendor/ensure-npm-deps!)
+    (vendor/ensure-browsers!)
     (u/exec! (into [(u/npx-cmd) "playwright" "test"] args))))
 
 (defn roundtrip!
