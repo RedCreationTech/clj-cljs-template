@@ -6,13 +6,14 @@
 (def ^:const system-filename "system.edn")
 
 (def sqlite-pool
-  "SQLite 只有一个写者:多连接不会变快,只会在并发写时抛 database is locked。"
-  {:init-size 1 :min-idle 1 :max-idle 1 :max-active 1})
+  "SQLite 只有一个写者:多连接不会变快,只会在并发写时抛 database is locked。
+   键名用 HikariCP 的 maximum-pool-size / minimum-idle,conman 会原样映射到池配置。"
+  {:minimum-idle 1 :maximum-pool-size 1})
 
 (def server-pool
   "服务端数据库(MySQL 等)的连接池兜底值:system.edn 里那组 1 是给 SQLite 的,
    换成 MySQL 又忘了调,整个应用会在一个连接上排队。"
-  {:init-size 2 :min-idle 2 :max-idle 5 :max-active 10})
+  {:minimum-idle 2 :maximum-pool-size 10})
 
 (defn with-default-migration-dir
   "没有显式设置 MIGRATION_DIR 时,按数据库选迁移目录:JDBC_URL 是 MySQL 就用 migrations,
@@ -37,7 +38,7 @@
 (defn with-dialect-pool
   "连接池按数据库方言兜底,不区分 profile:
    - SQLite:强制单连接(SQLite 多连接只会互相等锁);
-   - 其它(MySQL 等):只有当 max-active 还停在 SQLite 的 1 时才抬到 server-pool,
+   - 其它(MySQL 等):只有当 maximum-pool-size 还停在 SQLite 的 1 时才抬到 server-pool,
      显式设过 DB_MAX_ACTIVE 或在 system.edn 里改过数字的都不动。"
   [config env]
   (let [url (jdbc-url config)]
@@ -45,7 +46,7 @@
       (not (re-find #"^jdbc:" url)) config
       (sqlite-url? config) (update config :db.sql/connection merge sqlite-pool)
       :else
-      (let [current (get-in config [:db.sql/connection :max-active])]
+      (let [current (get-in config [:db.sql/connection :maximum-pool-size])]
         (if (or (contains? env "DB_MAX_ACTIVE") (not= 1 current))
           config
           (update config :db.sql/connection merge server-pool))))))

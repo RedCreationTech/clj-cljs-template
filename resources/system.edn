@@ -135,27 +135,23 @@
  {:schedule []}
 
  :db.sql/connection
+ ;; 键名必须是 HikariCP 认得的(minimum-idle / maximum-pool-size),
+ ;; 写成 max-active / init-size 会被静默忽略,SQLite 的单连接兜底也就落空了。
  ;; 连接池上限可用 DB_MAX_ACTIVE 覆盖;SQLite 下 com.ruoyi.config/with-dialect-pool 会强制回 1
  #profile {:dev  {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:ruoyi.db"]
-                  :init-size  1
-                  :min-idle   1
-                  :max-idle   1
-                  :max-active #long #or [#env DB_MAX_ACTIVE 1]
+                  :minimum-idle      1
+                  :maximum-pool-size #long #or [#env DB_MAX_ACTIVE 1]
                   :connection-test-query "SELECT 1"
                   :validation-timeout 3000}
            ;; 测试用独立的 test.db,不污染开发库(bb test 每次先删除它)
            :test {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:test.db"]
-                  :init-size  1
-                  :min-idle   1
-                  :max-idle   1
-                  :max-active #long #or [#env DB_MAX_ACTIVE 1]
+                  :minimum-idle      1
+                  :maximum-pool-size #long #or [#env DB_MAX_ACTIVE 1]
                   :connection-test-query "SELECT 1"
                   :validation-timeout 3000}
            :prod {:jdbc-url   #or [#env JDBC_URL "jdbc:sqlite:ruoyi.db"]
-                  :init-size  1
-                  :min-idle   1
-                  :max-idle   1
-                  :max-active #long #or [#env DB_MAX_ACTIVE 1]
+                  :minimum-idle      1
+                  :maximum-pool-size #long #or [#env DB_MAX_ACTIVE 1]
                   :connection-test-query "SELECT 1"
                   :validation-timeout 3000}}
 

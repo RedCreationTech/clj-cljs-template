@@ -4,6 +4,7 @@
    [clojure.string :as str]
    [com.ruoyi.config :as config]
    [com.ruoyi.domain.system.data-scope :as data-scope]
+   [com.ruoyi.infra.datasource :as ds]
    [com.ruoyi.integrant.state :as integrant-state]
    [com.ruoyi.integrant.trace :as trace]
    [com.ruoyi.web.response :as res]
@@ -188,25 +189,32 @@
     (let [^java.sql.DatabaseMetaData md (.getMetaData conn)]
       (str (.getDatabaseProductName md) " " (.getDatabaseProductVersion md)))))
 
+(defn- hikari-datasource
+  "取出真正的 HikariCP 连接池:装配给路由的是支持热切换的代理 DataSource,
+   不解包的话 instance? 永远为假,数据源监控只能显示 unknown。"
+  [datasource]
+  (let [target (or (ds/get-delegate datasource) datasource)]
+    (when (instance? HikariDataSource target)
+      ^HikariDataSource target)))
+
 (defn datasource-info
   "获取 HikariCP 数据源监控信息。读不到池信息属于意外错误,交给异常中间件走 5xx,
    不把异常信息拼进响应给前端。"
   [{:keys [datasource]} _]
-  (if-not (instance? HikariDataSource datasource)
-    (res/ok {:db_name "unknown" :db_version "unknown" :active_connections 0})
-    (let [^HikariDataSource ds datasource
-          pool (.getHikariPoolMXBean ds)]
-      (res/ok {:db_name (some-> (.getJdbcUrl ds) (str/replace "jdbc:" ""))
-               :db_version (db-product ds)
+  (if-let [^HikariDataSource hikari (hikari-datasource datasource)]
+    (let [pool (.getHikariPoolMXBean hikari)]
+      (res/ok {:db_name (some-> (.getJdbcUrl hikari) (str/replace "jdbc:" ""))
+               :db_version (db-product hikari)
                :active_connections (.getActiveConnections pool)
                :idle_connections (.getIdleConnections pool)
                :total_connections (.getTotalConnections pool)
                :threads_awaiting_connection (.getThreadsAwaitingConnection pool)
-               :max_connections (.getMaximumPoolSize ds)
-               :min_idle (.getMinimumIdle ds)
-               :connection_timeout (.getConnectionTimeout ds)
-               :idle_timeout (.getIdleTimeout ds)
-               :max_lifetime (.getMaxLifetime ds)}))))
+               :max_connections (.getMaximumPoolSize hikari)
+               :min_idle (.getMinimumIdle hikari)
+               :connection_timeout (.getConnectionTimeout hikari)
+               :idle_timeout (.getIdleTimeout hikari)
+               :max_lifetime (.getMaxLifetime hikari)}))
+    (res/ok {:db_name "unknown" :db_version "unknown" :active_connections 0})))
 
 ;; ─── Integrant config → system 监控 ─────────────────────────────────
 

@@ -1,9 +1,13 @@
 (ns com.ruoyi.config-test
   "配置后处理测试。"
   (:require
+   [clojure.java.io :as io]
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
-   [com.ruoyi.config :as config]))
+   [com.ruoyi.config :as config]
+   [com.ruoyi.infra.datasource :as ds]
+   [com.ruoyi.integrant.trace]
+   [integrant.core :as ig]))
 
 (defn- cfg [url]
   {:db.sql/connection {:jdbc-url url}
@@ -32,7 +36,7 @@
     (is (= config/sqlite-pool
            (select-keys (:db.sql/connection
                          (config/with-dialect-pool
-                           (assoc-in (cfg "jdbc:sqlite:x.db") [:db.sql/connection :max-active] 50) {}))
+                           (assoc-in (cfg "jdbc:sqlite:x.db") [:db.sql/connection :maximum-pool-size] 50) {}))
                         (keys config/sqlite-pool)))))
   (testing "MySQL 沿用 system.edn 里给 SQLite 的那组 1 时,整体换成服务端连接池"
     (is (= config/server-pool
@@ -44,8 +48,8 @@
            (config/with-dialect-pool (system-edn-pool "jdbc:mysql://h/db") {"DB_MAX_ACTIVE" "50"})))
     (is (= 20 (get-in (config/with-dialect-pool
                         (assoc-in (system-edn-pool "jdbc:mysql://h/db")
-                                  [:db.sql/connection :max-active] 20) {})
-                      [:db.sql/connection :max-active]))))
+                                  [:db.sql/connection :maximum-pool-size] 20) {})
+                      [:db.sql/connection :maximum-pool-size]))))
   (testing "不是 JDBC URL 时完全不碰连接池"
     (is (= (cfg "redis://h") (config/with-dialect-pool (cfg "redis://h") {})))))
 
@@ -60,3 +64,18 @@
   (testing "prod 用 MySQL 且设了 TZ 时不提示"
     (is (empty? (config/prod-warnings (assoc (cfg "jdbc:mysql://h/db") :system/env :prod)
                                       {"TZ" "Asia/Shanghai"})))))
+
+(def ^:private pool-file "target/config-pool-test.db")
+
+(deftest pool-keys-reach-hikari-test
+  (testing "兜底值要真的落到 HikariCP 上:键名写成 max-active 会被 conman 静默忽略"
+    (let [spec (:db.sql/connection
+                (config/with-dialect-pool (cfg (str "jdbc:sqlite:" pool-file)) {}))
+          conn ((get-method ig/init-key :db.sql/connection) :db.sql/connection spec)
+          ^com.zaxxer.hikari.HikariDataSource pool (ds/get-delegate conn)]
+      (try
+        (is (= 1 (.getMaximumPoolSize pool)) "SQLite 必须是单连接")
+        (is (= 1 (.getMinimumIdle pool)))
+        (finally
+          (.close pool)
+          (io/delete-file pool-file true))))))

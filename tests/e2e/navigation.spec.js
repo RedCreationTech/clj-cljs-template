@@ -42,3 +42,13 @@ for (const { path, text } of cases) {
     }
   });
 }
+
+// 装配给路由的是可热切换的代理 DataSource，控制器不解包就只能显示 unknown 占位。
+test('数据源监控显示真实的数据库与连接池信息', async ({ page }) => {
+  await page.goto('/monitor/datasource');
+  const table = page.locator('table').first();
+  await expect(table).toBeVisible({ timeout: 10000 });
+  const text = await table.innerText();
+  expect(text).not.toContain('unknown');
+  expect(/SQLite|MySQL/.test(text)).toBe(true);
+});
