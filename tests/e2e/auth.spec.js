@@ -37,7 +37,11 @@ test.describe('认证流程', () => {
     expect(t).toBeTruthy();
     const before = await page.request.get('/api/auth/getInfo', { headers: { Authorization: `Bearer ${t}` } });
     expect(before.status()).toBe(200);
+    // 前端点「退出登录」后立刻清本地令牌、跳回登录页,登出请求是后台发出的(fire-and-forget)。
+    // 所以要等这条请求真的完成:否则下面的 getInfo 可能抢在 sys_online 删掉会话之前跑到,返回 200。
+    const loggedOut = page.waitForResponse((r) => r.url().includes('/api/auth/logout'));
     await logout(page);
+    await loggedOut;
     const after = await page.request.get('/api/auth/getInfo', { headers: { Authorization: `Bearer ${t}` } });
     expect(after.status()).toBe(401);
   });
