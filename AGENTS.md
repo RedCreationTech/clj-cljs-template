@@ -11,7 +11,7 @@
 ## 任务入口与质量门禁
 
 - **所有任务走 babashka**：`bb tasks` 列出全部任务；不要再写 Makefile / shell 脚本，新任务加到 `bb.edn`，实现放 `bb/tasks/*.clj`（跨平台，Windows 也能跑）。
-- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`）、`bb lint:migrations`、`bb check`、`bb lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`，见「Frontend 组件规范」§11b）、`bb lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 跟得上源码，见「后端热重载」）；这些都是内部步骤，不是独立任务名。格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
+- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`）、`bb lint:migrations`、`bb check`、`bb lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`，见「Frontend 组件规范」§11b）、`bb lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 跟得上源码，见「后端热重载」）、`bb lint:e2e`（`tests/e2e/**/*.js`：不许残留 `test.only`/`fixme`、分页参数只用 `page`/`size`、不许 `goto('http…')` 写死绝对地址、`*.spec.js` 不许 `waitForTimeout` 且必须有断言、`playwright.config.js` 必须仍然 `testIgnore` 掉 tour）；这些都是内部步骤，不是独立任务名。格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
 - **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟。改了任务名或参数，要同步改 CI。
 - **新增业务模块用 `bb new-module`**（见 README「新增业务模块」）。源码里的 `;; [new-module] <tag>` 注释是脚手架的登记点（`system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs`），**不要删除或改写这些标记行**；重构这些文件时把标记保留在对应集合的末尾。改动脚手架模板（`bb/tasks/scaffold/*.clj`）后，至少生成一个模块跑一遍 lint / fmt:check / 生成的测试 / `bb cljs:check`（CI 的 scaffold 任务会做完整检查）。
 - **生产密钥**：prod profile 下 `JWT_SECRET`（≥32 字符）与 `COOKIE_SECRET`（16 字节）缺失或为内置默认值时拒绝启动（`com.ruoyi.infra.secrets`）；dev/test 用默认值即可，不要把真实密钥写进仓库。
@@ -620,6 +620,8 @@ npm run test:e2e:report                  # 查看 HTML 报告
 - `<module>.spec.js` — `bb new-module` 为每个生成的模块写的新增/修改/删除用例
 
 报告输出：`playwright-report/`
+
+- **`bb lint:e2e` 静态守住用例约定**（并入 `bb lint`，CI 强制）：不许残留 `test.only` / `describe.only` / `test.fixme`（会静默跳过其余用例）；请求参数只用 `page` / `size`，出现 `pageNum` / `pageSize` / `page-num` / `page-size` 即失败；`page.goto('http…')` 写死绝对地址不允许（走 `baseURL`，换端口才不用改用例）；`*.spec.js` 里不许 `waitForTimeout`（固定 sleep 在慢机器上时好时坏，辅助文件 `tour-helper.js` 为了镜头节奏例外）；每条 `*.spec.js` 至少要有一处 `expect`（只点不验的用例发现不了回归）；`playwright.config.js` 必须仍然 `testIgnore` 掉 `tour`，否则 17 分钟的录像会被当成常规门禁跑。
 
 ### API Access
 

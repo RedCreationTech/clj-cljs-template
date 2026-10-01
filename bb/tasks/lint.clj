@@ -278,3 +278,60 @@
           (u/fail! "开发期约定检查未通过(" (count problems) " 处):状态只能有一份,reload-exclusions 要跟得上源码"))
       (println "✔ 开发期约定通过:没有第二份系统状态;"
                (count (declared-exclusions)) "个不参与热重载的命名空间与 src/clj 对得上"))))
+
+;; ─── E2E 用例（tests/e2e）──────────────────────────────────────────
+
+(def e2e-dir "tests/e2e")
+
+(def e2e-config "playwright.config.js")
+
+(def ^:private e2e-forbidden
+  "所有用例文件共用的写法问题。逐行匹配,注释也算 —— 注释里的 pageNum 一样会被复制粘贴带走。"
+  [[#"\btest\.only\s*\(|\bdescribe\.only\s*\(|\.fixme\s*\("
+    "test.only / describe.only / test.fixme:会静默跳过其余用例,门禁就成了摆设"]
+   [#"\bpageNum\b|\bpageSize\b|page-num|page-size"
+    "分页参数只有 page / size(见 AGENTS.md「后端分页参数使用 page / size」)"]
+   [#"\.goto\s*\(\s*['\"`]\s*http"
+    "写死了 http:// 绝对地址:用相对路径走 baseURL,换端口时不用改用例"]])
+
+(def ^:private spec-forbidden
+  "只约束 *.spec.js:辅助文件(tour-helper.js)为了镜头节奏可以故意等一会儿。"
+  [[#"\.waitForTimeout\s*\(" "固定 sleep:慢机器上时好时坏,改成等元素或等断言"]])
+
+(defn- e2e-files [] (->> (fs/glob e2e-dir "**.js") (map str) sort))
+
+(defn- spec-files [] (filter #(str/ends-with? % ".spec.js") (e2e-files)))
+
+(defn- line-problems
+  "返回 `文件:行 原因`。"
+  [file patterns]
+  (for [[i line] (map-indexed vector (str/split-lines (slurp file)))
+        [re why] patterns
+        :when (re-find re line)]
+    (str file ":" (inc i) " " why)))
+
+(defn- assertion-problems [specs]
+  (for [f specs
+        :when (not (re-find #"\bexpect[.(]" (slurp f)))]
+    (str f " 一条断言都没有:只点不验的用例发现不了回归")))
+
+(defn- tour-is-excluded? []
+  ;; 导览录像要 17 分钟,只归 playwright.tour.config.js 管;这条 testIgnore 一旦被删,
+  ;; bb e2e 会把录像当常规门禁跑,CI 的前端任务直接超时。
+  (boolean (re-find #"testIgnore\s*:\s*['\"].*tour" (slurp e2e-config))))
+
+(defn e2e-conventions!
+  "E2E 用例的静态约定:不残留 only/fixme、分页只用 page/size、不写死绝对地址、spec 不 sleep 且必须有断言、tour 仍被排除。"
+  []
+  (let [files (e2e-files)
+        specs (spec-files)
+        problems (concat (mapcat #(line-problems % e2e-forbidden) files)
+                         (mapcat #(line-problems % spec-forbidden) specs)
+                         (assertion-problems specs)
+                         (when-not (tour-is-excluded?)
+                           [(str e2e-config " 不再 testIgnore tour:bb e2e 会把 17 分钟的录像当常规门禁跑")]))]
+    (if (seq problems)
+      (do (doseq [p problems] (println "  ✖" p))
+          (u/fail! "E2E 用例约定未通过(" (count problems) " 处)"))
+      (println "✔ E2E 用例约定通过:" (count files) "个用例文件 /" (count specs)
+               "条 spec 都有断言;tour 仍由 playwright.tour.config.js 单独跑"))))
