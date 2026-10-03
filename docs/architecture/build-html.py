@@ -5,7 +5,9 @@
 - sh / clojure 块在仓库根目录实际执行(跳过 :eval never),把输出作为"生成时的执行结果"附在代码块下;
 - 其余内容(标题、表格、引用、行内标记)由 pandoc 从 org 转成 HTML。
 
-依赖:pandoc、node(npx @mermaid-js/mermaid-cli)。
+依赖:pandoc、node(npx @mermaid-js/mermaid-cli)。mermaid 要用 headless Chrome 渲染,
+puppeteer 缓存里没有浏览器时设 `PUPPETEER_EXECUTABLE_PATH` 指向本机 Chrome
+(或 `npx puppeteer browsers install chrome-headless-shell`)—— 图渲染失败本脚本会退出 1。
 用法:python3 docs/architecture/build-html.py [--no-exec] [--mmdc <path>] [--puppeteer-config <json>]
 """
 import argparse
@@ -50,10 +52,29 @@ def render_mermaid(mmdc, puppeteer_cfg, src, svg_id):
             cmd += ["-p", str(puppeteer_cfg)]
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
         if r.returncode != 0 or not outp.exists():
-            return None, (r.stderr or r.stdout)[-800:]
+            return None, (r.stderr or r.stdout)
         svg = outp.read_text(encoding="utf-8")
         svg = re.sub(r"^<\?xml[^>]*\?>\s*", "", svg)
         return svg, ""
+
+
+def brief(err):
+    """报错里大半是 puppeteer 堆栈,挑出真正说明原因的那一行。"""
+    lines = [ln.strip() for ln in (err or "").splitlines() if ln.strip()]
+    for ln in lines:
+        if re.match(r"^(Error|ERROR|Parse|Cannot|Unknown)", ln):
+            return ln[:300]
+    return lines[0][:300] if lines else "(无报错)"
+
+
+def unrendered_markup(html):
+    """org 的粗体要求收尾的 * 后面是空白或 , . ; : ) " ,写成 *已解决*(ADR-010) 会原样漏进页面。
+
+    只在去掉 pre/code/svg 后的可见文本里找,避免把 ~*:*:*~ 这类正文当成误报。
+    """
+    h = re.sub(r"<(pre|code|svg|script|style)\b.*?</\1>", " ", html, flags=re.S | re.I)
+    h = re.sub(r"<[^>]+>", " ", h)
+    return [m.group(0) for m in re.finditer(r"\*[^*\s<>&]{1,40}\*", h)]
 
 
 def run_block(lang, args, body, timeout):
@@ -198,6 +219,7 @@ def main():
 
     counter = {"i": 0}
     diag_n = {"i": 0}
+    diag_fail = []
 
     def replace(m):
         i = counter["i"]
@@ -217,7 +239,8 @@ def main():
             src_html = f"<details><summary>mermaid 源码</summary><pre><code>{html.escape(body)}</code></pre></details>"
             if svg:
                 return f'<figure class="diagram">{svg}{src_html}</figure>'
-            return f'<figure class="diagram"><p class="diag-error">图渲染失败:{html.escape(err)}</p>{src_html}</figure>'
+            diag_fail.append((fm.group(1) if fm else f"第 {diag_n['i']} 块", err))
+            return f'<figure class="diagram"><p class="diag-error">图渲染失败:{html.escape(brief(err))}</p>{src_html}</figure>'
         # sh / clojure / emacs-lisp
         head = [f'<span class="badge">{html.escape(lang)}</span>']
         if ":eval never" in args:
@@ -240,6 +263,23 @@ def main():
     page = page.replace("<!--GEN-->", dt.datetime.now().strftime("%Y-%m-%d %H:%M"))
     OUT.write_text(page, encoding="utf-8")
     print(f"写入 {OUT.relative_to(ROOT)}({OUT.stat().st_size // 1024} KB),图 {diag_n['i']} 张,代码块 {len(blocks)} 个", file=sys.stderr)
+    if diag_fail:
+        # 图渲染失败只会在页面上留一段红字,构建本身照样退出 0 —— 那等于悄悄交出没有图的架构文档
+        # (实测过一次:16 张全挂、exit 0)。这里必须让调用方失败。
+        print(f"✗ {len(diag_fail)}/{diag_n['i']} 张图渲染失败(下面的 svg 可能还是上一次的旧产物):", file=sys.stderr)
+        for name, err in diag_fail:
+            print(f"  - {name}:{brief(err)}", file=sys.stderr)
+        if any("could not find" in brief(e).lower() for _, e in diag_fail):
+            sys.exit("浏览器不可用?设 PUPPETEER_EXECUTABLE_PATH 指向本机 Chrome,或跑 "
+                     "`npx puppeteer browsers install chrome-headless-shell`。")
+        sys.exit("mermaid 源码有问题,按上面的报错行修正后重跑。")
+    stray = unrendered_markup(page)
+    if stray:
+        # 实测过 14 处 *已解决*(ADR-010) 原样印在页面上:org 粗体收尾的 * 后面直接跟 ( 就不解析。
+        print(f"✗ 页面里有 {len(stray)} 处没渲染成粗体的 org 标记:", file=sys.stderr)
+        for s in stray[:10]:
+            print(f"  - {s}", file=sys.stderr)
+        sys.exit("在收尾的 * 与后面的字符之间补一个空格后重跑。")
 
 
 if __name__ == "__main__":

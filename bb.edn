@@ -101,7 +101,7 @@
                     :depends [release]
                     :override-builtin true
                     :task (u/exec! (into (u/clojure-cmd) ["-T:build" "all"]))}
-  docs             {:doc  "重新生成 C4 架构文档 HTML 与 img/*.svg(需要 pandoc、node)"
+  docs             {:doc  "重新生成 C4 架构文档 HTML 与 img/*.svg(需要 pandoc、node,以及 Chrome:装过 chrome-headless-shell 或设 PUPPETEER_EXECUTABLE_PATH)"
                     :task (u/exec! ["python3" "docs/architecture/build-html.py"])}
   clean            {:doc  "删除构建产物与本地测试库"
                     :task (do (doseq [d ["target" ".cpcache" ".shadow-cljs" "resources/public/js"]]
