@@ -73,7 +73,18 @@ async function ensureOverlay(page) {
                          line-height: 1.7; color: #c9d6e8; white-space: pre-wrap; }
         #tour-term b { color: #7ee787; font-weight: 600; }
         #tour-term u { color: #7c8ea8; text-decoration: none; }
-        #tour-term em { color: #ffd166; font-style: normal; font-weight: 600; }`;
+        #tour-term em { color: #ffd166; font-style: normal; font-weight: 600; }
+        /* 假鼠标：Playwright 录的是页面本身，系统光标在浏览器进程外，不进画面。
+           所以把真实 mousemove 坐标画成一个箭头叠在页面上，一起被录进视频。 */
+        #tour-cursor { position: absolute; left: 0; top: 0; display: none;
+                       transition: transform .13s cubic-bezier(.22,.7,.3,1); will-change: transform; }
+        #tour-cursor svg { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+        #tour-cursor .ring { position: absolute; left: -16px; top: -16px; width: 38px; height: 38px;
+                             border-radius: 50%; border: 2px solid rgba(255,255,255,.95);
+                             background: rgba(64,158,255,.32); opacity: 0; }
+        #tour-cursor.press .ring { animation: tour-click .5s ease-out; }
+        @keyframes tour-click { 0% { opacity: .95; transform: scale(.3); }
+                                100% { opacity: 0; transform: scale(1.3); } }`;
       const root = document.createElement('div');
       root.id = 'tour-root';
       root.innerHTML =
@@ -83,13 +94,50 @@ async function ensureOverlay(page) {
         '<pre></pre></div></div>' +
         '<div id="tour-chip"></div>' +
         '<div id="tour-rec"><i></i><span>REC</span></div>' +
-        '<div id="tour-caption"></div>';
+        '<div id="tour-caption"></div>' +
+        '<div id="tour-cursor"><span class="ring"></span>' +
+        '<svg width="22" height="29" viewBox="0 0 22 29">' +
+        '<path d="M2 1 L2 22 L7.6 17.2 L11 25.4 L15 23.7 L11.6 15.7 L19.6 15.2 Z" ' +
+        'fill="#fff" stroke="#111418" stroke-width="1.7" stroke-linejoin="round"/></svg></div>';
       const mount = () => {
         if (!document.getElementById('tour-style')) document.head.appendChild(style);
         document.body.appendChild(root);
       };
       if (document.body) mount();
       else document.addEventListener('DOMContentLoaded', mount);
+      // 指针跟着真实鼠标事件走：Playwright 的 click 会先往页面派 mousemove / mousedown，
+      // 所以不用额外驱动鼠标，画面里的箭头就落在真正被点的那个位置上。
+      const cursor = root.querySelector('#tour-cursor');
+      const moveTo = (x, y) => {
+        cursor.style.display = 'block';
+        cursor.style.transform = `translate(${x}px, ${y}px)`;
+      };
+      document.addEventListener('mousemove', (e) => moveTo(e.clientX, e.clientY), true);
+      // fill() 只 focus 不移动鼠标，所以「用键盘填的输入框」拿到焦点时把指针挪过去，
+      // 否则登录整段都在打字却看不到手在哪。两种情况不挪：
+      // 按钮 / 菜单项 / 下拉只能靠点，mousedown 已经落在真正的点击点上；
+      // 以及焦点就来自刚才那一下点击（同一个元素）——按时间间隔判断会被 slowMo 打乱，比对象身份不可靠。
+      let clickTarget = null;
+      const isTypable = (el) =>
+        el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable === true;
+      document.addEventListener('focusin', (e) => {
+        const el = e.target;
+        if (!el || el === document.body || el === clickTarget) return;
+        if (!isTypable(el)) return;
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height || r.width > window.innerWidth * 0.8) return;
+        moveTo(r.left + Math.min(46, r.width / 2), r.top + r.height / 2);
+      }, true);
+      document.addEventListener('mousedown', (e) => {
+        clickTarget = e.target;
+        moveTo(e.clientX, e.clientY);
+        cursor.classList.remove('press');
+        void cursor.offsetWidth; // 重启动画：连点两次要看到两圈涟漪
+        cursor.classList.add('press');
+      }, true);
+      document.addEventListener('mouseleave', () => {
+        cursor.style.display = 'none';
+      }, true);
       window.__tour = {
         set(text) {
           const el = document.getElementById('tour-caption');
