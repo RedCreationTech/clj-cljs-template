@@ -1,0 +1,42 @@
+(ns ruoyi.json-test
+  "接口层两头换算的单元测试(`bb mobile:test`)。
+
+   这里测的是纯数据换算,不起 isolate、不连后端:
+   键转成关键字、字符串转义、空 body 按 nil 处理,这三件事错了会在很远的地方
+   (界面永远转圈、中文提示变乱码)才暴露,所以必须在最靠近 JSON 的那一层钉住。"
+  (:require [cljd.test :refer [deftest is testing]]
+            [ruoyi.json :as json]))
+
+(deftest decode-keywordises-keys
+  (testing "嵌套 map 与数组的键一律转成关键字,下游 (:code resp) 才取得到"
+    (is (= {:code 200
+            :msg "操作成功"
+            :data {:rows [{:post_id 1 :post_name "ceo"}] :total 41}}
+           (json/decode
+             "{\"code\":200,\"msg\":\"操作成功\",\"data\":{\"rows\":[{\"post_id\":1,\"post_name\":\"ceo\"}],\"total\":41}}"))))
+
+  (testing "null 变 nil、布尔与小数原样保留"
+    (is (= {:a nil :b true :c 1.5} (json/decode "{\"a\":null,\"b\":true,\"c\":1.5}"))))
+
+  (testing "空 body 与空白都算「没有内容」"
+    (is (nil? (json/decode "")))
+    (is (nil? (json/decode "   ")))))
+
+(deftest encode-writes-json
+  (is (= "{\"username\":\"admin\"}" (json/encode {:username "admin"})))
+  (is (= "[1,2,3]" (json/encode [1 2 3])))
+  (is (= "null" (json/encode nil)))
+  (is (= "true" (json/encode true)))
+  (testing "引号必须转义,否则表单里的中文原文会拼出坏 JSON"
+    (is (= "\"a\\\"b\"" (json/encode "a\"b")))
+    (is (= "\"a\\\\b\"" (json/encode "a\\b")))
+    (is (= "\"a\\nb\"" (json/encode "a\nb")))))
+
+(deftest encode-decode-round-trip
+  (let [data {:post_id 5
+              :post_name "老板\"兼\"行政"
+              :remark "第一行\n第二行"
+              :enabled true
+              :status nil
+              :tags ["a" "b"]}]
+    (is (= data (json/decode (json/encode data))))))

@@ -1,0 +1,97 @@
+(ns ruoyi.views.login
+  "登录页。用户名与密码属于输入控件自己的状态(Flutter 的 controller),不进 app-db;
+   「提交中」与「失败原因」是跨组件共享的状态,才走 re-dash。
+
+   与网页端一致的两点:失败提示只用后端给的中文 msg(不区分「用户不存在」与「密码错」);
+   验证码是后端开关,移动端这一版按关闭处理,开验证码时在这里补一次 /captcha/image。"
+  (:require ["package:flutter/material.dart" :as m]
+            [cljd.flutter :as f]
+            [hti.re-dash.core :as rd]
+            [ruoyi.theme :as theme]))
+
+(def username-ctrl (m/TextEditingController))
+
+(def password-ctrl (m/TextEditingController))
+
+(defn- text-of [^m/TextEditingController controller]
+  (.-text controller))
+
+(defn- submit []
+  (let [u (text-of username-ctrl)
+        p (text-of password-ctrl)]
+    (if (or (= "" u) (= "" p))
+      (rd/dispatch [:ui/notify "用户名和密码都要填"])
+      (rd/dispatch [:auth/login u p]))))
+
+(defn- field
+  "一个带标签的输入框;密码框遮住内容,回车即提交。"
+  [controller label obscure?]
+  (m/TextField
+    .controller controller
+    .obscureText obscure?
+    .textInputAction m/TextInputAction.done
+    .decoration (m/InputDecoration
+                  .labelText label
+                  .border (m/OutlineInputBorder
+                            .borderRadius (m/BorderRadius.circular 8.0)))
+    .onSubmitted (fn [_] (submit))))
+
+(defn- error-tip
+  [palette msg]
+  (m/Container
+    .margin (m/EdgeInsets.only .top theme/gap)
+    .padding (m/EdgeInsets.all 8.0)
+    .decoration (m/BoxDecoration
+                  .color (:danger-bg palette)
+                  .borderRadius (m/BorderRadius.circular 6.0))
+    .child (m/Text msg .style (m/TextStyle .color (:danger palette) .fontSize 13.0))))
+
+(defn- press
+  "提交按钮的回调:提交中返回 nil,Flutter 会把按钮变灰。
+   一定要经过这个函数返回——内联的 (if pending? nil submit) 会被 ClojureDart
+   提成 `Function?` 类型的临时变量,Dart 不接受它赋给 VoidCallback?;
+   函数调用的返回类型是 dynamic,类型检查才通得过。"
+  [pending?]
+  (if pending? nil submit))
+
+(defn- login-button
+  [palette pending?]
+  (m/ElevatedButton
+    .onPressed (press pending?)
+    .style (m/ElevatedButton.styleFrom
+             .backgroundColor (:primary palette)
+             .minimumSize (m/Size 0.0 44.0)
+             .shape (m/RoundedRectangleBorder
+                      .borderRadius (m/BorderRadius.circular 8.0)))
+    .child (if pending?
+             (m/CircularProgressIndicator .color m/Colors.white .strokeWidth 2.0)
+             (m/Text "登 录" .style (m/TextStyle .color m/Colors.white .fontSize 16.0)))))
+
+(def view
+  (f/widget
+    :watch [login (rd/subscribe [:login/state])
+            palette (rd/subscribe [:ui/palette])]
+    (m/SafeArea
+      .child (m/Center
+               .child (m/SingleChildScrollView
+                        .padding (m/EdgeInsets.all 24.0)
+                        .child (let [{:keys [pending? msg]} login]
+                                  (m/Column
+                                    .crossAxisAlignment m/CrossAxisAlignment.stretch
+                                    .children
+                                    [(m/Text "若依移动端"
+                                             .style (m/TextStyle .fontSize 26.0
+                                                                 .fontWeight m/FontWeight.bold
+                                                                 .color (:primary palette)))
+                                     (m/SizedBox .height 6.0)
+                                     (m/Text "ClojureDart + re-dash"
+                                             .style (m/TextStyle .color (:text-regular palette)))
+                                     (m/SizedBox .height 28.0)
+                                     (field username-ctrl "用户名" false)
+                                     (m/SizedBox .height theme/gap)
+                                     (field password-ctrl "密码" true)
+                                     (if (some? msg)
+                                       (error-tip palette msg)
+                                       (m/SizedBox .height 0.0))
+                                     (m/SizedBox .height theme/gap)
+                                     (login-button palette pending?)])))))))

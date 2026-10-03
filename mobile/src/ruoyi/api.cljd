@@ -1,0 +1,96 @@
+(ns ruoyi.api
+  "移动端唯一的后端出口,与网页端 com.ruoyi.frontend.api.transport 同一套契约:
+  带令牌、解 {:code :msg :data} 信封、把失败归类,页面只看 :ok? 与 :msg。
+
+   响应形状(src/clj/com/ruoyi/web/response.clj):
+     HTTP 200 + :code 200   成功,:data 是业务数据
+     HTTP 200 + :code 500   业务失败,:msg 是中文原因
+     HTTP 401 / 403         未登录 / 无权限,状态码与 :code 相同
+   分页参数只发 :page 与 :size,列表数据在 :data 的 {:rows :total}。"
+  (:require ["package:http/http.dart" :as http]
+            [clojure.string :as str]
+            [ruoyi.config :as config]
+            [ruoyi.json :as json]))
+
+(defn- param-name [k]
+  (if (keyword? k) (name k) (str k)))
+
+(defn- query-string [m]
+  (str/join "&"
+            (for [[k v] m]
+              (str (param-name k) "=" (Uri.encodeComponent (str v))))))
+
+(defn- uri
+  "把 path 与查询参数拼成完整地址。path 不带 /api 前缀,前缀在 base-url 里。"
+  [path query]
+  (let [qs (query-string query)]
+    (Uri/parse (if (str/blank? qs)
+                 (str config/base-url path)
+                 (str config/base-url path "?" qs)))))
+
+(defn- headers [token]
+  (cond-> {"accept" "application/json"
+           "content-type" "application/json"}
+    (some? token) (assoc "authorization" (str "Bearer " token))))
+
+(defn- send!
+  "发一次请求并等回来;超时与连接失败都在这一步收敛成异常,由 call 归类。"
+  [{:keys [method path query body token]}]
+  (let [u (uri path query)
+        h (headers token)
+        b (some-> body json/encode)
+        future (case method
+                 :get (http/get u .headers h)
+                 :delete (http/delete u .headers h)
+                 :put (http/put u .headers h .body b)
+                 :post (http/post u .headers h .body b))]
+    (await (.timeout future (Duration .milliseconds config/timeout-ms)))))
+
+(defn- envelope
+  "响应体解析成 Clojure 数据;不是 JSON(网关错误页、空 body)时返回 nil。
+   ClojureDart 的 catch 必须写类型,catch-all 用 dynamic。"
+  [text]
+  (try
+    (json/decode text)
+    (catch dynamic _e nil)))
+
+(defn- result
+  "统一的返回形状:{:ok? :error :code :msg :data}。error 是归类关键字,给上层决定收尾动作。"
+  [{:keys [status body]}]
+  (let [env (envelope body)
+        code (:code env)]
+    (cond
+      (nil? env) {:ok? false :error :server :code status
+                  :msg (str "服务异常(" status ")")}
+      (= 401 status) {:ok? false :error :unauthorized :code 401
+                      :msg (or (:msg env) "登录已失效,请重新登录")}
+      (= 403 status) {:ok? false :error :forbidden :code 403
+                      :msg (or (:msg env) "没有权限")}
+      (>= status 500) {:ok? false :error :server :code status
+                       :msg (or (:msg env) "服务暂时不可用")}
+      (= 200 code) {:ok? true :error nil :code code
+                    :msg (:msg env) :data (:data env)}
+      :else {:ok? false :error :business :code code
+             :msg (or (:msg env) "操作失败")})))
+
+(defn- response->map
+  "把 Dart 的 http.Response 转成 Clojure 数据。
+   关键字读不到 Dart 对象的字段((:status resp) 永远是 nil),必须显式取属性,
+   而且要带类型提示,否则 ClojureDart 报 DYNAMIC WARNING。
+   属性名是 Dart 那边的 statusCode(http.BaseResponse),不是 :status。"
+  [^http/Response resp]
+  {:status (.-statusCode resp) :body (.-body resp)})
+
+(defn call
+  "调用一次接口。永远返回结果 map,不抛异常:连不上与超时都归类成 :network。
+   ClojureDart 里不能用 instance? 分辨异常类型(dart/is? 只认字面量类型),
+   而超时和 DNS 失败对用户的处置一样,所以不再细分。
+
+   这是个异步函数(send! 里 await 过),调用方必须 (await (api/call …)),
+   否则拿到的是 Future 而不是结果 map。"
+  [request]
+  (try
+    (result (response->map (await (send! request))))
+    (catch dynamic _e
+      {:ok? false :error :network :code 0
+       :msg "无法连接后端(地址不对、服务未启动或请求超时)"})))

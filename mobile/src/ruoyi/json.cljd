@@ -1,0 +1,69 @@
+(ns ruoyi.json
+  "后端只回普通 JSON,这里负责两头的换算:
+   进来的 JSON 文本解成带关键字键的 Clojure 数据(Dart 的 Map/List 既不能 get-in,
+   也没有结构共享,放进 app-db 会让所有更新代码变味);
+   出去的 Clojure 数据编成 JSON 文本。"
+  (:require ["dart:convert" :as dj]
+            ["dart:core" :as d]
+            [clojure.string :as str]))
+
+(declare ->edn)
+
+(defn- ->edn-map [^d/Map m]
+  (let [box (atom {})]
+    (.forEach m (fn [k v] (swap! box assoc (keyword (str k)) (->edn v))))
+    @box))
+
+(defn- ->edn-list [^d/Iterable coll]
+  (let [box (atom [])]
+    (.forEach coll (fn [v] (swap! box conj (->edn v))))
+    @box))
+
+(defn ->edn
+  "dart:convert 解出来的 Dart 结构 -&gt; Clojure 数据。
+   字符串、数字、布尔在 ClojureDart 里本来就是同一份对象,原样返回;
+   键一律转成关键字,所以下游 (:code resp) 能直接取。"
+  [v]
+  (cond
+    (nil? v) nil
+    (dart/is? v d/Map) (->edn-map v)
+    (dart/is? v d/List) (->edn-list v)
+    :else v))
+
+(defn decode
+  "JSON 文本 -&gt; Clojure 数据。空串与 null 都按「没有 body」给 nil。"
+  [text]
+  (when-not (str/blank? text)
+    (->edn (dj/json.decode text))))
+
+(defn- key-name [k]
+  (cond
+    (keyword? k) (name k)
+    (string? k) k
+    :else (str k)))
+
+(defn- escape
+  "字符串值里的引号、反斜杠与控制字符必须转义;表单里来的中文原文直接进 JSON。"
+  [s]
+  (-> (str s)
+      (str/replace "\\" "\\\\")
+      (str/replace "\"" "\\\"")
+      (str/replace "\n" "\\n")
+      (str/replace "\r" "\\r")
+      (str/replace "\t" "\\t")))
+
+(defn- entry [k v]
+  (str "\"" (escape (key-name k)) "\":" (encode v)))
+
+(defn encode
+  "Clojure 数据 -&gt; JSON 文本。map 的键可以是关键字或字符串,vector 与 seq 都按数组编。"
+  [v]
+  (cond
+    (nil? v) "null"
+    (true? v) "true"
+    (false? v) "false"
+    (number? v) (str v)
+    (keyword? v) (str "\"" (escape (name v)) "\"")
+    (map? v) (str "{" (str/join "," (map (fn [[k val]] (entry k val)) v)) "}")
+    (coll? v) (str "[" (str/join "," (map encode v)) "]")
+    :else (str "\"" (escape v) "\"")))

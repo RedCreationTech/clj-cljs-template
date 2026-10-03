@@ -1,10 +1,11 @@
 (ns tasks.lint
-  "静态检查:bb lint = clj-kondo(warning 即失败)+ 迁移文件 + 规模约束 + 分页约定。"
+  "静态检查:bb lint = clj-kondo(warning 即失败)+ 迁移文件 + 规模约束 + 分页约定 + 脚手架登记点。"
   (:require
    [babashka.fs :as fs]
    [babashka.pods :as pods]
    [clojure.string :as str]
    [edamame.core :as e]
+   [tasks.new-module :as nm]
    [tasks.util :as u]))
 
 ;; ─── clj-kondo ─────────────────────────────────────────────────────
@@ -120,7 +121,14 @@
 (def ns-limit 500)
 (def fn-limit 50)
 (def ^:private fn-heads '#{defn defn- defmacro defmethod})
-(def ^:private src-roots ["src" "env" "test" "bb" "scripts"])
+
+(def ^:private src-roots
+  "规模约束覆盖的目录。mobile/ 也在里面:.cljd 与 .clj 用同一套纪律,
+   移动端拆分依赖命名空间(config/json/api/fx/events/subs/model/views),
+   不检查就会一路膨胀成一个巨大的 main.cljd。"
+  ["src" "env" "test" "bb" "scripts" "mobile/src" "mobile/test"])
+
+(def ^:private src-glob "**.{clj,cljs,cljc,cljd}")
 
 (defn- parse-forms [text]
   (e/parse-string-all text {:all true
@@ -141,10 +149,11 @@
     {:path path :lines lines :fns fns}))
 
 (defn constraints!
-  "命名空间 ≤ 500 行,defn/defn-/defmacro/defmethod ≤ 50 行(按原始行数,含 docstring 与空行)。"
+  "命名空间 ≤ 500 行,defn/defn-/defmacro/defmethod ≤ 50 行(按原始行数,含 docstring 与空行)。
+   覆盖 .clj/.cljs/.cljc 与移动端的 .cljd。"
   []
   (let [files (->> src-roots
-                   (mapcat #(fs/glob % "**.{clj,cljs,cljc}"))
+                   (mapcat #(fs/glob % src-glob))
                    (map str) sort)
         reports (map file-report files)
         big-files (filter #(> (:lines %) ns-limit) reports)

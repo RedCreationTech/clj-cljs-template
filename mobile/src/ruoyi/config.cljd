@@ -1,0 +1,29 @@
+(ns ruoyi.config
+  "移动端唯一的配置入口。接口地址不写死在代码里:编译时用 --dart-define 注入,
+  真机连开发机、测试环境、生产环境各自一份地址,不用改源码。
+
+    bb mobile:run --dart-define=RUOYI_API_BASE_URL=http://192.168.1.10:3000/api
+
+  留空时用本机的后端地址,便于 flutter create 之后直接跑起来。"
+  (:require ["dart:core" :as d]))
+
+(defn- or-default
+  "未注入时 String.fromEnvironment 给的是空串,空串按「没配」处理。"
+  [^d/String v default]
+  (if (= "" v) default v))
+
+;; 键名必须写成字面量、并且直接放在这一层:ClojureDart 只把字面量参数的调用编成
+;; const String.fromEnvironment("K"),而 --dart-define 只在 const 上下文里生效。
+;; 包一层函数把键名当参数传进去,编译期就拿不到值了(实测会静默用回默认地址)。
+(def base-url
+  "后端 API 前缀,与 resources/system.edn 的 :reitit.routes/api :base-path 一致。"
+  (or-default (d/String.fromEnvironment "RUOYI_API_BASE_URL")
+              "http://127.0.0.1:3000/api"))
+
+(def timeout-ms
+  "单个请求的超时;超时按网络失败归类,不让界面永远转圈。"
+  (d/int.fromEnvironment "RUOYI_REQUEST_TIMEOUT_MS" .defaultValue 10000))
+
+(def page-size
+  "列表默认每页条数,与网页端 components/pagination 的默认值保持同一量级。"
+  20)

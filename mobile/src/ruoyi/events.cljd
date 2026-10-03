@@ -1,0 +1,151 @@
+(ns ruoyi.events
+  "事件层:唯一改 app-db 的地方,全部是纯函数(re-dash 的 reg-event-fx / reg-event-db)。
+
+   与网页端的对应关系:
+     :posts/load / :posts/change-page  ≈ events.common/fetch-with-query
+     :auth/session-expired             ≈ api.transport 收到 401 时的统一处理
+   换筛选条件一律把参数并进 app-db 里的查询状态再重新请求,
+   不要在下一次回调里对已取到的 rows 做本地 filter,那会绕过分页。
+
+   re-dash 只认 :db、:dispatch、:dispatch-later、:fx 这几个内置效果,
+   没有 re-frame 的 :dispatch-n,所以一次事件只直接派发一条,
+   需要连着做两件事就串成事件链(:auth/logged-in → :app/session-opened → :profile/load)。"
+  (:require [hti.re-dash.core :as rd]
+            [ruoyi.config :as config]
+            [ruoyi.fx :as fx]))
+
+(defn- request-fx
+  "声明一次接口调用:成功回 ok 事件、失败回 bad 事件,结果由效果层附在事件尾部。"
+  [request ok bad]
+  {fx/api-effect {:request request :ok ok :bad bad}})
+
+(defn- with-token
+  [db request]
+  (assoc request :token (:token db)))
+
+(defn- empty-posts []
+  {:page 1 :size config/page-size :rows [] :total 0 :pending? false :msg nil})
+
+(defn- register-login-events!
+  "登录请求本身:提交 → 成功存令牌 / 失败留中文原因。"
+  []
+  (rd/reg-event-fx :auth/login
+    (fn [{:keys [db]} [_ username password]]
+      (merge {:db (assoc-in db [:login :pending?] true)}
+             (request-fx {:method :post :path "/auth/login"
+                          :body {:username username :password password}}
+                         :auth/logged-in :auth/login-failed))))
+
+  (rd/reg-event-fx :auth/logged-in
+    (fn [{:keys [db]} [_ {:keys [data]}]]
+      {:db (-> db
+               (assoc :token (:token data) :route :posts)
+               (assoc-in [:login :pending?] false))
+       :dispatch [:app/session-opened]}))
+
+  (rd/reg-event-db :auth/login-failed
+    (fn [db [_ {:keys [msg]}]]
+      (assoc-in db [:login] {:pending? false :msg msg}))))
+
+(defn- register-profile-events!
+  "会话建立后取身份(getInfo),再取首页数据。"
+  []
+  ;; 会话刚建立(登录成功)后的统一入口:先取身份,再取首页数据。
+  (rd/reg-event-fx :app/session-opened
+    (fn [_ _]
+      {:dispatch [:profile/load]}))
+
+  (rd/reg-event-fx :profile/load
+    (fn [{:keys [db]} _]
+      (request-fx (with-token db {:method :get :path "/auth/getInfo"})
+                  :profile/loaded :profile/failed)))
+
+  (rd/reg-event-fx :profile/loaded
+    (fn [{:keys [db]} [_ {:keys [data]}]]
+      {:db (-> db
+               (assoc :profile (:user data))
+               (assoc :permissions (set (:permissions data []))))
+       :dispatch [:posts/load]}))
+
+  (rd/reg-event-fx :profile/failed
+    (fn [_ [_ {:keys [msg]}]]
+      {:dispatch [:ui/notify msg]})))
+
+(defn- register-session-events!
+  "会话失效与登出:不管是 401 还是主动退出,都一次清干净回到登录页。"
+  []
+  ;; 效果层遇到 401 只派发这一条:令牌、身份、列表数据一次清干净并回到登录页。
+  (rd/reg-event-db :auth/session-expired
+    (fn [db [_ msg]]
+      (-> db
+          (assoc :route :login :token nil :profile nil :permissions #{})
+          (assoc :posts (empty-posts))
+          (assoc :login {:pending? false
+                         :msg (or msg "登录已失效,请重新登录")}))))
+
+  (rd/reg-event-fx :auth/logout
+    (fn [{:keys [db]} _]
+      (merge {:db (assoc db :route :login)}
+             (request-fx (with-token db {:method :post :path "/auth/logout"})
+                         :auth/logged-out :auth/logged-out))))
+
+  (rd/reg-event-db :auth/logged-out
+    (fn [db _]
+      (assoc db :token nil :profile nil :permissions #{} :posts (empty-posts)))))
+
+(defn- register-ui-events!
+  "全局提示条:通知 3 秒后自动收,计时由 re-dash 的 :dispatch-later 排,视图不需要自己计时。"
+  []
+  (rd/reg-event-fx :ui/notify
+    (fn [{:keys [db]} [_ msg]]
+      {:db (assoc db :notice {:msg msg :seq (inc (:seq (:notice db) 0))})
+       :dispatch-later {:ms 3000 :dispatch [:ui/dismiss-notice]}}))
+
+  (rd/reg-event-db :ui/dismiss-notice
+    (fn [db _]
+      (update db :notice (fn [n] (assoc n :msg nil)))))
+
+  ;; 主题只翻一个布尔:配色与 ThemeData 由订阅派生,这里不碰任何颜色值。
+  (rd/reg-event-db :ui/toggle-theme
+    (fn [db _]
+      (update-in db [:theme :dark?] (fn [d?] (not (boolean d?)))))))
+
+(defn- register-posts-events!
+  "岗位列表的服务端分页:查询条件一直留在 app-db 里,翻页与刷新都在其上合并覆盖值。"
+  []
+  (rd/reg-event-fx :posts/load
+    (fn [{:keys [db]} [_ overrides]]
+      (let [query (merge (:posts db) overrides)]
+        (merge {:db (update db :posts (fn [p] (-> p (merge query) (assoc :pending? true))))}
+               (request-fx (with-token db {:method :get :path "/system/post"
+                                           :query {:page (:page query 1)
+                                                   :size (:size query config/page-size)}})
+                           :posts/loaded :posts/failed)))))
+
+  (rd/reg-event-db :posts/loaded
+    (fn [db [_ {:keys [data]}]]
+      (update db :posts (fn [p] (-> p
+                                    (assoc :rows (:rows data []) :total (:total data 0)
+                                           :pending? false :msg nil))))))
+
+  (rd/reg-event-fx :posts/failed
+    (fn [{:keys [db]} [_ {:keys [msg]}]]
+      {:db (update db :posts (fn [p] (-> p (assoc :pending? false :msg msg))))
+       :dispatch [:ui/notify msg]}))
+
+  (rd/reg-event-fx :posts/change-page
+    (fn [_ [_ page]]
+      {:dispatch [:posts/load {:page page}]}))
+
+  (rd/reg-event-fx :posts/refresh
+    (fn [{:keys [db]} _]
+      {:dispatch [:posts/load {:page (get-in db [:posts :page] 1)}]})))
+
+(defn register!
+  "登记全部事件。和效果一样,必须在这个会被调用的函数里登记,否则树摇会把处理函数删掉。"
+  []
+  (register-login-events!)
+  (register-profile-events!)
+  (register-session-events!)
+  (register-ui-events!)
+  (register-posts-events!))

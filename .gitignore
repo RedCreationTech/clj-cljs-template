@@ -11,6 +11,8 @@ target/
 .shadow-cljs/
 node_modules/
 resources/public/js/
+# 移动端网页版产物,由 bb mobile:web 从 mobile/src 编译
+resources/public/mobile/
 
 # ─── 本地数据库 / 日志 ─────────────────────────────────────────
 *.db

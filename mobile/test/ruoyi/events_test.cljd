@@ -1,0 +1,93 @@
+(ns ruoyi.events-test
+  "re-dash 事件与订阅的单元测试(`bb mobile:test`)。
+
+   只打「纯数据」事件:reg-event-db 的处理函数、以及 :ui/notify 这种只排计时器、
+   不发请求的 reg-event-fx。会派发接口调用的事件链
+   (:auth/logged-in → :profile/load、:posts/load → HTTP)留给真机竖切与
+   `bb mobile:compile`,单元测试里不连后端,免得测试依赖一个跑着的 3000。
+
+   分页派生值(总页数)是订阅层算的,视图不写算法,所以回归也钉在订阅上。
+
+   ClojureDart 的坑:re-dash 的 dispatch-sync 内部用了 await,它自己因此也是异步函数,
+   不 (await …) 的话处理函数还排在微任务里,紧接着的断言读到的是旧 app-db
+   ——表现是断言永远差一拍,而不是报错。"
+  (:require [cljd.test :refer [deftest is testing use-fixtures]]
+            [hti.re-dash.core :as rd]
+            [hti.re-dash.testing.core :as rdt]
+            [ruoyi.model :as model]
+            [ruoyi.theme :as theme]))
+
+(defn- register-handlers!
+  "整个文件登记一次处理器:re-dash 的 reg-* 必须真的被调用,否则树摇会删掉。"
+  ([] (model/register!))
+  ([_]))
+
+(defn- reset-db!
+  "每条用例都从 initial-db 开始,用例之间不互相污染。"
+  ([] (await (rd/dispatch-sync [:app/initialize-db])))
+  ([_]))
+
+(use-fixtures :once register-handlers!)
+(use-fixtures :each reset-db!)
+
+(defn- query
+  "取一次订阅的当前值(derefable-subscribe 是即时快照,派发之后再读)。"
+  [query-vec]
+  @(rdt/subscribe query-vec))
+
+(deftest login-failed-keeps-the-reason
+  (await (rd/dispatch-sync [:auth/login-failed {:msg "用户名或密码错误"}]))
+  (is (= :login (query [:app/route])))
+  (is (= "用户名或密码错误" (:msg (query [:login/state]))))
+  (is (false? (:pending? (query [:login/state])))))
+
+(deftest posts-loaded-computes-paging
+  (testing "服务端分页:41 条、每页 20 → 3 页,取到的 rows 原样进 app-db"
+    (await (rd/dispatch-sync [:posts/loaded {:data {:rows [{:post_id 1} {:post_id 2}]
+                                                     :total 41}}]))
+    (let [paging (query [:posts/paging])]
+      (is (= 41 (:total paging)))
+      (is (= 3 (:total-pages paging)))
+      (is (= 1 (:page paging)))
+      (is (false? (:pending? paging))))
+    (is (= [{:post_id 1} {:post_id 2}] (query [:posts/rows])))))
+
+(deftest posts-loaded-on-last-page
+  (testing "刚好整除时不要多算一页(ClojureDart 没有 ceil,上取整是手写除法)"
+    (await (rd/dispatch-sync [:posts/loaded {:data {:rows [] :total 40}}]))
+    (is (= 2 (:total-pages (query [:posts/paging]))))))
+
+(deftest session-expired-clears-the-session
+  (await (rd/dispatch-sync [:auth/session-expired "登录已失效,请重新登录"]))
+  (is (= :login (query [:app/route])))
+  (is (false? (query [:auth/signed-in?])))
+  (is (nil? (query [:ui/profile])))
+  (is (= #{} (query [:ui/permissions])))
+  (is (= [] (query [:posts/rows])))
+  (is (= "登录已失效,请重新登录" (:msg (query [:login/state])))))
+
+(deftest logout-drops-token-and-list-data
+  (await (rd/dispatch-sync [:auth/logged-out]))
+  (is (false? (query [:auth/signed-in?])))
+  (is (= [] (query [:posts/rows]))))
+
+(deftest notice-is-set-and-can-be-dismissed
+  (testing "提示条只改 app-db,3 秒后自动收由 :dispatch-later 排,视图不自己计时"
+    (await (rd/dispatch-sync [:ui/notify "创建成功"]))
+    (is (= "创建成功" (:msg (query [:ui/notice]))))
+    (is (= 1 (:seq (query [:ui/notice]))))
+    (await (rd/dispatch-sync [:ui/dismiss-notice]))
+    (is (nil? (:msg (query [:ui/notice]))))))
+
+(deftest theme-toggle-switches-the-palette
+  (testing "主题只有 app-db 里那一个开关:派生出配色与 ThemeData,并且不动会话"
+    (is (false? (query [:ui/dark?])))
+    (is (= (:text-main theme/light) (:text-main (query [:ui/palette]))))
+    (await (rd/dispatch-sync [:ui/toggle-theme]))
+    (is (true? (query [:ui/dark?])))
+    (is (= (:text-main theme/dark) (:text-main (query [:ui/palette]))))
+    (is (= (:bg theme/dark) (:bg (query [:ui/palette]))))
+    (await (rd/dispatch-sync [:ui/toggle-theme]))
+    (is (false? (query [:ui/dark?])))
+    (is (= :login (query [:app/route])))
+    (is (= [] (query [:posts/rows])))))

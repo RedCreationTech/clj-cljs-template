@@ -1,0 +1,21 @@
+;; ClojureDart 移动端工程的依赖表,与后端 deps.edn 完全独立:
+;; 这里的 :paths 只有 src,后端的 src/clj、resources 与 shadow-cljs 一概不参与编译。
+{:paths ["src"]
+
+ :deps  {tensegritics/clojuredart
+         {:git/url "https://github.com/tensegritics/ClojureDart.git"
+          ;; 版本跟着 ClojureDart 的 release 走,升级时同步改这里的 tag 与 sha,
+          ;; 并跑一遍 bb mobile:compile(编译器就是类型检查器)。
+          :git/tag "0.9.20260917"
+          :git/sha "9f9cef5e0735026b667c28372e6967dcf43dc13e"}
+
+         ;; re-dash:ClojureDart 版的 re-frame,应用状态只有 app-db 这一份。
+         net.clojars.htihospitality/re-dash {:mvn/version "1.2.1"}}
+
+ :aliases {:cljd {:main-opts ["-m" "cljd.build"]}
+
+           ;; 单元测试:test 目录只在跑测试时进 classpath。
+           :test {:extra-paths ["test"]}}
+
+ :cljd/opts {:kind :flutter
+             :main ruoyi.main}}

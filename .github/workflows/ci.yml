@@ -4,6 +4,7 @@
 #   test-mysql  后端测试 + 迁移往返(MySQL 8.4 service)
 #   e2e         前端单元测试 + 生产构建(warning 即失败)+ Playwright
 #   scaffold    bb new-module 生成一个模块后,整套检查、测试与生成的 E2E 都要通过
+#   mobile      ClojureDart 移动端:编译(= 类型检查)+ .cljd 单元测试
 name: CI
 
 on:
@@ -145,3 +146,26 @@ jobs:
             test-results/
             backend.log
           retention-days: 7
+
+  # 移动端是独立工程(mobile/ 有自己的 deps.edn 与 pubspec.yaml),所以不进 bb ci:
+  # 后端与网页端的门禁不应该要求装 Flutter。这里单独一个 job,只依赖 JDK + Clojure CLI + Flutter。
+  mobile:
+    name: 移动端(ClojureDart)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - uses: subosito/flutter-action@v2
+        with:
+          # 与 mobile/pubspec.yaml 的 environment: sdk 以及本地开发用的版本一致;
+          # 升级时同步改这里,并跑一遍 bb mobile:compile + bb mobile:test。
+          flutter-version: "3.35.2"
+          cache: true
+      - name: 拉 Dart 依赖(平台工程目录不需要,编译只用 pubspec)
+        run: flutter pub get
+        working-directory: mobile
+      - name: 编译(clj -M:cljd compile 就是移动端的类型检查器)
+        run: bb mobile:compile
+      - name: 单元测试(cljd.test,不连后端)
+        run: bb mobile:test

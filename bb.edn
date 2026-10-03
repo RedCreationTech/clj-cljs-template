@@ -5,6 +5,7 @@
  :tasks
  {:requires ([tasks.dev :as dev]
              [tasks.lint :as lint]
+             [tasks.mobile :as mobile]
              [tasks.narrate :as narrate]
              [tasks.tour :as tour]
              [tasks.util :as u]
@@ -27,6 +28,24 @@
   rename           {:doc  "把 com.ruoyi / ruoyi 改成你的命名空间与项目名:bb rename com.acme.myapp myapp"
                     :task (do (require 'tasks.rename)
                               ((resolve 'tasks.rename/rename!) *command-line-args*))}
+
+  ;; ── 移动端(ClojureDart + Flutter,mobile/ 独立工程,不进 bb ci)──
+  mobile:doctor    {:doc  "检查移动端工具链:flutter/clojure/xcode、平台目录、macOS 出站网络权限"
+                    :task (mobile/doctor!)}
+  mobile:create    {:doc  "生成平台工程目录(默认 macos,可加 android ios …)并补齐 macOS 网络权限:bb mobile:create macos"
+                    :task (mobile/create! *command-line-args*)}
+  mobile:compile   {:doc  "clj -M:cljd compile:移动端唯一的静态检查(CI 用它)"
+                    :task (mobile/compile!)}
+  mobile:run       {:doc  "编译并前台运行(改 .cljd 自动热重载);接口地址默认本机后端,MOBILE_DART_DEFINES 可整体覆盖"
+                    :task (mobile/run-app!)}
+  mobile:test      {:doc  "跑 mobile/test 下的 .cljd 单元测试"
+                    :task (mobile/test! *command-line-args*)}
+  mobile:web       {:doc  "编译网页版并部署到 resources/public/mobile(录屏/演示,同源 /api)"
+                    :task (mobile/web!)}
+  video:mobile     {:doc  "录制 tests/e2e/mobile 的四段移动端分镜:重编网页版 → 起 3210 录屏后端(独立库)→ 录制 → 合成 target/mobile-tour/mobile.mp4 → 配旁白(--compose-only 只重合成,--no-narrate 不出音轨)"
+                    :task (mobile/video! *command-line-args*)}
+  mobile:clean     {:doc  "删除移动端构建产物(build/、.dart_tool/、lib/cljd-out 等)"
+                    :task (mobile/clean!)}
 
   ;; ── 测试 ──────────────────────────────────────────────
   test             {:doc  "后端测试(独立的 test.db;额外参数传给 test-runner,如 -n com.ruoyi.web.handler-test)"

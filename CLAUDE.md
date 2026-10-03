@@ -3,7 +3,7 @@
 本文件是 AI 编码助手的入口说明。**权威、详细的项目约定见同目录下的 [`AGENTS.md`](./AGENTS.md)**;本文件仅作指针与快速上手,避免两处重复维护。
 
 ## 权威指令
-- 全部项目约定、前端组件规范、antd 常见坑、数据库双库兼容、热重载与构建流程:见 [AGENTS.md](./AGENTS.md)。
+- 全部项目约定、前端组件规范、antd 常见坑、数据库双库兼容、热重载与构建流程、移动端(ClojureDart)纪律:见 [AGENTS.md](./AGENTS.md);移动端的目录分层与踩坑清单另见 [mobile/README.md](./mobile/README.md)。
 - 项目背景、技术栈、模块与 API 概览、新增业务模块步骤:见 [README.md](./README.md)。
 - 架构(C4 模型:Context / Container / Component / Code + 动态与部署视图):见 [docs/architecture/c4-model.org](./docs/architecture/c4-model.org)。新增模块或改动组件装配后,同步更新该文档对应小节。
 
@@ -20,6 +20,13 @@ bb e2e                    # Playwright(需后端已在 3000 运行)
 bb ci                     # 提交前:lint(clj-kondo + 迁移 + 规模约束)+ fmt:check + test + test:cljs
 bb fmt                    # cljfmt 自动格式化
 bb new-module <名称> --label 中文名 --fields "title:string:required:标题,..."   # 生成 CRUD 模块
+
+# 移动端(可选,ClojureDart + Flutter;独立工程,不在 bb ci 里)
+bb mobile:doctor            # 查工具链 / 平台目录 / macOS 出站网络权限
+bb mobile:create            # flutter create 生成平台工程目录(幂等)+ cljd init
+bb mobile:compile           # = 移动端的静态检查(.cljd 不进 clj-kondo)
+bb mobile:test              # .cljd 单元测试(不需要后端)
+bb mobile:run               # 编译并热重载运行;接口地址用 --dart-define
 ```
 
 ## Clojure 编辑约定

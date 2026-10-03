@@ -1,0 +1,36 @@
+(ns ruoyi.model
+  "应用状态的装配点:app-db 的初值 + 一次性的 register!。
+
+   整个应用只有这一份状态(re-dash 的 app-db 是一个普通 Clojure map),
+   改它只走事件,读它只走订阅 —— 与网页端 re-frame 的 app-db 同一个纪律。
+   局部 UI 状态(文本框焦点、动画)不属于这里,交给 Flutter 自己的 controller。"
+  (:require [hti.re-dash.core :as rd]
+            [ruoyi.config :as config]
+            [ruoyi.events :as events]
+            [ruoyi.fx :as fx]
+            [ruoyi.subs :as subs]))
+
+(def initial-db
+  "app-db 的形状就是这一份数据,新增字段先在这里落地,
+   免得某处 (get-in db […]) 因为字段缺失而拿到 nil,又查不出为什么。"
+  {:route :login
+   :token nil
+   :profile nil
+   :permissions #{}
+   :notice {:msg nil :seq 0}
+   :theme {:dark? false}
+   :login {:pending? false :msg nil}
+   :posts {:page 1 :size config/page-size :rows [] :total 0 :pending? false :msg nil}})
+
+(defn register!
+  "在 main 里调用一次:先登记处理器,再把初值灌进 app-db。
+   顺序有讲究——处理器必须在第一帧订阅之前装好,否则视图订阅不到任何东西。
+
+   AppDB(re-dash 的默认数据库)由库自己注册在 :db 这个 id 上,不需要 reg-database;
+   初值走一条自己的事件,比依赖库内部的 :re-dash/initialize-db 更稳。"
+  []
+  (rd/reg-event-db :app/initialize-db (fn [_ _] initial-db))
+  (fx/register!)
+  (events/register!)
+  (subs/register!)
+  (rd/dispatch-sync [:app/initialize-db]))

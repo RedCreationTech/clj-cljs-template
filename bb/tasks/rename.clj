@@ -6,11 +6,16 @@
    [clojure.string :as str]
    [tasks.util :as u]))
 
-(def ^:private text-exts #{"clj" "cljs" "cljc" "edn" "md" "org" "html" "svg" "sh" "js" "mjs" "json" "sql" "xml" "yml" "yaml" "py"})
+(def ^:private text-exts #{"clj" "cljs" "cljc" "cljd" "dart" "edn" "md" "org" "html" "svg" "sh" "js" "mjs" "json" "sql" "xml" "yml" "yaml" "py"})
 (def ^:private text-names #{"Dockerfile" "Makefile" ".gitignore"})
-(def ^:private skip-dirs #{"node_modules" ".git" "target" ".shadow-cljs" ".cpcache" ".clj-kondo/.cache" ".lsp/.cache"})
-(def ^:private skip-paths #{"resources/public/js" "docs/training" "RUOYI_VUE_COMPARISON.md"})
-(def ^:private src-roots ["src/clj" "src/cljs" "test/clj" "env/dev/clj" "env/prod/clj" "env/test/clj"])
+;; 移动端只有 src/test 下的 .cljd、lib/main.dart、pubspec.yaml 与 deps.edn 需要改写:
+;; 平台工程目录与 Dart 构建产物都由 bb mobile:create 按 kit.edn 重新生成,改名时不碰。
+(def ^:private skip-dirs #{"node_modules" ".git" "target" ".shadow-cljs" ".cpcache" ".clj-kondo/.cache" ".lsp/.cache"
+                           "build" ".dart_tool" ".clojuredart" "cljd-out" ".plugin_symlinks" ".idea"})
+(def ^:private skip-paths #{"resources/public/js" "docs/training" "RUOYI_VUE_COMPARISON.md"
+                            "mobile/macos" "mobile/ios" "mobile/android" "mobile/linux" "mobile/windows" "mobile/web"})
+(def ^:private src-roots ["src/clj" "src/cljs" "test/clj" "test/cljs" "env/dev/clj" "env/prod/clj" "env/test/clj"])
+(def ^:private mobile-roots ["mobile/src" "mobile/test"])
 
 (defn- munge-seg [s] (str/replace s "-" "_"))
 (defn- ns->path [ns-name] (->> (str/split ns-name #"\.") (map munge-seg) (str/join "/")))
@@ -77,6 +82,12 @@
                                      (str "(def main-cls \"" (munge-seg new-ns) ".core\")"))))
     (when (not= old-path (:new-path ctx))
       (doseq [root src-roots] (move-tree! root old-path (:new-path ctx))))
+    ;; 移动端的命名空间就是项目名本身(ruoyi → myapp):上面的改写规则会把 (ns ruoyi.main)
+    ;; 变成 (ns myapp.main),目录必须跟着搬,否则 clj -M:cljd compile 找不到源文件。
+    (when (not= old-name new-name)
+      (doseq [root mobile-roots] (move-tree! root old-name new-name)))
     (println (str "\n完成。接着执行:\n"
-                  "  bb clean && bb test && npx shadow-cljs compile app\n"
+                  "  bb clean && bb lint && bb test && bb test:cljs\n"
+                  "  用了移动端再跑一遍:bb mobile:clean && bb mobile:compile && bb mobile:test"
+                  "(旧项目名的 Dart 产物不清掉会被重复跑)\n"
                   "  再改 src/cljs/" (:new-path ctx) "/frontend/config.cljs 里的 app-name / repo-url"))))

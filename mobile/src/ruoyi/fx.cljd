@@ -1,0 +1,43 @@
+(ns ruoyi.fx
+  "re-dash 的效果层:应用里唯一真正做 IO 的地方。
+
+   事件只描述「要发哪个请求、成功回哪个事件、失败回哪个事件」,
+   真正的 await 在这个效果里做,所以事件函数都是纯的、可以单元测试。
+
+   re-dash 的效果不会被 await(fire-and-forget),
+   所以异常必须在这里吃掉,否则失败会静默丢失、界面永远转圈。
+
+   ClojureDart 的坑:await 不能写在 let 的解构绑定里,
+   (let [{:keys [a b]} (await f)] …) 会直接编译失败(Faulty form),
+   要先 (let [result (await f) {:keys [a b]} result] …)。"
+  (:require [hti.re-dash.core :as rd]
+            [ruoyi.api :as api]))
+
+(def api-effect
+  "事件里用这个键声明一次接口调用,值是 {:request :ok :bad}。"
+  ::api)
+
+(defn- event-with
+  "把结果塞到事件向量尾部:[event-id result],re-dash 的 dispatch 收的正是这个向量。"
+  [event-id result]
+  (-> [] (conj event-id) (conj result)))
+
+(defn- perform!
+  [{:keys [request ok bad]}]
+  ;; api/call 是异步的(内部 await 了 http),这里必须 await,
+  ;; 否则拿到的是 Future,:ok?/:msg 全是 nil,界面永远转圈。
+  (let [result (await (api/call request))
+        {:keys [ok? error msg]} result]
+    (case error
+      :unauthorized (rd/dispatch [:auth/session-expired msg])
+      (if ok?
+        (rd/dispatch (event-with ok result))
+        (do (rd/dispatch (event-with bad result))
+            (when (= :forbidden error)
+              (rd/dispatch [:ui/notify msg])))))))
+
+(defn register!
+  "登记效果。所有 reg-* 都要放在被调用的 register! 里,
+   否则 Dart 的树摇会把这些没人显式引用的处理函数删掉。"
+  []
+  (rd/reg-fx api-effect perform!))

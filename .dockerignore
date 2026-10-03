@@ -14,3 +14,6 @@ logs
 test-results
 playwright-report
 docs
+
+# 移动端是独立工程(ClojureDart + Flutter),uberjar 镜像不需要它
+mobile

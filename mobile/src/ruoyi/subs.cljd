@@ -1,0 +1,37 @@
+(ns ruoyi.subs
+  "订阅层:页面只通过这里读 app-db,不直接认字段路径。
+   订阅函数是纯函数,派生计算(总页数、每页区间)也放这里,视图里不写算法。"
+  (:require [hti.re-dash.core :as rd]
+            [ruoyi.config :as config]
+            [ruoyi.theme :as theme]))
+
+(defn- paging-of
+  "把 posts 的分页状态收成一个 map,视图一次订阅拿全。
+   总页数在这里算:ClojureDart 里没有 Math/ceil,用整数上取整的写法。"
+  [db]
+  (let [p (:posts db)
+        size (:size p config/page-size)
+        total (:total p 0)]
+    {:page (:page p 1)
+     :size size
+     :total total
+     :total-pages (int (/ (+ total size -1) size))
+     :pending? (:pending? p false)
+     :msg (:msg p)}))
+
+(defn register!
+  "登记订阅。同样必须在被调用的 register! 里。"
+  []
+  (rd/reg-sub :app/route (fn [db _] (:route db :login)))
+  (rd/reg-sub :auth/signed-in? (fn [db _] (some? (:token db))))
+  (rd/reg-sub :ui/profile (fn [db _] (:profile db)))
+  (rd/reg-sub :ui/permissions (fn [db _] (:permissions db #{})))
+  (rd/reg-sub :ui/notice (fn [db _] (:notice db)))
+  ;; 主题开关是 app-db 里的数据,配色和 ThemeData 都由它派生:视图只订这两个,
+  ;; 不认识具体色值,也不自己造 ThemeData。
+  (rd/reg-sub :ui/dark? (fn [db _] (boolean (get-in db [:theme :dark?]))))
+  (rd/reg-sub :ui/palette (fn [db _] (theme/palette-of (boolean (get-in db [:theme :dark?])))))
+  (rd/reg-sub :ui/theme (fn [db _] (theme/theme-for (boolean (get-in db [:theme :dark?])))))
+  (rd/reg-sub :login/state (fn [db _] (or (:login db) {:pending? false :msg nil})))
+  (rd/reg-sub :posts/rows (fn [db _] (:rows (:posts db) [])))
+  (rd/reg-sub :posts/paging (fn [db _] (paging-of db))))

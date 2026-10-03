@@ -28,7 +28,7 @@ runs:
           ~/.m2/repository
           ~/.gitlibs
           ~/.deps.clj
-        key: clj-${{ runner.os }}-${{ hashFiles('deps.edn', 'shadow-cljs.edn', 'bb.edn') }}
+        key: clj-${{ runner.os }}-${{ hashFiles('deps.edn', 'shadow-cljs.edn', 'bb.edn', 'mobile/deps.edn') }}
         restore-keys: clj-${{ runner.os }}-
 
     - if: inputs.node == 'true'
