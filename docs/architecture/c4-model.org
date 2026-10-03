@@ -17,9 +17,9 @@ System Context(L1)→ Container(L2)→ Component(L3)→ Code(L4),再补充动态
 所有 ~#+begin_src~ 代码块都可以执行:
 - ~mermaid~ 块由 ob-mermaid 渲染成图(用 flowchart / sequence / ER 记 C4 元素:方框标 ~[Container: 技术]~ ,深蓝=人,蓝=系统/容器,浅蓝=组件,灰=外部;不用 mermaid 实验性的 C4 语法,它在组件数较多时布局会互相压盖),导出 HTML/PDF 时自动生成;
 - ~sh~ / ~clojure~ 块是"论断即测试":在仓库根目录 ~C-c C-c~ 直接运行,输出即证据,用来保证文档与代码不脱节。
-所有块默认 ~:eval never-export~ :导出 HTML/PDF 时*不*执行任何块(用已缓存的 ~#+RESULTS:~ 图片与代码原文),避免导出时弹出十几次确认、跑几分钟测试;需要刷新证据时在块上 ~C-c C-c~ 手动执行。没有会产生副作用的块(除标 ~:eval never~ 的部署命令)。
+所有块默认 ~:eval never-export~ :导出 HTML/PDF 时 *不* 执行任何块(用已缓存的 ~#+RESULTS:~ 图片与代码原文),避免导出时弹出十几次确认、跑几分钟测试;需要刷新证据时在块上 ~C-c C-c~ 手动执行。没有会产生副作用的块(除标 ~:eval never~ 的部署命令)。
 
-*维护约定*:新增业务模块、改动 ~system.edn~ 装配、改动中间件链或路由聚合时,必须同步更新本文对应小节(见第 10 节的清单)。
+*维护约定*:新增业务模块、改动 ~system.edn~ 装配、改动中间件链或路由聚合时,必须同步更新本文对应小节(见第 10 节的清单)。改动 ~mobile/~ (新增 App 页面、换通讯格式、换状态库)时同样要更新 §2/§3/§5.3/§8.3/§9.8/§11 与 ADR-013 —— 移动端不是"另一份文档的事",它是这个系统的第二个容器。另外 ~docs/index.html~ 与 ~docs/training/*.html~ 是手写页面,不是本文的导出物:改了热重载助手名、 ~frontend/api/*~ 命名空间或依赖版本时也要一起改它们( ~bb rename~ 会跳过 ~docs/training~ ,课程页因此滞后过一整年,见 §13 #27)。本文自己也会滞后: ~env/dev/clj/user.clj~ 的助手、 ~bb/tasks/new_module.clj~ 的登记点一旦增删,§4.1 / §6.1 / §6.2 / §9.5 / §10.1 要同步改(2026-10-03 一次就清出 5 处写着已删除助手的句子)。
 #+END_QUOTE
 
 * 0. 环境准备(babel 语言)
@@ -50,7 +50,7 @@ System Context(L1)→ Container(L2)→ Component(L3)→ Code(L4),再补充动态
 |------+-----------------------------------------------+----------|
 | L1 System Context | 系统给谁用、和哪些外部系统打交道 | §2 |
 | L2 Container | 系统由哪些可独立运行/部署的单元组成 | §3 |
-| L3 Component | 每个容器内部的主要模块及其职责、依赖 | §4(后端)§5(前端) |
+| L3 Component | 每个容器内部的主要模块及其职责、依赖 | §4(后端)§5(前端与移动端) |
 | L4 Code | 关键命名空间、目录约定、一个模块的垂直切片 | §6 |
 | Dynamic | 关键场景下组件如何协作(登录、CRUD、导航、启动) | §7 |
 | Deployment | 开发/生产环境下容器落在什么基础设施上 | §8 |
@@ -64,17 +64,22 @@ System Context(L1)→ Container(L2)→ Component(L3)→ Code(L4),再补充动态
 
 模板本身是一个 *单体管理后台*:浏览器中的管理员通过 SPA 操作;后端只依赖一个关系数据库;开发者通过 nREPL 与运行中的系统交互。没有其它必需的外部系统——这正是模板"干净"的含义,业务外部依赖(短信、对象存储、第三方 API 等)由派生项目按需加入,并在此图追加 ~System_Ext~ 。
 
+需要 App 时,可选的 *移动端* ( ~mobile/~ )是同一个系统的另一个入口:它不新增任何服务端能力,只是把同一套 ~/api~ 契约画在手机/桌面上。它是独立工程(自己的 ~deps.edn~ 与 ~pubspec.yaml~),不要 App 的派生项目把 ~mobile/~ 整个删掉即可,本图其余部分与全部后端/网页端门禁都不受影响。
+
 #+begin_src mermaid :file img/c4-context.svg :exports results
 flowchart TB
-  admin(["管理员 / 业务用户<br/>[Person]<br/>在浏览器中登录,管理用户、角色、菜单、字典、任务等"]):::person
+  admin(["管理员 / 业务用户<br/>[Person]<br/>在浏览器中登录,管理用户、角色、菜单、字典、任务等<br/>需要时也在手机上用移动端 App"]):::person
   dev(["开发者<br/>[Person]<br/>本地运行、nREPL 热重载、bb new-module 生成模块、查看 Swagger"]):::person
   browser["浏览器<br/>[External]<br/>Chrome / Edge / Safari,运行 SPA"]:::ext
   subgraph SYS["clojure-template"]
     app["管理后台<br/>[Software System]<br/>Clojure(Kit / Integrant / Reitit / Undertow)<br/>+ ClojureScript(Reagent / re-frame / antd)"]:::system
+    mobile["移动端 App(可选)<br/>[Software System]<br/>ClojureDart(Clojure → Dart)+ Flutter Material + re-dash<br/>独立工程 mobile/,打同一套 /api 接口"]:::system
   end
   db[("关系数据库<br/>[External System]<br/>SQLite(默认,单文件)或 MySQL 8")]:::ext
   admin -- 使用 --> browser
+  admin -- "使用(可选)" --> mobile
   browser -- "HTTPS:静态资源 + REST/JSON(/api/*)" --> app
+  mobile -- "REST/JSON(/api/*)<br/>Bearer JWT" --> app
   dev -- "nREPL :7000 热重载;Swagger UI /api" --> app
   app -- "读写 sys_* 表;启动时自动迁移<br/>[JDBC / HikariCP]" --> db
   classDef person fill:#08427b,stroke:#052e56,color:#fff
@@ -88,6 +93,7 @@ flowchart TB
 *边界说明*
 - 同一个 JVM 进程同时提供 API 与前端静态文件(同端口 3000),不需要独立的 Web 服务器;生产可在前面放 Nginx 做 TLS/反向代理(见 §8)。
 - 数据库是唯一的状态存储:会话、验证码、登录失败计数、续期宽限都在数据库( ~sys_online~ / ~sys_kv~ ),多实例部署共享,不引入 Redis;只有 Quartz 调度与缓存监控的演示数据在各实例内存里(见 §9.7)。
+- 移动端 *不引入新的服务端容器*:它是同一个 ~~/api~ 上的第二个客户端,没有专用路由、没有新的响应信封;它也是唯一不进 ~bb ci~ 的容器(见 §11 与 ADR-013)。
 
 * 3. Containers(L2)
 
@@ -98,14 +104,18 @@ flowchart TB
   subgraph SYS["clojure-template"]
     direction TB
     spa["Web 前端 (SPA)<br/>[Container: ClojureScript 1.12, shadow-cljs 3.5,<br/>Reagent 2.0, re-frame 1.4, React 19.3, antd 6.6]<br/>登录、布局(侧边菜单 / 多 Tab)、系统管理 / 监控 / 工具页面<br/>编译产物 resources/public/js/app.js"]:::container
+    mobile["移动端 App(可选)<br/>[Container: ClojureDart 0.9 → Dart, Flutter 3.35 Material,<br/>hti/re-dash 1.2, package:http]<br/>登录 + 岗位列表;独立工程 mobile/,自己的 deps.edn 与 pubspec.yaml<br/>演示形态:bb mobile:web → resources/public/mobile,由后端在 /mobile/ 提供"]:::container
     backend["后端服务 (JVM)<br/>[Container: JDK 21, Clojure 1.12.6, Kit 1.0,<br/>Integrant, Undertow, Reitit 0.11, Ring 1.15]<br/>REST API(/api)、静态资源、SPA fallback、Swagger、Quartz 调度<br/>端口 3000"]:::container
     nrepl["nREPL 服务<br/>[Container: kit-nrepl]<br/>开发期热重载入口;端口 7000,仅绑定 127.0.0.1"]:::container
     db[("数据库<br/>[Container: SQLite 文件 ruoyi.db 或 MySQL]<br/>sys_user / role / menu / dept / post / dict / config /<br/>notice / log / job / online / form_template")]:::container
     fs["本地文件<br/>[Container: 文件系统]<br/>上传目录(通用上传 / 头像)、日志 log/、SQLite 文件"]:::container
   end
   admin -- "访问 [HTTPS]" --> spa
+  admin -- "访问(手机 / 桌面)[HTTP]" --> mobile
   spa -- "REST/JSON,Bearer JWT [HTTPS]" --> backend
+  mobile -- "REST/JSON,Bearer JWT [HTTP]" --> backend
   backend -. "提供 index.html 与 js/css" .-> spa
+  backend -. "提供 /mobile/(演示)" .-> mobile
   dev -- "(user/rd) (user/rr) … [nREPL]" --> nrepl
   nrepl -. 同一 JVM 内 .- backend
   backend -- "conman/HugSQL + Migratus [JDBC]" --> db
@@ -124,6 +134,7 @@ flowchart TB
 | 后端服务 | JDK 21, Clojure 1.12.6, Kit 1.0, Integrant, Undertow, Reitit 0.11, Ring 1.15, Muuntaja 0.6, Malli 0.20, Buddy 3, conman/HugSQL, Migratus, Quartz 2.5, HikariCP 7, sqlite-jdbc 3.53, MySQL Connector/J 26.7 | ~com.ruoyi.core/-main~;装配见 ~resources/system.edn~ | 开发 ~bb dev~ / ~bb backend~ ;生产 ~bb uberjar~ 后 ~java -jar~ (prod 先校验密钥) |
 | Web 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0(函数组件 + Hooks), re-frame 1.4, bidi, cljs-ajax, antd 6.6, React 19.3 | ~com.ruoyi.frontend.app/init~;构建见 ~shadow-cljs.edn~ | 开发 ~bb dev~ (watch);生产 ~bb release~ (warning 即失败) |
 | nREPL | kit-nrepl(Integrant 组件 ~:nrepl/server~) | ~NREPL_PORT~ / ~NREPL_HOST~ | 随后端启动;生产可通过环境变量改端口/绑定 |
+| 移动端 App(可选) | ClojureDart 0.9.20260917(Clojure → Dart,锁 git tag/sha), Flutter 3.35(Material), hti/re-dash 1.2.1, package:http 1.6 | 入口 ~ruoyi.main~-main;接口地址与超时由编译期 ~--dart-define~ 注入( ~mobile/src/ruoyi/config.cljd~ );依赖表 ~mobile/deps.edn~ + ~mobile/pubspec.yaml~ 与根工程无关 | 开发 ~bb mobile:run~ ;静态检查 ~bb mobile:compile~ (就是编译器本身);单测 ~bb mobile:test~ ;演示网页 ~bb mobile:web~ ;CI 单独一个 mobile job, *不在* ~bb ci~ 里(ADR-013) |
 | 数据库 | SQLite(开发默认)/ MySQL 8 | ~JDBC_URL~ + ~MIGRATION_DIR~ | 启动时 ~migrate-on-init?~ 自动迁移 |
 
 ** 3.2 可执行:Integrant 组件即容器内的"装配清单"
@@ -230,7 +241,7 @@ flowchart LR
 - ~operlog~ 在路由器 *外层*,看不到路由级 ~wrap-jwt-auth~ 写入的 ~:identity~,所以它自己从 ~Authorization~ 头解析 JWT 取操作人(缺失/无效记为 ~anonymous~);只记录 ~/api/*~ 下的非 GET 请求,跳过 ~/api/auth/login~ ~/api/health~;写日志失败只打 warn,不影响业务响应。
 - 认证与鉴权挂在 API 顶层、由 *路由数据* 驱动(ADR-010): ~wrap-jwt-auth~ 对所有 ~/api~ 请求解析令牌(有令牌才查会话), ~authorize~ 是 reitit ~:compile~ 中间件,只包装声明了 ~:auth? true~ 或 ~:perms~ 的路由,未声明的匿名接口零开销。 ~/system~ 、 ~/tool~ 、 ~/common~ 路由组与 ~/auth/refresh~ 、 ~/auth/getInfo~ 声明 ~:auth? true~;具体接口在方法上声明 ~:perms "system:user:add"~ (集合表示满足任一,如用户表单的角色/岗位/部门下拉);子路由可用 ~:auth? false~ 覆盖(头像图片)。 ~/api/health~ 、 ~/api/auth/config~ 、 ~/api/auth/login~ 、 ~/api/auth/register~ (默认关闭)、验证码可匿名访问, ~/api/auth/logout~ 不强制登录。
 - 鉴权在参数校验 *之前* :未登录 / 无权限的请求先得到 401 / 403,而不是参数错误;异常中间件在认证之外,认证、鉴权、解码抛出的异常同样转成 ~{:code :msg}~ (5xx 不回传异常消息与 ex-data)。
-- dev 环境下 ~router/core~ 返回一个每次请求都重新构建路由表的函数,配合 ~(user/rroutes)~ 实现路由热重载;prod 下路由表只构建一次。
+- dev 环境下 ~router/core~ 返回一个每次请求都重新构建路由表的函数,所以改完路由数据只要 ~(user/rd)~ 重载到命名空间就生效(组件结构变了用 ~(user/rr)~ );prod 下路由表只构建一次。
 - ~ring-defaults~ 的 cookie session 已配置但业务代码不使用 session(API 全靠 Bearer);CSRF 关闭。
 
 可执行:验证中间件包裹顺序与"哪些路由组要求登录"
@@ -265,9 +276,11 @@ clojure -M:dev -e '
 grep -n "defmethod ig/init-key" src/clj/com/ruoyi/domain/*.clj src/clj/com/ruoyi/web/*.clj src/clj/com/ruoyi/web/routes/api.clj src/clj/com/ruoyi/integrant/*.clj
 #+end_src
 
-* 5. Components(L3)— 前端
+* 5. Components(L3)— 前端(Web SPA 与移动端 App)
 
 前端是标准的 re-frame 单向数据流: ~页面组件 → dispatch 事件 → 事件处理器(更新 app-db / 触发 :api/* 效果)→ api 层发 HTTP → 成功/失败事件写回 app-db → 订阅驱动重渲染~ 。路由用 bidi 匹配 URL,与 ~history.pushState~ 手动集成(不依赖 accountant)。
+
+移动端(§5.3、§5.4)是同一条数据流的 Dart 版本:状态同样只有一份 app-db,写只走事件、读只走订阅,IO 只在一个效果里 —— 换的只是宿主(Flutter Material 而不是 antd)与语言( ClojureDart 编译成 Dart)。
 
 #+begin_src mermaid :file img/c4-frontend-components.svg :exports results
 flowchart TB
@@ -334,6 +347,82 @@ echo "subs:       $(grep -rho 'reg-sub' src/cljs | wc -l)"
 echo "routes:     $(grep -c '" :' src/cljs/com/ruoyi/frontend/router.cljs)"
 #+end_src
 
+** 5.3 Components(L3)— 移动端(ClojureDart)
+
+移动端一共 12 个命名空间、785 行 ~.cljd~ ,但它把 §5.1 的三条纪律一条不少地复刻了一遍:一份 app-db、写只走事件、读只走订阅、IO 只在一个效果里。换掉的只是宿主(Flutter Material 而不是 antd)和语言(ClojureDart 编译成 Dart),再加三条 ClojureDart 特有的硬约束(见 §5.4)。
+
+#+begin_src mermaid :file img/c4-mobile-components.svg :exports results
+flowchart TB
+  backend["后端 /api<br/>[Container: Reitit]"]:::container
+  subgraph APP["mobile/src/ruoyi(ClojureDart → Dart)"]
+    direction TB
+    model["model<br/>[app-db 初值 + 一次性 register!]<br/>initial-db:route / token / profile / permissions /<br/>notice / theme / login / posts<br/>顺序 fx → events → subs,处理器必须在第一帧订阅之前装好"]:::comp
+    main["main<br/>[Flutter root]<br/>(model/register!) → runApp<br/>MaterialApp 的 theme 订自 :ui/theme,切主题不重建页面树"]:::comp
+    cfg["config<br/>[编译期常量]<br/>base-url / timeout-ms 来自 --dart-define,page-size = 20"]:::comp
+    events["events<br/>[rd/reg-event-fx / reg-event-db]<br/>:auth/login · :auth/logged-in · :auth/session-expired · :auth/logout<br/>:profile/load · :posts/load · :posts/change-page · :posts/refresh<br/>:ui/notify · :ui/toggle-theme"]:::comp
+    subs["subs<br/>[rd/reg-sub]<br/>:app/route · :auth/signed-in? · :ui/profile · :ui/permissions<br/>:ui/notice · :ui/dark? · :ui/palette · :ui/theme<br/>:login/state · :posts/rows · :posts/paging<br/>(派生计算在这里做:ClojureDart 没有 Math/ceil)"]:::comp
+    fx["fx<br/>[rd/reg-fx ::api]<br/>应用里唯一 await 的地方;效果不会被 await,异常必须在这吃掉<br/>:unauthorized 一律派发 :auth/session-expired"]:::comp
+    api["api<br/>[package:http]<br/>headers(JSON + Bearer)· call 永不抛异常<br/>result 归类 :unauthorized / :forbidden / :business / :server / :network<br/>超时 config/timeout-ms"]:::comp
+    json["json<br/>[dart:convert]<br/>encode(关键字键 → 字符串)· ->edn(字符串键递归转关键字)"]:::comp
+    theme["theme<br/>[纯函数]<br/>palette-of / theme-for:亮 / 暗两套同一组语义键"]:::comp
+    views["views/*<br/>[Flutter widget]<br/>login(用户名、密码、错误提示) · shell(顶栏 + 提示条 + 主题开关 + 登出)<br/> · posts(服务端分页列表 + 刷新 + 翻页)"]:::comp
+  end
+  main --> model
+  main --> views
+  main -- "订 :ui/theme" --> subs
+  model --> fx
+  model --> events
+  model --> subs
+  views -- dispatch --> events
+  views -- subscribe --> subs
+  events -- 更新 --> model
+  events -- "{:api {:request :ok :bad}}" --> fx
+  fx -- "await (api/call …)" --> api
+  api -- "JSON 文本两头换算" --> json
+  api -- 取地址与超时 --> cfg
+  api -- "HTTP JSON,Authorization: Bearer" --> backend
+  subs -- 派生配色 --> theme
+  classDef container fill:#438dd5,stroke:#2e6295,color:#fff
+  classDef comp fill:#85bbf0,stroke:#5d82a8,color:#000
+#+end_src
+
+#+RESULTS:
+[[file:img/c4-mobile-components.svg]]
+
+与网页端的逐项对应(同一套契约,不同的宿主):
+
+| 网页端 | 移动端 | 差异 |
+|------+------+------|
+| ~db.cljs~ 的 app-db 初值 | ~model.cljd~ 的 ~initial-db~ | 键更少:没有 ~:tabs~ / ~:layout-settings~ / ~:i18n~ ;新增字段必须先在这里落地 |
+| ~events/*.cljs~(按领域拆分) | ~events.cljd~(一个文件) | re-dash 没有 ~:dispatch-n~ ,要连着做两件事就串成事件链( ~:auth/logged-in → :app/session-opened → :profile/load~ ) |
+| ~subs/*.cljs~ | ~subs.cljd~ | 同样"派生计算放订阅",但没有 reaction/追踪粒度,靠 Flutter 的 ~Consumer~ 重建 |
+| ~api/transport.cljs~ | ~api.cljd~ + ~fx.cljd~ | transport 的 *过半自动续期* 与 *统一 :api/error 弹窗* 在移动端没有对应物:401 只派发 ~:auth/session-expired~ ,其它失败由各自的 bad 事件派发 ~:ui/notify~ |
+| ~components/pagination~ | ~:posts/paging~ 订阅 + ~views/posts.cljd~ | 只有上一页/下一页与「第 n / 共 m 页」,没有页码选择器与每页条数 |
+| ~storage.cljs~(localStorage) | 无 | 令牌、主题、查询条件都不跨启动保留(§13 #21) |
+| ~i18n.cljs~ | 无 | 界面只有中文,与 §13 #14 同源 |
+| antd + ~--app-*~ CSS 变量 | Flutter ~ThemeData~ | 主题走 ~palette-of~ / ~theme-for~,两边互不相干;~:theme :dark?~ 这个布尔的角色和网页端的 ~data-theme~ 一样 |
+
+** 5.4 移动端的关键设计点
+
+- *状态只有一份*: ~mobile/src/ruoyi/model.cljd~ 的 ~initial-db~ 是唯一的状态形状;文本框控制器、动画这类局部 UI 状态不进 app-db,交给 Flutter 自己的 controller —— 与网页端「全局用 re-frame、局部用 Hooks」是同一个分工。
+- *通讯是 JSON,不是 transit*: ~api.cljd~ 固定发 ~accept~ / ~content-type = application/json~ 。理由与实测数字在 ADR-013;ClojureDart 侧本来也没有 transit 库,而 ~json.cljd~ 的 ~dart:convert~ + ~->edn~ 是 69 行、有单元测试的代码。
+- *关键字键靠 ~->edn~ 补回来*: Dart 的 ~Map~ / ~List~ 既不能 ~get-in~ 也没有结构共享,直接放进 app-db 会让所有更新代码变味,所以响应一进来就整体转成 Clojure 数据,下游 (~:code resp) 、 (~get-in db [:posts :page]) 都是普通写法。
+- *配置只走 ~--dart-define~*: ~RUOYI_API_BASE_URL~ / ~RUOYI_REQUEST_TIMEOUT_MS~ 在 ~config.cljd~ 里以 *字面量键* 的 ~String.fromEnvironment~ 读取。包一层函数把键当参数传进去,编译期就拿不到值,会静默用回默认地址(实测踩过)。
+- *注册必须写在会被调用的 ~register!~ 里*: Dart 的树摇会把顶层从未显式引用的 ~reg-event-*~ / ~reg-sub~ / ~reg-fx~ 直接删掉,表现是运行期「Event not found」而不任何编译错误。
+- *三条最容易踩的运行期坑* (只在真机/桌面出现,浏览器里跑网页版看不出来):① 关键字读不到 Dart 对象字段,要写 (~.statusCode resp) 并带 ~^http/Response~ 类型提示;② 内部 ~await~ 过的函数就是异步函数,调用方漏 ~await~ 拿到 ~Future~ 、解构出来全是 ~nil~ ;③ ~await~ 不能写在 ~let~ 的解构绑定里,编译失败但报错指向入口命名空间。完整清单见 ~mobile/README.md~ 。
+- *平台工程目录不入库*: ~macos/~ / ~android/~ 等由 ~bb mobile:create~ 重新生成;macOS 必须补 ~com.apple.security.network.client~ 出站权限,否则每个请求都是 ~SocketException: Operation not permitted~ ~bb mobile:doctor~ 负责报告。
+- *规模约束对 ~.cljd~ 同样生效*: ~bb check~ 覆盖 ~mobile/src~ 与 ~mobile/test~ ,移动端靠命名空间拆分(config / api / json / fx / events / subs / theme / model / main / views)守住 ≤500 行 / ≤50 函数行。
+
+** 5.5 可执行:移动端规模与契约
+
+#+begin_src sh :exports both
+echo "命名空间: $(find mobile/src -name '*.cljd' | wc -l) 个 / $(find mobile/src -name '*.cljd' -exec cat {} + | wc -l) 行"
+echo "事件 $(grep -rho 'reg-event-\(db\|fx\)' mobile/src | wc -l) 个,订阅 $(grep -rho 'reg-sub' mobile/src | wc -l) 个,效果 $(grep -rho 'reg-fx' mobile/src | wc -l) 个"
+echo "顶层直接 reg-*(应为 0,树摇会删): $(grep -rn '^(rd/reg' mobile/src | wc -l)"
+echo "移动端源码里出现 transit 的次数(应为 0): $(grep -rni transit mobile/src | wc -l)"
+echo "--dart-define 注入项: $(grep -o '"RUOYI_[A-Z_]*"' mobile/src/ruoyi/config.cljd | sort -u | tr '\n' ' ')"
+#+end_src
+
 * 6. Code(L4)
 
 ** 6.1 目录与命名空间约定
@@ -349,8 +438,14 @@ echo "routes:     $(grep -c '" :' src/cljs/com/ruoyi/frontend/router.cljs)"
 | ~resources/sql/*.sql~ | HugSQL 查询(~-- :name~) | 两库通用语法;写时间用 ~:now~ (自动注入);库特定变体加后缀并在 Clojure 层选择 |
 | ~resources/migrations{,-sqlite}/~ | Migratus 迁移 | 两目录同名同步维护 |
 | ~env/{dev,prod}/clj/com/ruoyi/env.clj~ | 环境差异(dev 中间件、日志文案) | 通过 ~:extra-paths~ 选择 |
-| ~env/dev/clj/user.clj~ | REPL 助手: ~rd rm rroutes ra rr reset-db migrate~ | 新增领域命名空间时加进 ~reload-domain~ |
+| ~env/dev/clj/user.clj~ | REPL 助手短名字: ~rd ra rr rs q req~ ,另有 ~reset-db~ ~migrate~ | 待重载集合由 ~com.ruoyi.dev~ 按文件时间戳从源码派生;只有会换掉运行期身份的 ns 才登记进 ~com.ruoyi.dev/reload-exclusions~ ( ~bb lint:dev~ 双向检查) |
 | ~src/cljs/com/ruoyi/frontend/*~ | 见 §5 | 每个领域: ~api/x.cljs~ + ~events/x.cljs~ + ~pages/x.cljs~ (+ ~subs/~) |
+| ~mobile/deps.edn~ + ~mobile/pubspec.yaml~ | 移动端工程自己的依赖表(ClojureDart 锁 git tag/sha、re-dash;Flutter SDK 与 Dart 包) | 与根 ~deps.edn~ 完全独立;升级 ClojureDart 时 tag 与 sha 一起改,然后 ~bb mobile:compile~ |
+| ~mobile/src/ruoyi/*.cljd~ | 移动端: ~config~ / ~api~ / ~json~ / ~fx~ / ~events~ / ~subs~ / ~theme~ / ~model~ / ~main~ + ~views/*~ (见 §5.3) | ~reg-*~ 一律写在被调用的 ~register!~ 里;~await~ 不写在 ~let~ 解构里;≤500 / ≤50 行由 ~bb check~ 覆盖 |
+| ~mobile/test/ruoyi/*_test.cljd~ | 移动端单元测试(cljd.test,纯事件与 JSON 层,不连后端) | ~bb mobile:test~ ;不依赖 Flutter SDK |
+| ~macos/~ ~android/~ ~ios/~ ~linux/~ ~windows/~ ~web/~(在 ~mobile/~ 下) | 平台工程目录 | *不入库*,由 ~bb mobile:create~ 重新生成;~bb mobile:doctor~ 检查 macOS 出站网络权限 |
+| ~resources/public/mobile/~ | ~bb mobile:web~ 的产物,后端在 ~/mobile/~ 直接静态提供(录屏 / 演示用) | *不入库* (gitignore);同源打 ~/api~,不需要 ~--dart-define~ |
+| ~tests/e2e/mobile/*.spec.js~ + ~playwright.mobile.config.js~ | 移动端网页版的四段分镜用例,由 ~bb video:mobile~ 驱动 | 演示录像,不是常规门禁;~bb lint:e2e~ 同样检查这些文件 |
 | ~test/clj/com/ruoyi/**~ | clojure.test; ~test_utils.clj~ 提供启动测试系统、ring-mock 请求、登录 token 等 | 文件名 ~*_test.clj~ |
 | ~tests/e2e/*.spec.js~ | Playwright | 依赖已启动的后端(3000) |
 | ~bb.edn~ 、 ~bb/tasks/*~ | 工程任务(开发、测试、lint、改名、脚手架)与 ~scaffold/~ 代码模板 | 只依赖 babashka,跨平台;路径与命名空间从 ~kit.edn~ 读取 |
@@ -515,7 +610,8 @@ echo "MySQL: "; grep -h "CREATE TABLE" resources/migrations/*.up.sql        | se
 | 列表响应 | 分页接口 ~:data {:total n :rows [...]}~;树/全量接口 ~:data [...]~ 。前端 ~:xxx/set-list~ 同时接受两种形状 | ~controllers/system/user.clj~ ~list-users~; ~events/posts.cljs~ |
 | 分页参数 | 查询串 ~page~ / ~size~ (不是 pageNum/pageSize);后端转成 ~:page-num~ / ~:page-size~ → SQL ~LIMIT :page_size OFFSET :offset~ | AGENTS.md 第 11 条; ~infra.db/paginate-query~ |
 | 路径参数 | ~/:id~ 用 Malli ~PathId~ 校验为数字串,controller 再 ~parse-long~ | ~routes/system.clj~ |
-| 认证头 | ~Authorization: Bearer <jwt>~;JWT claims = ~{:user-id :user-name :roles(角色 id 列表) :exp}~,默认 24h | ~infra.security~; ~api/transport.cljs~ |
+| 认证头 | ~Authorization: Bearer <jwt>~;JWT claims = ~{:user-id :user-name :roles(角色 id 列表) :jti(会话 ID) :iat :exp(Unix 秒)}~,默认 720 分钟(~TOKEN_TTL_MINUTES~,§8.1);令牌能验签 *不等于* 会话有效,每个请求还要在 ~sys_online~ 打心跳 | ~infra.security~ ; ~api/transport.cljs~ ; ~mobile/src/ruoyi/api.cljd~ |
+| 适用的客户端 | 网页 SPA(~cljs-ajax~ / ~fetch~ )与移动端 App( ~package:http~ )打的是 *同一套* 契约:同样的信封、同样的 ~page~ / ~size~ 、同样的 snake_case 与时间字符串。后端不为移动端开专用路由,也不为它发明新信封 | ~api/transport.cljs~ ; ~mobile/src/ruoyi/api.cljd~ |
 | 字段命名 | 数据库与 JSON 均 snake_case(~user_name~),Clojure 内部关键字保持 ~:user_name~,不做 camelCase 转换 | 全部 controller / events |
 | 时间 | 字符串 ~yyyy-MM-dd HH:mm:ss~ (SQLite TEXT / MySQL TIMESTAMP 均按字符串读写) | 迁移文件 |
 | Swagger | 每个路由带 ~:summary~ / ~:description~ / ~:parameters~; ~/api/swagger.json~ + ~/api~ UI | ~routes/api.clj~ |
@@ -654,6 +750,41 @@ flowchart LR
 
 Integrant 按 ~#ig/ref~ 依赖自动排序; ~:app.system/job-scheduler~ 显式依赖 ~:db.sql/migrations~ 是为了保证 ~sys_job~ 表已存在。停止顺序相反(~ig/halt!~)。
 
+** 7.5 移动端:登录 → 取列表 → 会话失效
+
+移动端没有自己的接口,这张图的后半段就是 §7.1 与 §7.2 的同一条服务端链路,只是客户端从 re-frame 换成 re-dash:
+
+#+begin_src mermaid :file img/dyn-mobile.svg :exports results
+sequenceDiagram
+  autonumber
+  participant V as views/login · views/posts
+  participant E as events.cljd(纯函数)
+  participant X as fx.cljd(应用里唯一 await 的地方)
+  participant A as api.cljd(package:http + json.cljd)
+  participant API as 后端 /api(§7.1 §7.2 的中间件链)
+  V->>E: dispatch [:auth/login 用户名 密码]
+  E->>X: {:api {:request … :ok :auth/logged-in :bad :auth/login-failed}}
+  X->>A: await (api/call request)
+  A->>API: POST /auth/login(JSON,不带令牌)
+  API-->>A: {code 200, data {token expiresIn}}
+  A-->>X: {:ok? true :data {…}}(->edn 已把键转成关键字)
+  X->>E: dispatch [:auth/logged-in result]
+  E->>E: 存 :token、:route :posts,串事件链 :app/session-opened → :profile/load
+  E->>A: GET /auth/getInfo(Bearer)
+  API-->>A: {user, roles, permissions}
+  E->>A: GET /system/post?page=1&size=20(Bearer)
+  API-->>A: {code 200, data {rows, total}}
+  E->>V: app-db 的 :posts 更新 → :posts/paging 订阅驱动重绘
+  Note over V,API: 任何请求 401(令牌过期、被强退、空闲 30 分钟会话被清)<br/>→ fx 派发 :auth/session-expired → 令牌 / 身份 / 列表一次清干净并回登录页
+  Note over V,API: 业务失败(HTTP 200 + code 500)由 bad 事件派发 :ui/notify,<br/>显示后端的中文 msg,:dispatch-later 3 秒后自动收
+#+end_src
+
+#+RESULTS:
+[[file:img/dyn-mobile.svg]]
+
+- *与网页端的两处不同*:移动端没有在令牌过有效期一半时自动 ~POST /auth/refresh~ (长会话会在过期那一刻掉线),也没有读 ~/api/auth/config~ 走验证码流程(prod 默认开验证码时移动端登录会被后端拒绝,见 §13 #20)。
+- *演示与录屏* 走的是 ~bb mobile:web~ 编译出的网页版(同源 ~/api~,见 §8.3),不是 Dart 原生包;两条路径的 Dart 代码完全相同,只有宿主与地址注入方式不同。
+
 * 8. Deployment(部署视图)
 
 #+begin_src mermaid :file img/c4-deployment.svg :exports results
@@ -666,9 +797,13 @@ flowchart LR
     subgraph NODE["Node.js:bb dev → shadow-cljs watch app"]
       fe1["shadow-cljs 编译器<br/>增量编译 → resources/public/js"]:::container
     end
+    subgraph DART["ClojureDart:bb mobile:web(可选)"]
+      fe2["clj -M:cljd compile → flutter build web<br/>--base-href /mobile/ --no-web-resources-cdn<br/>产物 → resources/public/mobile"]:::container
+    end
     sqlite[("ruoyi.db<br/>SQLite 文件")]:::container
     be1 -- JDBC --> sqlite
     fe1 -. 写入 js/ .-> be1
+    fe2 -. "写入 /mobile/(演示)" .-> be1
   end
   subgraph PROD["生产主机 / 容器(Linux, JDK 21)"]
     direction TB
@@ -683,7 +818,11 @@ flowchart LR
   subgraph DBHOST["数据库服务器"]
     mysql[("MySQL 8<br/>myapp (utf8mb4)")]:::container
   end
+  subgraph PHONE["手机 / 平板 / 桌面(可选的移动端)"]
+    appm["Flutter 运行时(Dart AOT)<br/>bb mobile:run 开发;flutter build apk / macos 发布<br/>地址与超时由 --dart-define 在编译期固化"]:::container
+  end
   be2 -- "JDBC / HikariCP" --> mysql
+  appm -- "REST/JSON /api,Bearer JWT [HTTP]" --> rp
   classDef container fill:#438dd5,stroke:#2e6295,color:#fff
 #+end_src
 
@@ -731,6 +870,23 @@ docker build -t clojure-template .  # 先 bb release;多阶段:clojure:temurin-2
 docker run -e JWT_SECRET=… -e COOKIE_SECRET=… -p 3000:3000 clojure-template
 #+end_src
 
+** 8.3 移动端:构建、注入与演示形态
+
+上面那张环境变量表 *不适用于移动端*:移动端的地址与超时是 Dart 的编译期常量(~--dart-define~ ),改了必须重新编译;运行时改环境变量没有任何效果。
+
+| 目标 | 命令 | 产物 / 说明 |
+|------+------+-------------|
+| 静态检查 | ~bb mobile:compile~ | ~clj -M:cljd compile~ ;编译器就是移动端唯一的静态检查(clj-kondo 不覆盖 ~.cljd~ ,§11) |
+| 单元测试 | ~bb mobile:test~ | ~mobile/test~ 下的 ~.cljd~ ,纯事件与 JSON 层,不需要后端在跑 |
+| 桌面 / 真机运行 | ~bb mobile:create macos~ 一次,然后 ~bb mobile:run~ | 改 ~.cljd~ 热重载;地址默认 ~http://127.0.0.1:3000/api~ , ~MOBILE_DART_DEFINES~ 可整体覆盖 |
+| 网页版演示 | ~bb mobile:web~ | ~flutter build web~ 带 ~--base-href /mobile/~ 、 ~--no-web-resources-cdn~ 、 ~--dart-define=UseLocalCanvasKit=true~ 、 ~--dart-define=RUOYI_API_BASE_URL=/api~ ;产物搬到 ~resources/public/mobile~ ,由同一个后端在 3000 伺服(不入库) |
+| 演示录像 | ~bb video:mobile~ | 在 3210 起一份独立库的录屏后端 → 录 ~tests/e2e/mobile/~ 四段分镜 → ~target/mobile-tour/mobile.mp4~ |
+| 发布包 | 在 ~mobile/~ 下 ~flutter build apk / macos / ipa~ | 必须带 ~--dart-define=RUOYI_API_BASE_URL=https://<host>/api~ ;平台目录不在版本库里,先 ~bb mobile:create <平台>~ |
+
+- *演示形态的意义*:没有真机与模拟器也能看界面、录屏、跑分镜用例。网页版走同源 ~/api~ ,因此不触发 CORS(模板默认只允许同源,§9.6);CanvasKit 与 CJK 字体都换成资源目录里的本地文件,离线也能渲染。
+- *同一份代码两种宿主*:网页版与原生包用的是同一批 ~.cljd~ ,没有任何 ~#if~ 式分支;唯一的差别就是注入进去的 ~RUOYI_API_BASE_URL~ (网页版填相对路径 ~/api~ ,原生包填绝对地址)。
+- *macOS 桌面要补出站网络权限*: ~flutter create~ 的模板不含 ~com.apple.security.network.client~ ,漏了以后每个请求都是 ~SocketException: Operation not permitted~ ,而网页版看不出问题。 ~bb mobile:create~ 幂等地补进 entitlements, ~bb mobile:doctor~ 负责报告。
+
 * 9. 横切关注点
 
 ** 9.1 认证与授权
@@ -772,7 +928,14 @@ diff <(ls resources/migrations-sqlite | sed 's/\.\(up\|down\)\.sql$//' | sort -u
 ~system.edn~ 是唯一装配点: ~#profile~ 区分 dev/test/prod, ~#env~ 读环境变量, ~#or~ 给默认值, ~#ig/ref~ 声明依赖。业务代码里不直接读环境变量(仅 ~infra.security~ 读 ~JWT_SECRET~ ; ~core/start-app~ 在创建任何组件之前调用 ~infra.secrets/verify!~ ,prod 下密钥不合格直接失败, ~-main~ 打印原因后以退出码 1 结束),测试通过 ~{:profile :test}~ 起一套独立系统(~test_utils.clj~)。
 
 ** 9.5 热重载
-~env/dev/clj/user.clj~ 提供 ~rd~ (领域) ~rm~ (中间件) ~rroutes~ (路由,需 ~rr~ 生效) ~ra~ (全部) ~rr~ (Integrant halt → prep → go) ~reset-db~ ~migrate~;SQL 文件、 ~system.edn~ 、组件结构变更需要 ~rr~ 。前端由 shadow-cljs watch 增量编译并热加载(~:after-load app/reload~)。
+系统状态只有一份: ~com.ruoyi.integrant.state/system~ ( ~com.ruoyi.core/system~ 是它的别名), ~integrant.repl~ 已从依赖里移除( ~bb lint:dev~ 拦住再次引入第二份状态)。 ~env/dev/clj/user.clj~ 只挂手敲的短名字:
+
+- ~rd~ (别名 ~ra~ ):按文件时间戳从源码派生待重载集合,只换命名空间的函数定义,不重建组件;若发现改到的 ns 里有被组件抓住的可变容器(atom / ref / agent / volatile!)换了对象,会自动补一次 halt+init。排除表 ~com.ruoyi.dev/reload-exclusions~ 只登记那三个"卸载会换掉运行期身份"的 ns( ~integrant.trace~ / ~integrant.state~ / ~infra.datasource~ )。
+- ~rr~ :halt(不 halt nREPL)→ 重新读 ~system.edn~ → ~ig/init~ ,130~150 ms,REPL 与 3000 端口都还在;改 HugSQL ~.sql~ 、 ~system.edn~ 、路由数据 / 组件结构时用它。
+- ~rs~ :打印 profile、组件数与连接池实时数字。 ~q~ :在运行中的库上跑命名查询(返回原始行,不经领域层脱敏)。 ~req~ :进程内打真实接口,完整走认证/权限/异常/分页中间件,令牌真签、会话临时登记进 ~sys_online~ 。
+- ~reset-db~ / ~migrate~ :清空重建开发库、跑待处理迁移。
+
+必须重启进程( ~bb dev~ )的只有两种:改 ~env/dev/clj~ 里的助手本身(它们刻意不在扫描目录里),或改 ~reload-exclusions~ 里那三个 ns。前端由 shadow-cljs watch 增量编译并热加载( ~:after-load app/reload~ )。
 
 ** 9.6 错误处理与安全头
 - ~middleware.exception~ 把未捕获异常统一转成与控制器相同的 ~{:code :msg}~ :4xx(业务异常、未找到、未登录、无权限)用异常消息作提示并附 ~ex-data~ ,5xx 一律「服务器内部错误,请稍后重试」且不回传 ~ex-data~ ;coercion 错误由 reitit 的 ~coerce-exceptions-middleware~ 返回 400。
@@ -810,6 +973,28 @@ echo "使用 infra.kv 的命名空间:"; grep -rl "infra.kv :as kv" src/clj | se
 echo "进程内 defonce:"; grep -rn "^(defonce" src/clj | sed 's|src/clj/com/ruoyi/||' | cut -d: -f1 | sort | uniq -c
 #+end_src
 
+** 9.8 两端共用契约:网页 SPA 与移动端 App
+
+移动端不是"第二套后端":它复用 §9.1 的整套认证与会话(JWT + ~sys_online~ 心跳、按请求实时算的权限)、 §9.2 的审计(非 GET 一样写 ~sys_oper_log~ )、 §9.3 的时间格式与 §9.6 的失败语义。服务端 *没有* 为移动端开专用路由、专用信封或版本协商 —— 这也是 ADR-013 里"契约不变,宿主可变"的含义。
+
+| 关注点 | 网页端 | 移动端 | 后端是否需要区分 |
+|--------|--------|--------|------------------|
+| 认证 | ~api.transport~ 带 Bearer,过半自动续期 | ~api.cljd~ 带 Bearer, *没有自动续期* | 否(续期是客户端策略) |
+| 会话失效 | 401 → ~:auth/session-expired~ | 401 → 同名事件,一次清干净回登录页 | 否 |
+| 业务失败 | ~:api/error~ 统一弹 ~msg~ | bad 事件 → ~:ui/notify~ 显示同一句 ~msg~ | 否 |
+| 按钮权限 | ~perm/when-allowed~ 按 ~:auth/permissions~ 显隐 | ~:ui/permissions~ 已进 app-db, *界面还没用它过滤* | 否(拦截本来就在后端) |
+| 验证码 | 登录页读 ~/api/auth/config~ 决定是否要 | 无验证码流程 | 否(prod 默认开 → 移动端登录被拒,§13 #20) |
+| 数据范围 | 由后端按当前用户算 | 同一个算法,拿到什么显示什么 | 否 |
+| 时间/分页/命名 | ~yyyy-MM-dd HH:mm:ss~ 、 ~page~ / ~size~ 、snake_case | 完全相同( ~:posts/paging~ 订阅) | 否 |
+
+可执行:两端打的接口路径与请求头(移动端只有 JSON,没有 transit)
+
+#+begin_src sh :exports both
+echo "移动端请求的路径: $(grep -rho ':path \"[^\"]*\"' mobile/src/ruoyi/events.cljd | sort -u | tr '\n' ' ')"
+echo "网页端请求的路径数: $(grep -rho '"/[a-z][^\" :]*"' src/cljs/com/ruoyi/frontend/api | sort -u | wc -l)"
+echo "两端的 accept/content-type: $(grep -rho 'application/json' mobile/src/ruoyi/api.cljd src/cljs/com/ruoyi/frontend/api/transport.cljs | wc -l) 处"
+#+end_src
+
 * 10. 扩展指南
 
 ** 10.1 新增业务模块: ~bb new-module~
@@ -845,9 +1030,11 @@ bb e2e tests/e2e/customer.spec.js                      # 生成的端到端用�
 | 4 | 控制器 / 路由 | ~web/controllers/<m>.clj~ 、 ~web/routes/<m>.clj~ | ~/api/biz/<m>~ 与 ~/:id~ ;要求登录;Malli 校验 query/body/path 并生成 Swagger |
 | 5 | 测试 | ~test/clj/.../web/controllers/<m>_test.clj~ 、 ~tests/e2e/<m>.spec.js~ | 未登录 401、增删改查、参数校验 400;E2E 新增 → 修改 → 删除 |
 | 6 | 前端 | ~api/<m>.cljs~ 、 ~events/<m>.cljs~ 、 ~pages/<m>.cljs~ | 状态在 ~app-db~ 的 ~:<m>~ 下;搜索、分页表格、新增/编辑弹窗(Form.useForm)、删除确认 |
-| 7 | 登记 | ~system.edn~ (组件、路由注入、SQL 文件)、 ~routes/api.clj~ 、 ~core.clj~ 、 ~user.clj~ ( ~reload-domain~ )、 ~router.cljs~ (路由、页面名)、 ~menu_data.cljs~ (menu-key、面包屑、图标)、 ~page_view.cljs~ 、 ~events.cljs~ 、 ~events/common.cljs~ (Tab 元数据) | 插在 ~;; [new-module] <tag>~ 标记行之前(保持缩进),require 按字母序插入;标记行保留,可反复生成 |
+| 7 | 登记 | ~system.edn~ (组件、路由注入、SQL 文件)、 ~routes/api.clj~ 、 ~core.clj~ 、 ~router.cljs~ (路由、页面名)、 ~menu_data.cljs~ (menu-key、面包屑、图标)、 ~page_view.cljs~ 、 ~events.cljs~ 、 ~events/common.cljs~ (Tab 元数据) | 插在 ~;; [new-module] <tag>~ 标记行之前(保持缩进),require 按字母序插入;标记行保留,可反复生成。 *不碰 ~env/dev/clj/user.clj~ * :待重载集合由 ~com.ruoyi.dev~ 从源码派生,新领域 ns 已被 ~core.clj~ require 到 |
 
 生成是"全有或全无"的:所有修改先在内存里算好;目标文件已存在、前端已使用同名关键字(路由 / ~app-db~ 键 / 事件前缀)、HugSQL 查询名冲突、缺少标记行、字段名是保留列或 SQL 保留字时报错且不写任何文件;同一秒内生成多个模块时迁移时间戳自动顺延。生成物满足模板的全部约束(clj-kondo 零 warning、cljfmt、函数 ≤50 行、迁移可往返、前端零 warning),CI 的 ~scaffold~ 任务每次都会验证(§11)。
+
+脚手架的覆盖面是 *后端 + 网页端* 两端, ~mobile/~ 不在其中:它没有 ~;; [new-module]~ 登记点,生成的模块不会自带 App 页面(移动端要接新模块照 §10.2 第 14 步手工加;§13 #22 把它列为扩展点)。
 
 可执行:试运行,只列出将要新建与修改的文件,不写盘
 
@@ -873,13 +1060,14 @@ grep -rn --include='*.clj' --include='*.cljs' --include='*.edn' ';; \[new-module
 | 4 | 装配 | ~resources/system.edn~ | 登记 ~:app.example/service~ ;在 ~:reitit.routes/api~ 注入 ~:example-service~ |
 | 5 | 控制器 | ~src/clj/com/ruoyi/web/controllers/example.clj~ | 请求 → 服务 → 响应;列表查询参数用 ~controllers.params/query~ ;按部门归属的数据用 ~domain.system.data-scope~ 过滤 |
 | 6 | 路由 | ~src/clj/com/ruoyi/web/routes/example.clj~ ; ~routes/api.clj~ 的 ~api-routes~ 追加 | 路由组 ~:auth? true~ 、各接口 ~:perms~ 、Malli 参数、Swagger tag |
-| 7 | 入口 | ~src/clj/com/ruoyi/core.clj~ ; ~env/dev/clj/user.clj~ ~reload-domain~ | require 新命名空间 |
+| 7 | 入口 | ~src/clj/com/ruoyi/core.clj~ | require 新命名空间(领域 ns 在这里挂上, ~(user/rd)~ 因此能自动发现它) |
 | 8 | 前端 API | ~src/cljs/com/ruoyi/frontend/api/example.cljs~ | 基于 ~api.transport/request~ |
 | 9 | 前端事件 | ~events/example.cljs~ + 在 ~events.cljs~ require | ~reg-event-fx~ + ~reg-fx~ ;状态放 ~app-db~ 的模块键下 |
 | 10 | 页面 | ~pages/example.cljs~ (复杂页面拆成 ~pages/example/*.cljs~ ) | 复用 ~components/*~ ;函数组件 + Hooks;首屏数据在页面的 ~use-effect~ 里 dispatch;按钮 ~:perm~ / ~perm/when-allowed~ |
 | 11 | 登记 | ~router.cljs~ (路由 + page-names)、 ~layout/menu_data.cljs~ (menu-key/面包屑/图标)、 ~layout/page_view.cljs~ (分发)、 ~events/common.cljs~ (Tab 元数据) | 各加一行 |
 | 12 | 测试 | ~test/clj/com/ruoyi/.../example_test.clj~ 、 ~tests/e2e/example.spec.js~ | 后端用 ~test_utils/system-fixture~ 起系统 + peridot;E2E 走真实页面 |
 | 13 | 文档 | 本文 §2/§3/§4/§5 对应图追加组件;README API 概览 | |
+| 14 | 移动端(需要 App 时) | ~mobile/src/ruoyi/{api,events,subs,views}~ | ~bb new-module~ *不动* ~mobile/~ :新模块的 App 页面要手工加 —— 在 ~api~ 里加一个调用、 ~events~ 里登记一组事件、 ~subs~ 里加订阅、 ~views/~ 下新建一个页面并在 ~main.cljd~ 的 ~:route~ 分发里接上; ~initial-db~ 先落模块的状态键(§5.3) |
 
 模板不提供页面内的代码生成器(「系统工具 → 代码生成」已按 ADR-012 移除);新模块用 ~bb new-module~ ,结构特殊的模块照本清单手工写。
 
@@ -895,6 +1083,8 @@ bb ci                            # lint + fmt:check + test,确认改名后一切
 
 改名后 ~bb new-module~ 、 ~bb dev~ 等任务都从 ~kit.edn~ 读取新的命名空间与路径,无需其它调整。
 
+用了移动端时改名同样覆盖: ~bb rename~ 会搬 ~mobile/src/<旧名>~ 与 ~mobile/test/<旧名>~ 并改写 ~.cljd~ 、 ~mobile/deps.edn~ 与 ~pubspec.yaml~ 里的命名空间(平台工程目录与 Dart 产物不碰,由 ~bb mobile:create~ 重新生成)。因为 ~bb ci~ 不含移动端,改完名要单独确认一次: ~bb mobile:clean && bb mobile:compile && bb mobile:test~ 。
+
 * 11. 质量保障
 
 所有检查都是 bb 任务,本地与 CI 执行同一条命令:
@@ -908,7 +1098,10 @@ bb ci                            # lint + fmt:check + test,确认改名后一切
 | 端到端 | Playwright | ~bb e2e~ | 需后端已在 3000 运行;串行(共享 SQLite)。覆盖登录与会话、导航、岗位 CRUD、按钮权限与数据范围、列表搜索、顶部工具 |
 | 静态检查 | clj-kondo 2026.08 | ~bb lint:kondo~ | warning 即失败(配置 ~.clj-kondo/config.edn~ );没装二进制时自动用 pod |
 | 格式 | cljfmt 0.16 | ~bb fmt:check~ / ~bb fmt~ | 配置 ~.cljfmt.edn~ ;编辑器用 ~.editorconfig~ / clojure-lsp 同一套规则 |
-| 规模约束 | edamame 解析 | ~bb check~ | ~src~ / ~env~ / ~test~ / ~bb~ / ~scripts~ :命名空间 ≤500 行、 ~defn~ 等 ≤50 行 |
+| 规模约束 | edamame 解析 | ~bb check~ | ~src~ / ~env~ / ~test~ / ~bb~ / ~scripts~ / ~mobile/src~ / ~mobile/test~ :命名空间 ≤500 行、 ~defn~ 等 ≤50 行(对 ~.cljd~ 一样生效,移动端靠命名空间拆分达标) |
+| 移动端静态检查 | ClojureDart 编译器 | ~bb mobile:compile~ | clj-kondo 没有可靠的 ClojureDart 支持( ~.cljd~ 里的 Dart 包 require、 ~dart/is?~ 、 ~(.-statusCode resp)~ 都会报假错),所以 *编译器本身* 就是移动端的类型检查器 |
+| 移动端单元 | cljd.test | ~bb mobile:test~ | ~mobile/test~ 下测 JSON 两头换算与事件对 app-db 的变更,不连后端、不需要 Flutter SDK |
+| 移动端演示录像 | Playwright + ffmpeg + TTS | ~bb video:mobile~ | 四段分镜(功能 / 通讯方式 / 状态管理 / 主题设置)配烧入台词与旁白音轨,产出 ~target/mobile-tour/mobile.mp4~ ; *不是门禁* (要 Flutter、ffmpeg 与外部 TTS 密钥) |
 | 前端编译 | shadow-cljs | ~bb release~ / ~bb cljs:check~ | 编译 warning 视为错误 |
 | 覆盖率 | cloverage | ~bb coverage~ | ~target/coverage/index.html~ |
 | 依赖新鲜度 | maven-metadata.xml / ~npm outdated~ | 见 ADR-007 的做法 | 升级后必须重跑上面各层 |
@@ -923,6 +1116,7 @@ flowchart LR
   setup --> my["test-mysql<br/>service mysql:8.4<br/>bb test:mysql · bb db:roundtrip"]:::container
   setup --> e2e["e2e<br/>bb test:cljs → bb release → bb backend → bb e2e<br/>失败时上传报告与后端日志"]:::container
   setup --> sc["scaffold<br/>bb new-module ci-demo(6 种字段类型)<br/>→ lint · fmt · 生成的测试 · roundtrip<br/>→ bb cljs:check → 生成的 E2E"]:::container
+  setup --> mo["mobile(装 Flutter 3.35)<br/>bb mobile:compile → bb mobile:test"]:::container
   classDef person fill:#08427b,stroke:#052e56,color:#fff
   classDef system fill:#1168bd,stroke:#0b4884,color:#fff
   classDef container fill:#438dd5,stroke:#2e6295,color:#fff
@@ -931,7 +1125,9 @@ flowchart LR
 #+RESULTS:
 [[file:img/ci-pipeline.svg]]
 
-5 个任务并行,互不依赖; ~concurrency~ 让同一分支的新提交取消旧的运行。 ~bb ci~ 在本地跑其中最快的部分(lint + fmt:check + test + test:cljs)。 ~scaffold~ 任务保证脚手架模板与主干代码同步演进:任何让生成代码失效的改动(改了登记点、组件接口、antd 封装等)都会在这里失败。
+6 个任务并行,互不依赖; ~concurrency~ 让同一分支的新提交取消旧的运行。 ~bb ci~ 在本地跑其中最快的部分(lint + fmt:check + test + test:cljs)。 ~scaffold~ 任务保证脚手架模板与主干代码同步演进:任何让生成代码失效的改动(改了登记点、组件接口、antd 封装等)都会在这里失败。
+
+~mobile~ 是 *唯一不进 ~bb ci~ 的门禁*: ~mobile/~ 有自己的 ~deps.edn~ 与 ~pubspec.yaml~ ,根 ~deps.edn~ 的 ~:paths~ 里没有它,所以 ~bb test~ / ~bb uberjar~ / Docker 镜像都不需要 Flutter;反过来,把 Flutter 塞进 ~bb ci~ 会让每个只做后端的人都要装一个 1 GB 的 SDK 才能提交。代价是改了 ~mobile/~ 要自己跑 ~bb mobile:compile~ 与 ~bb mobile:test~ (AGENTS.md「移动端」一节)。Flutter 版本在 ~.github/workflows/ci.yml~ 里钉死为 3.35.2(与本地开发一致, ~mobile/pubspec.yaml~ 的 ~environment: sdk~ 只约束 Dart ^3.9.0);升级 Flutter 时同步改 CI 的 ~flutter-version~ 并跑一遍 ~bb mobile:compile~ + ~bb mobile:test~ 。
 
 可执行:跑后端测试并只看汇总行
 
@@ -989,25 +1185,33 @@ bb lint:migrations 2>&1 | tail -1
 
 | # | 事项 | 现状 | 建议做法 | 涉及文件 |
 |---+------+------+----------+----------|
-| 1 | 按钮级权限校验 | *已解决*(ADR-010):路由数据 ~:auth?~ / ~:perms~ + ~authorize~ ;权限按请求实时计算;各模块按钮菜单已补齐;前端按 ~permissions~ 显隐按钮 | — | — |
-| 2 | 数据权限接入 SQL | *已解决*(ADR-010): ~domain.system.data-scope~ + 固定写法的 SQL 参数,已接入用户管理(列表、导出、单条读写);自定义部门存 ~sys_role_dept~ 。其它按部门归属的业务表需要时照此接入 | 业务表加 ~dept_id~ / ~create_by~ 列后复用 ~sql-params~ 与 ~allows?~ | ~domain/system/data_scope.clj~ |
-| 3 | 前端统一错误处理 | *已解决*(ADR-010): ~api.transport~ 对 403 / 5xx / 网络断开 / 业务码非 200 统一提示并复位 loading;带令牌下载统一走 ~t/download!~ | — | — |
+| 1 | 按钮级权限校验 | *已解决* (ADR-010):路由数据 ~:auth?~ / ~:perms~ + ~authorize~ ;权限按请求实时计算;各模块按钮菜单已补齐;前端按 ~permissions~ 显隐按钮 | — | — |
+| 2 | 数据权限接入 SQL | *已解决* (ADR-010): ~domain.system.data-scope~ + 固定写法的 SQL 参数,已接入用户管理(列表、导出、单条读写);自定义部门存 ~sys_role_dept~ 。其它按部门归属的业务表需要时照此接入 | 业务表加 ~dept_id~ / ~create_by~ 列后复用 ~sql-params~ 与 ~allows?~ | ~domain/system/data_scope.clj~ |
+| 3 | 前端统一错误处理 | *已解决* (ADR-010): ~api.transport~ 对 403 / 5xx / 网络断开 / 业务码非 200 统一提示并复位 loading;带令牌下载统一走 ~t/download!~ | — | — |
 | 4 | 生产安全默认值 | *已解决*:prod 密钥强制(ADR-008);CORS 改为白名单(ADR-009) | — | — |
-| 5 | 多实例部署 | *基本解决*(ADR-011):会话、验证码、登录失败计数与锁定、续期宽限都在数据库( ~sys_online~ / ~sys_kv~ ),多实例共享;启动时会打印 prod 配置体检(仍用 SQLite、未设 ~TZ~ ).仍在进程内:Quartz 调度(从实例设 ~SCHEDULER_ENABLED=false~ 只留一个实例跑任务)、缓存监控演示数据 | 定时任务改用 Quartz JDBC JobStore 集群模式(需要 ~11 张 QRTZ_~ 表的两套迁移)(§9.7) | ~infra/scheduler.clj~ ~domain/system.clj~ ~controllers/job.clj~ ~config.clj~ |
-| 6 | 未使用的依赖 | *已解决*(ADR-011):删除 selmer(组件与依赖)、cheshire(JSON 统一用 jsonista)、clj-time、buddy-auth、kit-postgres; ~:cronut/scheduler~ 的 ~:schedule []~ 由 ~infra.scheduler~ 动态填充,保留 | — | — |
-| 7 | 两套代码生成 | *已解决*(ADR-012):删除页面代码生成器,只保留 ~bb new-module~ (CI 每次生成模块并完整验证) | 需要「从已有表生成模块」时,给脚手架加读取表结构转字段规格的入口,仍走同一套模板 | ~bb/tasks/scaffold/~ |
-| 8 | 静态检查遗留 | *已解决*(ADR-008) | 保持零 warning | ~.clj-kondo/config.edn~ |
-| 9 | 文档站 | *已解决*:标题、快速开始与目录已更新为模板与 bb 命令 | — | ~docs/index.html~ |
-| 10 | 验证码可绕过 | *已解决*(ADR-009):开启时空验证码判失败;E2E 在 dev profile(默认关闭)下运行 | — | — |
-| 11 | 时间戳时区 | *已解决*(ADR-011):SQL 用 ~:now~ (应用生成的本地时间,自动注入),lint 禁止在共用查询里取当前时间;接口里的时间统一编码为 ~yyyy-MM-dd HH:mm:ss~ 。升级前写进开发库的旧记录仍是 UTC,重建开发库( ~bb dev --reset-db~ )即可 | 部署时统一 ~TZ~ | — |
-| 12 | 脚手架生成的路由只校验登录 | *已解决*(ADR-010):生成的路由声明 ~biz:<模块>:list/query/add/edit/remove~ ,迁移生成对应按钮菜单并授权 admin,页面按权限显示按钮 | — | — |
-| 13 | MySQL 需要手动设 ~MIGRATION_DIR~ | *已解决*(ADR-009):按 ~JDBC_URL~ 推导 | — | ~config.clj~ |
+| 5 | 多实例部署 | *基本解决* (ADR-011):会话、验证码、登录失败计数与锁定、续期宽限都在数据库( ~sys_online~ / ~sys_kv~ ),多实例共享;启动时会打印 prod 配置体检(仍用 SQLite、未设 ~TZ~ ).仍在进程内:Quartz 调度(从实例设 ~SCHEDULER_ENABLED=false~ 只留一个实例跑任务)、缓存监控演示数据 | 定时任务改用 Quartz JDBC JobStore 集群模式(需要 ~11 张 QRTZ_~ 表的两套迁移)(§9.7) | ~infra/scheduler.clj~ ~domain/system.clj~ ~controllers/job.clj~ ~config.clj~ |
+| 6 | 未使用的依赖 | *已解决* (ADR-011):删除 selmer(组件与依赖)、cheshire(JSON 统一用 jsonista)、clj-time、buddy-auth、kit-postgres; ~:cronut/scheduler~ 的 ~:schedule []~ 由 ~infra.scheduler~ 动态填充,保留 | — | — |
+| 7 | 两套代码生成 | *已解决* (ADR-012):删除页面代码生成器,只保留 ~bb new-module~ (CI 每次生成模块并完整验证) | 需要「从已有表生成模块」时,给脚手架加读取表结构转字段规格的入口,仍走同一套模板 | ~bb/tasks/scaffold/~ |
+| 8 | 静态检查遗留 | *已解决* (ADR-008) | 保持零 warning | ~.clj-kondo/config.edn~ |
+| 9 | 文档站 | *大部分解决*:标题、快速开始与目录已更新为模板与 bb 命令,并补了移动端一节(2026-10-03)。同一天清出的过期引用不止课程页: ~docs/training~ 5 页 8 处( ~venantius/accountant~ 、 ~api.cljs~ 门面、 ~reagent/atom~ 版 transport、 ~integrant.repl/reset~ 、re-frame 版本号), ~docs/index.html~ 的 REPL 一节还在教不存在的 ~(user/rroutes)~ 与 ~(reset)~ , *本文自己也有 5 处* (§4.1 路由热重载、§6.1 助手清单、§6.2 与 §10.1 的登记表、§9.5 整节)写着 ~rm~ / ~rroutes~ / ~reload-domain~ 这套早已删掉的助手 | 文档里出现的助手名与依赖坐标靠 #27 的 lint 守住,不要靠人记 | ~docs/index.html~ ~docs/training/*.html~ ~docs/architecture/c4-model.org~ |
+| 10 | 验证码可绕过 | *已解决* (ADR-009):开启时空验证码判失败;E2E 在 dev profile(默认关闭)下运行 | — | — |
+| 11 | 时间戳时区 | *已解决* (ADR-011):SQL 用 ~:now~ (应用生成的本地时间,自动注入),lint 禁止在共用查询里取当前时间;接口里的时间统一编码为 ~yyyy-MM-dd HH:mm:ss~ 。升级前写进开发库的旧记录仍是 UTC,重建开发库( ~bb dev --reset-db~ )即可 | 部署时统一 ~TZ~ | — |
+| 12 | 脚手架生成的路由只校验登录 | *已解决* (ADR-010):生成的路由声明 ~biz:<模块>:list/query/add/edit/remove~ ,迁移生成对应按钮菜单并授权 admin,页面按权限显示按钮 | — | — |
+| 13 | MySQL 需要手动设 ~MIGRATION_DIR~ | *已解决* (ADR-009):按 ~JDBC_URL~ 推导 | — | ~config.clj~ |
 | 14 | 业务页面文案 | 外壳已国际化( ~i18n/tr~ ),业务页面与后端返回的 ~msg~ 仍是中文 | 页面逐个把字面量包进 ~tr~ 并补 ~en-US~ 词条;后端 ~msg~ 改为错误码 + 前端翻译 | ~pages/*.cljs~ ~i18n.cljs~ ~controllers/*.clj~ |
-| 15 | 暗色主题细节 | *大部分解决*(ADR-011):工具栏按钮改用 ~--app-btn-*~ 变量(亮 / 暗两套),部门树选中、错误详情、组件依赖图、缓存图表、错误边界、顶部导航、布局设置面板的固定颜色已换成变量;剩下的十六进制颜色是两种主题下都可读的强调色(图表、标签、主题色板)与登录页的固定配色 | 新写的页面只用变量;登录页需要随主题变化时同样改成变量 | ~resources/public/css/app.css~ ~pages/login.cljs~ |
+| 15 | 暗色主题细节 | *大部分解决* (ADR-011):工具栏按钮改用 ~--app-btn-*~ 变量(亮 / 暗两套),部门树选中、错误详情、组件依赖图、缓存图表、错误边界、顶部导航、布局设置面板的固定颜色已换成变量;剩下的十六进制颜色是两种主题下都可读的强调色(图表、标签、主题色板)与登录页的固定配色 | 新写的页面只用变量;登录页需要随主题变化时同样改成变量 | ~resources/public/css/app.css~ ~pages/login.cljs~ |
 | 16 | 头部占位按钮 | *已解决*:搜索 = 在当前用户可访问的页面里搜索并跳转;文档 = ~config/docs-url~ ;铃铛 = 最新 5 条已发布通知 + 当前用户的未读数(按用户记录已读,见 #19) | — | — |
 | 17 | 上传限制 | *已解决*:扩展名白名单 + 单文件大小上限( ~:upload-config~ / ~UPLOAD_MAX_MB~ / ~UPLOAD_EXTENSIONS~ ),头像只收图片;请求体整体上限仍需反向代理 | 需要在应用内限制请求体时给 Undertow 配 ~max-entity-size~ | ~infra/files.clj~ ~system.edn~ |
 | 18 | 权限查询无缓存 | 每个受保护请求实时查一次「用户 → 角色 → 菜单 perms」(与会话心跳同量级),换来改角色立即生效 | 请求量大时加几秒的进程内缓存(按用户 ID),并在角色/菜单变更时清除;多实例时注意缓存一致性 | ~domain/system/permission.clj~ |
-| 19 | 用户已读状态 | *已解决*(ADR-011): ~sys_notice_read~ (user_id, notice_id);关闭铃铛面板时 ~PUT /api/system/notice/read-all~ 把已发布通知全部标为已读,换设备、刷新后保持 | 需要逐条已读时加 ~PUT /notice/read/{id}~ | ~controllers/system/notice.clj~ ~events/notices.cljs~ |
+| 19 | 用户已读状态 | *已解决* (ADR-011): ~sys_notice_read~ (user_id, notice_id);关闭铃铛面板时 ~PUT /api/system/notice/read-all~ 把已发布通知全部标为已读,换设备、刷新后保持 | 需要逐条已读时加 ~PUT /notice/read/{id}~ | ~controllers/system/notice.clj~ ~events/notices.cljs~ |
+| 20 | 移动端没有验证码流程 | prod 默认 ~CAPTCHA_ENABLED=true~ ,而 ~api.cljd~ 的登录只发用户名与密码,后端会判验证码缺失 —— *移动端在 prod 配置下登不进去* (dev/test 默认关闭,开发和演示都正常) | 登录前读 ~/api/auth/config~ 拿开关,开启时 ~/api/captcha/image~ 取图,把 ~uuid~ 与输入一起提交 | ~mobile/src/ruoyi/{events,api}.cljd~ ~views/login.cljd~ |
+| 21 | 移动端不续期、不持久化 | 网页端在令牌过半时自动 ~refresh~ ,令牌/主题/布局设置存 localStorage;移动端两样都没有:令牌只活在这次运行里,长时间挂着会在过期那一刻掉线,重启后回到浅色主题与登录页 | 续期用 ~:dispatch-later~ 排一个 ~:auth/refresh~ 效果;持久化给 ~storage~ 找一个 Dart 实现(如 ~shared_preferences~ ),仍然只在 ~fx.cljd~ 里做 IO | ~mobile/src/ruoyi/{fx,api,model}.cljd~ |
+| 22 | 脚手架不生成移动端页面 | ~bb new-module~ 的 ~;; [new-module]~ 登记点只覆盖后端 + 网页端,新模块在 App 上是空白 | 加第 N 组模板( ~api~ / ~events~ / ~subs~ / ~views~ + ~initial-db~ 键 + ~main.cljd~ 的 ~:route~ 分发),并让 ~bb lint:scaffold~ 与 CI 的 scaffold 任务一起验证 | ~bb/tasks/scaffold/~ ~bb/tasks/new_module.clj~ |
+| 23 | 移动端权限只取不用 | ~getInfo~ 的 ~permissions~ 已经进 app-db( ~:ui/permissions~ 订阅),但现有界面是只读列表,没有按权限显隐的入口 | 照网页端 ~perm/permitted?~ + ~when-allowed~ 写一份纯函数版,接写操作(新增/删除)时一起用;拦截本来就在后端,前端只管显隐 | ~mobile/src/ruoyi/{subs,views}.cljd~ |
+| 24 | 移动端只有一个业务模块 | App 目前覆盖登录 + 岗位列表(读),够演示与讲清架构(那四段分镜就是按这条竖切录的),其余模块没有 App 界面 | 按需照 §10.2 第 14 步手工加,或等 #22 | ~mobile/src/ruoyi/views/~ |
+| 25 | transit 通道仍然开着 | 后端 muuntaja 用的是默认格式表, ~Accept: application/transit+json~ 实测仍能协商成功( ~GET /api/health~ 就回 transit 文本)。 ~deps.edn~ 里 ~luminus-transit~ 虽然排除了 ~transit-clj~ ,但 muuntaja 0.6.12 自己把 ~com.cognitect/transit-clj 1.1.363~ 带了进来( ~clojure -Stree~ 可见),两个客户端都不用它 | 不需要就把格式表收窄到 JSON:从 ~muuntaja.core/default-options~ 的 ~:formats~ 里删掉 transit 项( ~luminus-transit.time~ 那套 handler 也随之可删),少一条对外暴露的编码路径 | ~src/clj/com/ruoyi/web/middleware/formats.clj~ ~deps.edn~ |
+| 26 | 移动端界面没有国际化 | #14 在移动端的对应物: ~views/*~ 全是中文字面量,re-dash 侧没有 ~i18n~ 命名空间 | 网页端的 ~i18n/tr~ 思路可以照搬(中文原文为键 + 词典),但先等 #14 定型,别两边各发明一套 | ~mobile/src/ruoyi/views/~ ~i18n.cljs~ |
+| 27 | 文档同步没有门禁 | 代码改了不带动文档: ~bb rename~ 刻意跳过 ~docs/training~ ,课程页与依赖升级因此滞后过一整年; ~bb ci~ 也不看 ~docs/~ 。本节维护约定(§13 之前那段)全靠人遵守 | *部分解决* (2026-10-03): ~bb docs~ 现在遇到 16 张图全挂却退出 0、或页面残留没渲染的 org 粗体标记(修前 14 处)都会失败 —— 但"文档写的助手名/版本号对不对"仍没人管,下一步加 ~bb lint:docs~ 并入 ~bb lint~ :把文档里出现的 ~user/rd~ 这类助手名、 ~frontend/api/*~ 命名空间、依赖坐标与版本号拿去和真实源码 ~deps.edn~ / ~shadow-cljs.edn~ / ~env/dev/clj/user.clj~ 对照,对不上就失败 | ~docs/architecture/build-html.py~ ~bb/tasks/lint.clj~ ~docs/training~ |
 
 可执行:设计债 1/2/3 的接入指标(都应非 0)
 
@@ -1113,6 +1317,26 @@ printf "统一错误事件派发   %s\n" "$(grep -c ':api/error' src/cljs/com/ru
 - *附带修复*:本文 §10.1 / §10.2 两张清单表的前几行,在第 6 批更新 §13 时被误替换成了设计债条目,已恢复。
 - *验证*: ~bb test~ 在 SQLite 与 MySQL 8.0 上都是 366 tests / 1046 assertions 全过,其中新增的回归测试确认 ~/api/tool/gen/*~ 返回 404、菜单里不再有代码生成;两库迁移往返;lint、格式、规模约束通过;release 0 warning;Playwright 31 个用例连续两轮全过;已有的开发库重启后菜单自动移除;脚手架冒烟(生成模块 → lint、两库上的生成测试、前端编译)通过。
 
+** ADR-013 移动端:ClojureDart + Flutter Material + re-dash,独立工程、同一套 JSON 契约
+- *背景*:模板只有浏览器里的 SPA。管理后台之外常有"在外面扫一眼/批一下"的需求,需要一条能出 App 的路径;但模板的核心价值是"一种语言一套纪律",所以候选方案先按这个标准筛。
+- *决策*:
+  - *语言*: ~mobile/~ 用 ClojureDart(Clojure → Dart,锁 ~0.9.20260917~ 的 git tag/sha),写 ~.cljd~ 编成 Dart,宿主是 Flutter 3.35 的 Material 组件。源码仍是 Clojure: ~:require~ 直接指 Dart 包( ~["package:http/http.dart" :as http]~ ),不需要手写 Dart 胶水。
+  - *状态*: ~hti/re-dash~ 1.2.1(ClojureDart 版的 re-frame)。一份 app-db、写只走事件、读只走订阅、IO 只在一个 ~reg-fx~ 里 —— 与 §5.1 的网页端纪律完全一致,学一次两端通用。
+  - *通讯*:JSON, *不用 transit* 。 ~api.cljd~ 固定 ~accept~ / ~content-type = application/json~ ,响应经 ~json.cljd~ 的 ~->edn~ 一次性把 Dart 的 ~Map~ / ~List~ 转成带关键字键的 Clojure 数据。
+  - *工程边界*: ~mobile/deps.edn~ 与 ~mobile/pubspec.yaml~ 是独立的依赖表,根 ~deps.edn~ 的 ~:paths~ 里没有 ~mobile/~ ;平台工程目录( ~macos/~ / ~android/~ 等)不入库,由 ~bb mobile:create~ 重新生成。
+  - *任务入口*:全部走 bb( ~mobile:doctor~ / ~mobile:create~ / ~mobile:compile~ / ~mobile:run~ / ~mobile:test~ / ~mobile:web~ / ~mobile:clean~ ),不额外写 shell;演示录像是 ~bb video:mobile~ 。
+- *放弃的方案*:
+  - *Dart 手写的 Flutter App*:等于给模板加第二种语言和另一套工程纪律,与" Clojure / ClojureScript 全栈"的定位冲突。
+  - *把 cljs 编译成 RN / Web 套壳*:shadow-cljs 没有可靠的 React Native 目标;纯 PWA 又缺真机能力,只保留为演示形态( ~bb mobile:web~ ),不当 App。
+  - *transit* (实测过同一批 ~/system/post~ 列表响应):① 体积只差 ~6% ,列表越大差距越小;② 它的价值是带类型标签(instant、keyword 键),而这两个问题本契约已经各自解决了 —— 时间由 ~infra.json~ 统一编码成本地 ~yyyy-MM-dd HH:mm:ss~ ,键由客户端 ~json.cljd/->edn~ 转成关键字;③ ClojureDart 侧根本没有 transit 库,要自己写 Dart reader,而 ~dart:convert~ + 一层 ~->edn~ 是 69 行、有单元测试的代码。 *注意*:后端仍然能协商 transit( ~web.middleware.formats~ 用的是 muuntaja 默认格式表, ~Accept: application/transit+json~ 实测可拿到 transit 响应),只是两个客户端都不用它;要收窄这条通道应显式从格式表里删掉,属于 §13 的可选清理项。
+- *后果*:
+  - 移动端 *不在 ~bb ci~ 里* :改了 ~mobile/~ 单独跑 ~bb mobile:compile~ (编译器就是它的静态检查,clj-kondo 不覆盖 ~.cljd~ )与 ~bb mobile:test~ ;CI 用独立的 ~mobile~ job 装 Flutter(§11.1)。
+  - 契约是唯一需要同时改两头的地方:后端改响应形状时, ~src/cljs/.../api/transport.cljs~ 与 ~mobile/src/ruoyi/api.cljd~ 都要改(AGENTS.md「移动端」)。
+  - 三条运行期坑只在真机/桌面出现( ~await~ 不能写在 ~let~ 解构里、内部 ~await~ 过的函数调用方必须 ~await~ 、Dart 对象字段要 ~(.-x y)~ 带类型提示), macOS 还要补 ~com.apple.security.network.client~ ;完整清单在 ~mobile/README.md~ ,本文只引不重复。
+  - 规模约束(≤500 / ≤50 行)对 ~.cljd~ 生效,靠命名空间拆分维持(~bb check~ 覆盖 ~mobile/src~ 与 ~mobile/test~ )。
+  - ~bb new-module~ 不生成移动端页面,新模块的 App 界面手工加(§10.2 第 14 步、§13 #22)。
+- *验证*: ~bb mobile:compile~ 通过(= 移动端的类型检查); ~bb mobile:test~ 10 tests 全过(纯事件与 JSON 层,不连后端); ~bb check~ 对 ~mobile/~ 达标;macOS 桌面实机跑通登录 → 岗位列表 → 深色主题 → 登出; ~bb mobile:web~ 的网页版被 ~bb video:mobile~ 的四段分镜逐条驱动并抽帧核对(含"刷新只重载 iframe,不重载舞台页"这一镜头)。
+
 * 附录 A:模板与源项目的差异清单
 
 | 类别 | 已删除 | 已新增 / 修改 |
@@ -1121,6 +1345,7 @@ printf "统一错误事件派发   %s\n" "$(grep -c ':api/error' src/cljs/com/ru
 | 前端 | ~api/{synthetic,formal}.cljs~ 、 ~pages/{synthetic,formal}/*~;模板移除 ~{api,events,subs,pages}/gen.cljs~ (ADR-012) | ~config.cljs~ (品牌); ~router~ / ~menu_data~ / ~page_view~ / ~events/common~ / ~api.cljs~ 去引用; ~db.cljs~ 删除废弃的 ~:projects~ 状态 |
 | 数据 | ~sql/synthetic.sql~ 、源项目的 ~2026092*~ 迁移、 ~2024061300[1-4]~ / ~202606150002~ / ~202606150010~ 业务迁移;模板移除 ~sql/gen.sql~ 、 ~sql/generated.sql~ ,迁移 ~20260924000005-remove-code-gen-menu~ 删除代码生成菜单 | MySQL ~20260613215630-add-notice-content~ ;模板新增 ~20260924000001-add-button-perms~ (按钮菜单)、 ~20260924000002-create-sys-role-dept~ (自定义数据范围)、 ~20260924000003-create-sys-kv~ (共享临时状态)、 ~20260924000004-create-sys-notice-read~ (通知已读);共用查询的时间改为 ~:now~ |
 | 配置 | ~deps.edn~ 外部 ~:paths~ 、 ~jarohen/chime~ 、未使用的 ~h2~ 、 ~selmer~ 、 ~cheshire~ 、 ~clj-time~ 、 ~buddy-auth~ 、 ~kit-postgres~; ~deps-cov.edn~; ~formal-backend.edn(.example)~; ~deploy.sh~ (含固定主机);npm ~react-syntax-highlighter~ | ~.gitignore~ 重写 |
+| 移动端 | —(源项目没有 App,模板 *新增* 整个 ~mobile/~ 工程) | ClojureDart + Flutter Material + re-dash 的可选 App(登录 + 岗位列表,同一套 ~/api~ 契约,ADR-013); ~bb mobile:doctor/create/compile/run/test/web/clean~ 任务;CI 的 ~mobile~ job; ~bb mobile:web~ 的网页演示形态与 ~bb video:mobile~ 四段分镜录像 |
 | 文档 | ~GAP_ANALYSIS.md~ ~REMAINING.md~ ~ROADMAP.md~ ~test/coverage-report.md~ ~docs/pic-field-checklist.md~;README 合成流量章节 | README 重写为模板说明; ~CLAUDE.md~ 指向本文;本文 |
 | 工具 | ~.beads/~ ~.agents/~ ~.claude/settings.json~ (issue 跟踪钩子)、 ~test-frontend.mjs~ 、 ~Makefile~ 、 ~start_dev.sh~ 、 ~scripts/*.sh~ / ~*.py~ (由 bb 任务取代) | ~bb.edn~ + ~bb/tasks/~ ( ~dev~ / ~lint~ / ~rename~ / ~new-module~ )、 ~.github/workflows/ci.yml~ 、 ~docker-compose.yml~ 、 ~scripts/db.clj~ 、 ~LICENSE~ 、 ~.editorconfig~ 、 ~.cljfmt.edn~ 、 ~.clj-kondo/config.edn~ |
 | 测试 | ~synthetic_profile_test.clj~ 、 ~synthetic-profile.spec.js~ 、 ~formal-pages.spec.js~;模板移除 ~gen_test.clj~ (两个),改为验证代码生成已移除的回归测试 | ~navigation.spec.js~ / ~post-crud.spec.js~ 修正 |
@@ -1136,3 +1361,8 @@ printf "统一错误事件派发   %s\n" "$(grep -c ':api/error' src/cljs/com/ru
 | data_scope | 角色的数据权限范围:1 全部 / 2 自定义部门 / 3 本部门 / 4 本部门及以下 / 5 仅本人 |
 | Tab | 前端主布局中的多页签, ~app-db :tabs~; ~:navigate~ 事件负责激活/新增 |
 | rr / rd | ~user.clj~ 中的热重载助手:整系统重启 / 领域层重载 |
+| ClojureDart | Clojure → Dart 编译器(输入是 ~.cljd~ 文件);编译产物是 Dart,运行期对象也是 Dart,所以读字段要 ~(.-statusCode resp)~ 并带类型提示 |
+| re-dash | re-frame 移植到 ClojureDart 的版本( ~hti/re-dash~ ):同样是 ~reg-event-fx~ / ~reg-sub~ / ~reg-fx~ 与一份 app-db,但没有 ~:dispatch-n~ 等扩展 |
+| ~--dart-define~ | Dart 的编译期常量注入(对应 ~String.fromEnvironment~ );移动端的接口地址与超时走它, *不走* ~system.edn~ / 环境变量(§8.3) |
+| CanvasKit | Flutter web 的渲染后端;演示与录屏用 ~UseLocalCanvasKit=true~ 换成打包在本机的版本,配合本地 CJK 字体,离线也能出字(§8.3) |
+| 平台工程目录 | ~mobile/{macos,android,ios,linux,windows,web}/~ ,由 ~bb mobile:create~ 生成,不入库 |
