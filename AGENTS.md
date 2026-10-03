@@ -2,18 +2,19 @@
 
 ## 代码规模约束（强制 · 持续重构）
 
-- **单个源文件（`.clj/.cljs/.cljc`）尽量不超过 500 行**；超过必须按职责/领域拆分为多个命名空间或组件文件。
+- **单个源文件（`.clj/.cljs/.cljc/.cljd`）尽量不超过 500 行**；超过必须按职责/领域拆分为多个命名空间或组件文件。
 - **单个函数 / Reagent 组件不超过 50 行**（`defn`/`defn-`/`defmacro`/`defmethod`，按原始行数计，含 docstring 与空行）；超过必须抽取私有辅助函数、拆分子组件或将长逻辑下沉。
 - **持续重构**：任何改动若使文件/函数超限，应在本次提交内顺手拆分，不要留待以后。
-- `bb check` 检查 `src` / `env` / `test` / `bb` / `scripts` 下全部 Clojure 文件，当前全部达标，CI 强制执行；超限即失败。
+- `bb check` 检查 `src` / `env` / `test` / `bb` / `scripts` / `mobile/src` / `mobile/test` 下全部 Clojure 文件（含 `.cljd`：移动端靠命名空间拆分遵守同一套纪律），当前全部达标，CI 强制执行；超限即失败。
 - 该约束与 `README.md`「开发约定」一致。
 
 ## 任务入口与质量门禁
 
 - **所有任务走 babashka**：`bb tasks` 列出全部任务；不要再写 Makefile / shell 脚本，新任务加到 `bb.edn`，实现放 `bb/tasks/*.clj`（跨平台，Windows 也能跑）。
-- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`）、`bb lint:migrations`、`bb check`、`bb lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`，见「Frontend 组件规范」§11b）、`bb lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 跟得上源码，见「后端热重载」）、`bb lint:e2e`（`tests/e2e/**/*.js`：不许残留 `test.only`/`fixme`、分页参数只用 `page`/`size`、不许 `goto('http…')` 写死绝对地址、`*.spec.js` 不许 `waitForTimeout` 且必须有断言、`playwright.config.js` 必须仍然 `testIgnore` 掉 tour）；这些都是内部步骤，不是独立任务名。格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
-- **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟。改了任务名或参数，要同步改 CI。
-- **新增业务模块用 `bb new-module`**（见 README「新增业务模块」）。源码里的 `;; [new-module] <tag>` 注释是脚手架的登记点（`system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs`），**不要删除或改写这些标记行**；重构这些文件时把标记保留在对应集合的末尾。改动脚手架模板（`bb/tasks/scaffold/*.clj`）后，至少生成一个模块跑一遍 lint / fmt:check / 生成的测试 / `bb cljs:check`（CI 的 scaffold 任务会做完整检查）。
+- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`，**不含 `.cljd`**，见「移动端」）、`bb lint:migrations`、`bb check`、`bb lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`，见「Frontend 组件规范」§11b）、`bb lint:scaffold`（`bb new-module` 的 `;; [new-module] <tag>` 登记点自检，不改工作区）、`bb lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 跟得上源码，见「后端热重载」）、`bb lint:e2e`（`tests/e2e/**/*.js`：不许残留 `test.only`/`fixme`、分页参数只用 `page`/`size`、不许 `goto('http…')` 写死绝对地址、`*.spec.js` 不许 `waitForTimeout` 且必须有断言、`playwright.config.js` 必须仍然 `testIgnore` 掉 tour）；这些都是内部步骤，不是独立任务名。格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
+- **移动端不在 `bb ci` 里**：改了 `mobile/` 要单独跑 `bb mobile:compile`（ClojureDart 编译器就是移动端的静态检查）与 `bb mobile:test`；CI 用独立的 `mobile` job 装 Flutter 跑这两条。理由见「移动端（ClojureDart）」。
+- **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟、移动端编译 + 单元测试。改了任务名或参数，要同步改 CI。
+- **新增业务模块用 `bb new-module`**（见 README「新增业务模块」）。源码里的 `;; [new-module] <tag>` 注释是脚手架的登记点（`system.edn` 的 components / route-services / sql-files、`web/routes/api.clj`、`router.cljs` 的 routes / page-names、`menu_data.cljs` 的 menu-keys / breadcrumbs / icons、`page_view.cljs`、`events/common.cljs` 的 tab-meta；`core.clj` 与 `events.cljs` 没有标记行，脚手架按字母序给它们补 require），**不要删除或改写这些标记行**；重构这些文件时把标记保留在对应集合的末尾。改动脚手架模板（`bb/tasks/scaffold/*.clj`）后，至少生成一个模块跑一遍 lint / fmt:check / 生成的测试 / `bb cljs:check`（CI 的 scaffold 任务会做完整检查）。
 - **生产密钥**：prod profile 下 `JWT_SECRET`（≥32 字符）与 `COOKIE_SECRET`（16 字节）缺失或为内置默认值时拒绝启动（`com.ruoyi.infra.secrets`）；dev/test 用默认值即可，不要把真实密钥写进仓库。
 - **第三方服务密钥同样只走环境变量**：导览旁白的 MiMo TTS 密钥（`bb video:narrate`）只从 `MIMO_API_KEY` 或 gitignore 掉的 `target/tour/mimo.key` 读取，请求失败时不要把密钥写进任何报错、任务参数或仓库文件。
 - **配置只走 `system.edn` + 环境变量，不要在读到配置的代码里再读 `System/getenv`**：环境相关项在 `resources/system.edn` 用 `#env`/`#profile` 声明，跨方言兜底（迁移目录、连接池）与 prod 体检由 `com.ruoyi.config` 的纯函数（`with-default-migration-dir` / `with-dialect-pool` / `prod-warnings`）在 `system-config` 里统一处理后交给 Integrant，新增这类规则请在这里加纯函数并补 `config_test`，不要在控制器里读环境变量。连接池：SQLite 强制单连接，MySQL 默认 10（`DB_MAX_ACTIVE` 可覆盖）；`system.edn` 里 `:db.sql/connection` 的池参数**必须用 HikariCP 的键名**（`:maximum-pool-size` / `:minimum-idle`），写成 `:max-active` / `:init-size` 会被 conman 静默忽略、兜底落空（`config_test` 的 `pool-keys-reach-hikari-test` 会真的建一次池来验证）；数据源监控读的是解包后的 Hikari 池，新增这类组件时要走 `infra.datasource/get-delegate`；定时任务用内存 JobStore，多实例部署时非主实例设 `SCHEDULER_ENABLED=false`；启动迁移可用 `MIGRATE_ON_INIT=false` 关闭。
@@ -207,19 +208,20 @@ clj-nrepl-eval -p 7200 '(user/migrate)'     # 跑待处理迁移
 
 ### 7. 路由初始化必须在 app 渲染之后，且 navigate! 需检查初始化状态
 
+路由是手写的（`frontend/router.cljs`：bidi 匹配 + `history.pushState` + `popstate` 监听），**项目里没有 accountant**（依赖已按 ADR-007 移除），不要照着老例子写 `accountant/navigate!`。
+
 ```clojure
-;; navigate! 必须等 configure-navigation! 调用后方可执行
-;; 使用 initialized? 标志保护
+;; navigate! 必须等 init-routes! 调用后方可执行，用 initialized? 保护
 (defonce initialized? (volatile! false))
 
-(defn navigate! [page]
+(defn navigate! [page]          ;; 只更新 URL，页面由 :navigate 事件驱动
   (when @initialized?
-    (accountant/navigate! (page-path page))))
+    (.pushState js/history nil "" (page-path page))))
 
-(defn init-routes! []
-  (accountant/configure-navigation! ...)
+(defn init-routes! []           ;; 在 app 渲染之后调用
+  (.addEventListener js/window "popstate" on-popstate)
   (vreset! initialized? true)
-  (accountant/dispatch-current!))
+  (rf/dispatch-sync [:navigate (or (:handler (match-route (.-pathname js/location))) :dashboard)]))
 ```
 
 ### 8. antd `message` 必须用 `App` 组件上下文，不能直接用静态方法
@@ -366,6 +368,24 @@ React 会警告 shorthand 与非 shorthand 属性冲突，应把颜色合并到 
 ;; ✅ 正确
 [:> Progress {:percent percent :size 10 :railColor "#f0f0f0"}]
 ```
+
+## 移动端（ClojureDart）
+
+需要 App 时用 `mobile/`：[ClojureDart](https://github.com/tensegritics/ClojureDart)（Clojure → Dart）+ Flutter Material + [re-dash](https://github.com/hti/re-dash)（re-frame 移植）。完整说明、目录分层与踩坑清单见 [`mobile/README.md`](mobile/README.md)，改动移动端前先读那一节；它在整体设计里的位置（作为容器、组件图、共用契约、选型理由与已知缺口）见 `docs/architecture/c4-model.org` 的 §2/§3/§5.3–§5.5/§7.5/§8.3/§9.8 与 ADR-013、§13 #20–#26。
+
+- **独立工程**：`mobile/deps.edn`、`mobile/pubspec.yaml` 与根依赖表无关；根 `deps.edn` 的 `:paths` 里没有 `mobile`，所以 `bb test` / `bb uberjar` / Docker 镜像不需要 Flutter，`bb ci` 也不含移动端。改 `mobile/` 后跑 `bb mobile:compile` + `bb mobile:test`（CI 的 `mobile` job 就是这两条）。
+- **静态检查是编译器，不是 clj-kondo**：clj-kondo 没有可靠的 ClojureDart 支持（`["package:http/http.dart" :as http]`、`dart/is?`、`(.-statusCode resp)`、`f/widget :watch` 都会报假错），所以 `.cljd` 不进 `bb lint:kondo`；`clj -M:cljd compile` 通过才算静态检查通过。规模约束（≤500 行 / ≤50 函数行）**对 `.cljd` 生效**（`bb check` 覆盖 `mobile/src`、`mobile/test`），移动端靠命名空间拆分（config/json/api/fx/model/events/subs/theme/views）守住这一点。
+- **打的是同一套后端契约**：响应 `{:code :msg :data}`、分页 `page`/`size`、JWT + `sys_online` 会话、401 一律归到 `:auth/session-expired`、业务失败显示后端 `msg`。所以后端改响应形状时必须同时改 `mobile/src/ruoyi/api.cljd`，两边不能各自发明新信封。
+- **通讯用 JSON，不用 transit**（实测：同一批列表响应体积只差 ~6%；后端虽然仍能协商 `application/transit+json`（muuntaja 默认格式表带着 `transit-clj`），但**两个客户端都不用它**，时间戳已由 `infra.json` 统一、键由移动端 `json/->edn` 转关键字，ClojureDart 侧也没有 transit 库）。要压缩上 gzip，服务端做；想彻底关掉 transit 通道见设计文档 §13 #25。
+- **三条最容易踩的运行期坑**（都表现为「不报错但没效果」）：
+  1. 关键字读不到 Dart 对象字段 → 写 `(.-statusCode resp)` 并加类型提示 `^http/Response`；
+  2. 函数内部 `await` 过就变成异步函数，调用方漏 `await` 拿到的是 `Future`、解构全是 `nil`（`api/call`、re-dash 的 `dispatch-sync` 都是这类）；
+  3. `await` 不能写在 `let` 的解构绑定里，编译失败但报错位置指向入口 ns（`=== Faulty form ===`），要先 `(let [r (await f) {:keys [a]} r] …)`。
+- **所有 `reg-event-* / reg-sub / reg-fx` 必须写在会被调用的 `register!` 里**：Dart 树摇会把顶层从未调用的注册代码直接删掉，表现是运行期「Event not found」。
+- **macOS 桌面必须补出站网络权限**：`flutter create` 的模板没有 `com.apple.security.network.client`，每个请求都是 `SocketException … Operation not permitted`（只在桌面/真机出现，chrome 看不出来）。`bb mobile:create` 幂等补进 `macos/Runner/*.entitlements`，`bb mobile:doctor` 负责报告。
+- **接口地址只走 `--dart-define`**（`RUOYI_API_BASE_URL`、`RUOYI_REQUEST_TIMEOUT_MS`），不要写死；注意 ClojureDart 只把**键名为字面量**的那层编成 `const String.fromEnvironment`，包一层把键当参数传进去就会静默用回默认值。
+- **平台工程目录（`macos/ android/ ios/ …`）不进版本库**，由 `bb mobile:create` 重新生成；`bb rename` 会搬 `mobile/src/<旧名>`、`mobile/test/<旧名>` 并改写 pubspec / deps / `.cljd` 里的命名空间。
+- **无头环境验证界面**：截图与键鼠在容器/CI 里通常不可用；用 `clj -M:cljd flutter` 起的 Dart VM service 调 `ext.flutter.debugDumpApp` 打 widget 树。
 
 ## RuoYi-Vue 对照参考
 

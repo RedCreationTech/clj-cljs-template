@@ -1,6 +1,6 @@
 # clojure-template — Clojure / ClojureScript 全栈管理系统模板
 
-一个可直接复用的 **Clojure 后端 + ClojureScript 前端** 管理后台起步模板。后端基于 **Kit 框架**（Integrant + Reitit + Ring + Undertow），前端基于 **shadow-cljs + Reagent + re-frame + Ant Design 6**，内置 RuoYi 风格的用户/角色/菜单/部门/字典/日志/定时任务等通用能力，并用 `bb new-module` 一条命令生成新的业务模块。
+一个可直接复用的 **Clojure 后端 + ClojureScript 前端** 管理后台起步模板。后端基于 **Kit 框架**（Integrant + Reitit + Ring + Undertow），前端基于 **shadow-cljs + Reagent + re-frame + Ant Design 6**，内置 RuoYi 风格的用户/角色/菜单/部门/字典/日志/定时任务等通用能力，并用 `bb new-module` 一条命令生成新的业务模块。需要 App 时还有可选的 **ClojureDart 移动端**模板（`mobile/`，Flutter + re-dash，打同一套后端接口）。
 
 克隆后三条命令就能得到一个带业务模块、可运行的新项目：`bb rename` 改名 → `bb new-module` 生成业务模块 → `bb dev` 启动。所有日常任务都通过 babashka 统一入口（`bb tasks` 查看），macOS / Linux / Windows 通用，CI 也只调用这些任务。架构说明见 [`docs/architecture/c4-model.org`](docs/architecture/c4-model.org)（C4 模型，org-mode 可执行文档；[HTML 版](docs/architecture/c4-model.html)）。
 
@@ -16,6 +16,7 @@
 | 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0 (函数组件 + Hooks), re-frame 1.4, React 19.3, Ant Design 6.6；中英文界面切换（`i18n/tr`）、浅色/暗色主题 |
 | 任务调度 | Quartz 2.5（`sys_job` 表驱动，支持暂停/恢复/立即执行） |
 | 工具链 | babashka（`bb.edn` 统一任务入口 + `bb new-module` 脚手架）, Clojure CLI (`deps.edn`), tools.build 0.10, clj-kondo 2026.08, cljfmt 0.16, cljs.test（Node）, Playwright 1.63 (E2E), cloverage, GitHub Actions |
+| 移动端（可选） | [ClojureDart](https://github.com/tensegritics/ClojureDart) 0.9（Clojure → Dart）+ Flutter 3.35 + [re-dash](https://github.com/hti/re-dash) 1.2（re-frame 移植），独立工程 `mobile/`，打同一套 `{:code :msg :data}` 契约；见 [`mobile/README.md`](mobile/README.md) |
 
 ---
 
@@ -84,6 +85,11 @@
 ├── test/clj                     # 后端单元/集成测试（clojure.test）
 ├── test/cljs                    # 前端单元测试（cljs.test,Node 运行）
 ├── tests/e2e                    # Playwright 端到端测试
+├── mobile/                      # 可选的 ClojureDart 移动端(独立 deps.edn + pubspec.yaml,不进 bb ci)
+│   ├── deps.edn                 # ClojureDart(锁 git tag/sha) + re-dash;:cljd/opts {:kind :flutter}
+│   ├── pubspec.yaml             # Dart 依赖(package:http、dev:test)
+│   ├── src/ruoyi/               # main/config/json/api/fx/model/events/subs/theme/views(与网页端同分层)
+│   └── test/ruoyi/              # cljd.test 单元测试(bb mobile:test,不需要后端在跑)
 ├── scripts/db.clj               # 数据库重置 / 迁移往返检查(bb test:mysql、bb db:roundtrip 调用)
 └── docs/
     ├── architecture/c4-model.org  # C4 架构文档（Context/Container/Component/Code + 动态/部署视图）
@@ -103,6 +109,7 @@
 - Node.js 18+（CI 用 22）
 - 推荐安装 [Clojure CLI](https://clojure.org/guides/install_clojure)；没装时 bb 会自动退回内置的 `bb clojure`
 - 可选：Docker（`bb test:mysql` 起本地 MySQL）、clj-kondo（没装时 `bb lint` 自动下载 pod）、clojure-lsp
+- 可选：[Flutter](https://docs.flutter.dev/get-started/install) 3.35+（只有做移动端 `bb mobile:*` 才需要；macOS 上 `brew install flutter` 会从源码编译，建议直接下官方 tarball）
 
 ### 1. 用模板创建新项目
 
@@ -195,8 +202,10 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | E2E | `bb e2e`（需后端已在 3000 运行；首次运行先 `npx playwright install chromium`）；单个用例 `bb e2e tests/e2e/post-crud.spec.js` |
 | 功能导览录像 | `bb video:tour`（需后端 + `bb release` + ffmpeg）→ `target/tour/tour.mp4`，14 段约 16 分 56 秒（含文件管理、生产部署与 babashka 工程链），左侧常驻目录、内嵌章节与烧录台词；只重新合成用 `bb video:tour --compose-only` |
 | 导览旁白配音 | `bb video:narrate`（默认小米 MiMo TTS，密钥 `export MIMO_API_KEY=…` 或写进 `target/tour/mimo.key`，不要把密钥提交进仓库）：逐句合成 273 句台词，剪掉每句首尾静音，按烧录字幕的时刻排一条整片音轨（装不下就最多提速 1.3 倍追字幕，两句之间留 0.2 秒空隙，追不上才会舍弃），画面流 copy 所以字幕/章节/目录带不变，可反复执行；语音缓存于 `target/tour/narration/`（剪静音的副本在 `narration/trimmed/`），改哪句只重合成哪句，`--force` 会连同缓存一起重灌（会计费）。没网或没额度时用离线兜底 `bb video:narrate --provider say`，只补缓存用 `--only 分镜号` |
+| 移动端导览录像 | `bb video:mobile`（需 ffmpeg + Chromium）：重编网页版 → 在 3210 起**独立库**的录屏后端（`target/mobile-demo.db`，写 20 条演示岗位凑成两页）→ 录 `tests/e2e/mobile/` 四段分镜（功能/通讯方式/状态管理/主题设置）→ 拼成 `target/mobile-tour/mobile.mp4` 并配旁白。舞台页自带目录与假鼠标，台词烧在画面里；`--compose-only` 只重新合成，`--no-narrate` 不出音轨。详见 [`mobile/README.md`](mobile/README.md)「网页版与录屏」 |
 | 覆盖率 | `bb coverage` → `target/coverage/index.html` |
-| 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束）+ `lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`）+ `lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 与源码对得上）+ `lint:e2e`（Playwright 用例：不残留 `test.only`/`fixme`、分页只用 `page`/`size`、不写死 `goto('http…')`、`*.spec.js` 不 `waitForTimeout` 且必须有断言、tour 仍被 `testIgnore` 排除） |
+| 移动端（可选） | `bb mobile:doctor`（查工具链与 macOS 网络权限）→ `bb mobile:create`（生成平台工程目录，幂等）→ `bb mobile:compile`（= 移动端的静态检查）→ `bb mobile:run`（编译并热重载运行）/ `bb mobile:test`（`.cljd` 单元测试，不需要后端）/ `bb mobile:clean`。这些不在 `bb ci` 里，改了 `mobile/` 单独跑；详见 [`mobile/README.md`](mobile/README.md) |
+| 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束）+ `lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`）+ `lint:scaffold`（`bb new-module` 的登记点自检）+ `lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 与源码对得上）+ `lint:e2e`（Playwright 用例：不残留 `test.only`/`fixme`、分页只用 `page`/`size`、不写死 `goto('http…')`、`*.spec.js` 不 `waitForTimeout` 且必须有断言、tour 仍被 `testIgnore` 排除） |
 | 格式化 | `bb fmt`（cljfmt 修改）/ `bb fmt:check`（只检查） |
 | 构建 | `bb release`（前端）、`bb uberjar`（前端 + 后端 jar）、`bb cljs:check`（快速编译检查）、`bb patch:vendor`（给 node_modules 打补丁，见下） |
 | 与 CI 相同的快速检查 | `bb ci`（lint + fmt:check + test + test:cljs） |
@@ -241,15 +250,16 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 
 ## 持续集成
 
-`.github/workflows/ci.yml` 在 push / PR 时并行运行 5 个任务，全部只调用 bb 任务，本地可原样复现：
+`.github/workflows/ci.yml` 在 push / PR 时并行运行 6 个任务，全部只调用 bb 任务，本地可原样复现：
 
 | 任务 | 内容 |
 |------|------|
-| lint | `bb lint`（clj-kondo、迁移检查、规模约束、分页约定、开发期约定、E2E 用例约定）+ `bb fmt:check` |
+| lint | `bb lint`（clj-kondo、迁移检查、规模约束、分页约定、脚手架登记点、开发期约定、E2E 用例约定）+ `bb fmt:check` |
 | test-sqlite | `bb test` + `bb db:roundtrip` |
 | test-mysql | MySQL 8.4 service 上 `bb test:mysql` + `bb db:roundtrip` |
 | e2e | `bb test:cljs` → `bb release`（warning 即失败）→ 启动后端 → `bb e2e`，失败时上传报告与后端日志 |
 | scaffold | `bb new-module` 生成示例模块后跑 lint、格式、生成的测试、迁移往返、`bb cljs:check`、生成的 E2E |
+| mobile | 装 Flutter 3.35（`subosito/flutter-action`）后 `bb mobile:compile` + `bb mobile:test`；只有 `mobile/` 用得到，所以不并进 `bb ci`，后端与网页端的门禁也不该被 Flutter SDK 绑住 |
 
 公共环境（JDK 21、Clojure CLI、bb、clj-kondo、Node、依赖缓存）封装在 `.github/actions/setup`。
 
@@ -298,7 +308,7 @@ Swagger UI：http://localhost:3000/api
 - 错误处理：业务规则不通过由领域层抛 `(errors/fail! "中文原因")`（`ex-info`，`{:type :system.exception/business}`），`web/middleware/exception` 把它转成 **HTTP 200 + `{:code 500 :msg}`**，前端照现有契约弹出这条 `msg`；控制器只负责判断直接返回响应（`web/response` 的 `ok` / `fail` / `deny`，`deny` 用于 401/403 状态码与业务码一致的场景），**不要写 try/catch 吞异常**，意外错误（数据库、IO）由中间件出 5xx 通用文案，细节只进服务端日志。单元测试用 `test/clj/com/ruoyi/web/controller_test_helper.clj` 的 `call` / `business-msg` 走真实中间件断言响应形状。
 - 权限：新接口在路由数据里声明 `:auth?` / `:perms`，对应按钮菜单（F）写进迁移；前端按钮加 `:perm` 或包 `perm/when-allowed`。前端只负责显隐，拦截以后端为准。
 - 接口失败由 `api.transport` 统一提示（403、5xx、网络断开、业务码非 200）并复位 loading（`events.common/stop-all-loading` 把 app-db 里各模块的 `:loading?` 清掉，请求失败后表格不会一直转圈），调用方的 `on-error` 只做收尾，不要再各自弹「网络错误」；上传用 `t/request` 的 `:body`，带令牌下载用 `t/download!`。
-- 每个 namespace ≤ 500 行、函数 ≤ 50 行（`bb check` 检查 src / env / test / bb / scripts）；超限时拆分。
+- 每个 namespace ≤ 500 行、函数 ≤ 50 行（`bb check` 检查 src / env / test / bb / scripts / mobile）；超限时拆分。
 - clj-kondo 零 warning、cljfmt 格式一致（`bb lint`、`bb fmt:check`，CI 强制）。
 - 时间由应用生成：SQL 里写 `:now`（`infra.clock` 自动注入本地时间），不写 `CURRENT_TIMESTAMP` / `NOW()`（lint 检查）；接口里的时间统一编码为 `yyyy-MM-dd HH:mm:ss`（`infra.json`），两库一致。需要多实例共享的临时状态用 `infra.kv`，不要放 atom。
 - SQL 统一放 `resources/sql/*.sql`；两套迁移目录必须同步（`bb lint:migrations` 检查）；共用 SQL 只写两库都支持的语法（如 `INSTR` 代替 `||`、派生表代替 `DUAL`）。

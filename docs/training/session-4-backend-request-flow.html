@@ -391,7 +391,7 @@ LIMIT :page_size OFFSET :offset</code></pre>
       <h2>练习 / 讨论</h2>
       <ol>
         <li>启动后端后，使用 <code>curl</code> 或浏览器开发者工具访问 <code>GET /api/system/user?page=1&amp;size=5</code>，观察响应。然后在 <code>wrap-oper-log</code> 里加一行 <code>(log/info "operlog:" uri)</code>，用 <code>(user/rr)</code> 热重载后再次请求，确认日志打印。</li>
-        <li>在 <code>system.clj</code> 中新增一个 <code>GET /system/demo/hello</code> 端点，要求必须登录(放在 <code>/system</code> 组里即可)并声明 <code>:perms "system:demo:hello"</code>,在控制器中返回 <code>{:code 200 :msg "ok" :data "hello"}</code>;分别用 admin 与一个没有该权限的用户调用,观察 200 / 403。借助<a href="session-1-clojure-basics.html">第1讲</a>的 <code>(user/rroutes)</code> + <code>(user/rr)</code> 让它在不重启后端的情况下上线。</li>
+        <li>在 <code>system.clj</code> 中新增一个 <code>GET /system/demo/hello</code> 端点，要求必须登录(放在 <code>/system</code> 组里即可)并声明 <code>:perms "system:demo:hello"</code>,在控制器里用 <code>com.ruoyi.web.response/ok</code> 返回 <code>"hello"</code>(信封 <code>{:code 200 :msg "操作成功" :data "hello"}</code>),权限标识要在迁移里登记成按钮菜单并授权给 admin;分别用 admin 与一个没有该权限的用户调用,观察 200 / 403。改动是路由数据,用<a href="session-1-clojure-basics.html">第1讲</a>的 <code>(user/rr)</code> 上线,再用 <code>(user/req :get "/system/demo/hello")</code> 进程内验证,不用重启后端。</li>
         <li>讨论：数据权限过滤放在控制器层还是 SQL 层更好？本项目为什么用「固定写法的 SQL 条件 + 参数」而不是拼接 SQL 片段？</li>
       </ol>
     </section>

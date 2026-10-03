@@ -253,16 +253,13 @@ flowchart TD
 <span class="comment">;; src/clj/com/ruoyi/integrant/state.clj</span>
 (<span class="kw">defonce</span> <span class="sym">system</span> (<span class="sym">atom</span> <span class="kw">nil</span>))</code></pre>
     <p>开发时常用的热重载命令来自 <code>env/dev/clj/user.clj</code>。更详细的用法与选择策略请参考<a href="session-1-clojure-basics.html">第1讲：LLM + nREPL 探索式开发</a>。</p>
-    <pre><code class="language-clojure">(<span class="kw">defn</span> <span class="sym">reload-domain</span> [] ...)
-(<span class="kw">defn</span> <span class="sym">reload-routes</span> [] ...)
-(<span class="kw">defn</span> <span class="sym">reload-all</span> [] ...)
-(<span class="kw">defn</span> <span class="sym">reload-system</span> [] (<span class="sym">integrant.repl/reset</span>))
-
-(<span class="kw">def</span> <span class="sym">rr</span> reload-system)
-(<span class="kw">def</span> <span class="sym">rd</span> reload-domain)
-(<span class="kw">def</span> <span class="sym">ra</span> reload-all)</code></pre>
+    <pre><code class="language-clojure">;; env/dev/clj/user.clj —— 四个短名字,实现都在 com.ruoyi.dev
+(<span class="kw">def</span> <span class="sym">rd</span> dev/reload)      <span class="comment">;; 只重载磁盘上改过的命名空间(待重载集合由 tools.namespace 按文件时间戳派生)</span>
+(<span class="kw">def</span> <span class="sym">rr</span> dev/restart!)   <span class="comment">;; refresh 源码 → halt(不 halt :nrepl/server)→ ig/init</span>
+(<span class="kw">def</span> <span class="sym">ra</span> dev/reload)      <span class="comment">;; 与 rd 是同一个函数,只是老手敲习惯的别名</span>
+(<span class="kw">def</span> <span class="sym">rs</span> dev/state)       <span class="comment">;; 看 profile、组件数、连接池实时数字</span></code></pre>
     <div class="note">
-      <strong>注意：</strong>修改 <code>system.edn</code> 或组件结构后，需要 <code>(user/rr)</code> 完全重启 Integrant 系统；修改 domain 逻辑只需 <code>(user/rd)</code>。定时任务调度器依赖 migrations 组件，因此必须先完成迁移再启动调度器。
+      <strong>注意：</strong>系统状态只有 <code>com.ruoyi.integrant.state/system</code> 这一份（<code>com.ruoyi.core/system</code> 是它的别名），<code>integrant.repl</code> 已从依赖里移除，<code>bb lint:dev</code> 会拦住任何再次引入第二份状态的改动。修改 <code>system.edn</code> 或组件结构后，用 <code>(user/rr)</code> 重建组件（nREPL 与 3000 端口都还在）；修改 domain 逻辑只需 <code>(user/rd)</code>。定时任务调度器依赖 migrations 组件，因此必须先完成迁移再启动调度器。
     </div>
 
     <h2>3. 数据库栈</h2>

@@ -66,7 +66,7 @@
         <li>Re-frame 核心概念：event → effect → subscription → view</li>
         <li><code>app-db</code> 的扁平命名空间设计</li>
         <li>事件处理器：<code>reg-event-db</code>、<code>reg-event-fx</code>、<code>reg-fx</code></li>
-        <li>API 层：<code>api.cljs</code> 与 <code>request</code> 助手</li>
+        <li>API 层：<code>api/transport.cljs</code> 的 <code>request</code> + 各领域 <code>api/&lt;module&gt;.cljs</code></li>
         <li>订阅：<code>reg-sub</code>、参数化订阅、layer 2 / layer 3</li>
         <li>服务器状态与派生状态；UI 状态的管理</li>
         <li>Effect：导航、消息提示、localStorage 主题</li>
@@ -119,7 +119,7 @@ flowchart LR
           <strong>effect</strong>：由 <code>reg-fx</code> 注册，负责真正的副作用（HTTP、导航、localStorage）。event handler 只描述“要做什么”，effect 去执行。
         </div>
         <div class="detail-panel" data-step="api">
-          <strong>HTTP API</strong>：<code>api.cljs</code> 中的 <code>request</code> 函数从 app-db 读取 token，发起 AJAX；成功后再次 dispatch 一个 db 更新事件。
+          <strong>HTTP API</strong>：<code>api/transport.cljs</code> 的 <code>request</code> 从 app-db 读取 token 发起 AJAX，成功后再 dispatch 一个 db 更新事件；401 统一派发 <code>:auth/session-expired</code>，其它失败统一派发 <code>:api/error</code>。
         </div>
         <div class="detail-panel" data-step="db">
           <strong>db update</strong>：例如 <code>:users/set-list</code> 把返回的 <code>:rows</code> 和 <code>:total</code> 写入 <code>app-db</code>，同时把 <code>:loading?</code> 置为 false。
@@ -210,33 +210,33 @@ flowchart LR
                                   (<span class="kw">fn</span> [_]))))</code></pre>
 
     <h2>4. API 层</h2>
-    <p><code>src/cljs/com/ruoyi/frontend/api.cljs</code> 封装了所有后端调用。核心 <code>request</code> 函数自动从 <code>app-db</code> 读取 token 并附加 <code>Authorization: Bearer &lt;token&gt;</code>：</p>
+    <p>HTTP 传输在 <code>src/cljs/com/ruoyi/frontend/api/transport.cljs</code>（已没有 <code>api.cljs</code> 门面，页面直接 require 各领域命名空间，如 <code>com.ruoyi.frontend.api.users</code>）。<code>request</code> 自动从 <code>app-db</code> 读取 token 并附加 <code>Authorization: Bearer &lt;token&gt;</code>，同时把令牌的续期与失效都收在这里：</p>
     <pre><code class="language-clojure">(<span class="kw">def</span> <span class="sym">api-base</span> <span class="str">"/api"</span>)
 
-(<span class="kw">defn-</span> <span class="sym">get-token</span> []
-  (<span class="sym">get-in</span> @rf-db/app-db [<span class="macro">:auth</span> <span class="macro">:token</span>]))
-
-(<span class="kw">defn-</span> <span class="sym">request</span>
-  <span class="str">"发起 HTTP 请求，从 re-frame app-db 读取 token。"</span>
-  [{<span class="macro">:keys</span> [method uri params on-success on-error]}]
-  (<span class="sym">ajax/ajax-request</span>
-    {<span class="macro">:method</span> method
-     <span class="macro">:uri</span> (<span class="sym">str</span> api-base uri)
-     <span class="macro">:params</span> params
-     <span class="macro">:headers</span> (<span class="kw">when-let</span> [token (<span class="sym">get-token</span>)]
-                {<span class="str">"Authorization"</span> (<span class="sym">str</span> <span class="str">"Bearer "</span> token)})
-     <span class="macro">:format</span> (<span class="sym">ajax/json-request-format</span>)
-     <span class="macro">:response-format</span> (<span class="sym">ajax/json-response-format</span> {<span class="macro">:keywords?</span> <span class="kw">true</span>})
-     <span class="macro">:handler</span> (<span class="kw">fn</span> [[ok result]]
-                (<span class="kw">if</span> ok
-                  (<span class="sym">on-success</span> result)
-                  (<span class="sym">on-error</span> result)))}))</code></pre>
-    <p>业务函数就是简单的 <code>request</code> 包装：</p>
+(<span class="kw">defn</span> <span class="sym">request</span>
+  <span class="str">"发起 HTTP 请求。默认从 app-db 读取令牌;传 :token 可显式指定(如登出时);
+   :silent? true 时失败不弹统一提示(后台续期、登出等);上传文件用 :body 传 js/FormData。"</span>
+  [{<span class="macro">:keys</span> [method uri params body on-success on-error token silent?]}]
+  (<span class="kw">let</span> [token (<span class="kw">or</span> token (<span class="sym">get-token</span>))]
+    (<span class="kw">when</span> (<span class="kw">and</span> token (<span class="kw">not=</span> uri <span class="str">"/auth/refresh"</span>)
+               (<span class="sym">token/refresh-due?</span> (<span class="sym">token/claims</span> token) (<span class="sym">js/Date.now</span>)))
+      (<span class="sym">rf/dispatch</span> [<span class="macro">:auth/refresh</span>]))            <span class="comment">;; 令牌过半,顺带续期</span>
+    (<span class="sym">ajax/ajax-request</span>
+      {<span class="macro">:method</span> method
+       <span class="macro">:uri</span> (<span class="sym">str</span> api-base uri)
+       <span class="macro">:headers</span> (<span class="kw">when</span> token {<span class="str">"Authorization"</span> (<span class="sym">str</span> <span class="str">"Bearer "</span> token)})
+       <span class="macro">:response-format</span> (<span class="sym">ajax/json-response-format</span> {<span class="macro">:keywords?</span> <span class="kw">true</span>})
+       <span class="macro">:handler</span> (<span class="kw">fn</span> [[ok result]]
+                  (<span class="sym">handle-failure!</span> token ok result silent?)
+                  <span class="comment">;; 带令牌的 401 → :auth/session-expired(回登录页)</span>
+                  <span class="comment">;; 403 / 5xx / 网络断开 / HTTP 200 但业务码非 200 → :api/error 弹后端 msg</span>
+                  (<span class="kw">if</span> ok (<span class="sym">on-success</span> result) (<span class="sym">on-error</span> result)))}))))</code></pre>
+    <p>业务函数在 <code>api/users.cljs</code> 这样的领域命名空间里，只是 <code>t/request</code> 的一层包装，页面 <code>:require</code> 它而不再经过统一门面：</p>
     <pre><code class="language-clojure">(<span class="kw">defn</span> <span class="sym">list-users</span>
   <span class="str">"获取用户列表。"</span>
   [params on-success on-error]
-  (<span class="sym">request</span> {<span class="macro">:method</span> <span class="macro">:get</span> <span class="macro">:uri</span> <span class="str">"/system/user"</span> <span class="macro">:params</span> params
-            <span class="macro">:on-success</span> on-success <span class="macro">:on-error</span> on-error}))</code></pre>
+  (<span class="sym">t/request</span> {<span class="macro">:method</span> <span class="macro">:get</span> <span class="macro">:uri</span> <span class="str">"/system/user"</span> <span class="macro">:params</span> params
+              <span class="macro">:on-success</span> on-success <span class="macro">:on-error</span> on-error}))</code></pre>
 
     <h2>5. 订阅</h2>
     <h3>5.1 基础订阅</h3>

@@ -181,6 +181,7 @@
         <a class="nav-link" href="#quickstart">快速开始</a>
         <a class="nav-link" href="#hot-reload">热重载</a>
         <a class="nav-link" href="#frontend-spec">前端规范</a>
+        <a class="nav-link" href="#mobile">移动端 App</a>
       </div>
       <div class="nav-group">
         <div class="nav-group-title">Kit 框架</div>
@@ -213,7 +214,8 @@
     <p>
       项目目标：让开发者专注于业务，降低技术难度，缩短项目周期，并保证软件安全质量。
       后端采用函数式、组件化的 Clojure 生态；前端使用 Reagent 2 + React 19 + Ant Design 6，
-      共享同一端口 <code>3000</code>。
+      共享同一端口 <code>3000</code>。需要 App 时还有可选的 <strong>ClojureDart 移动端</strong>
+      （<code>mobile/</code>，Flutter Material + re-dash），打的是<strong>同一套后端接口</strong>，见 <a href="#mobile">移动端 App</a>。
     </p>
 
     <div class="tip">
@@ -231,6 +233,7 @@
         <tr><td>Clojure CLI</td><td>推荐安装;没有时 bb 自动退回内置的 <code>bb clojure</code></td></tr>
         <tr><td>Node.js</td><td>18+</td></tr>
         <tr><td>数据库</td><td>SQLite（默认）/ MySQL</td></tr>
+        <tr><td>Flutter SDK</td><td>仅移动端需要（CI 固定 3.35.2,Dart <code>^3.9.0</code>);不开发 App 就不用装,后端与网页端的门禁都不依赖它</td></tr>
       </tbody>
     </table>
 
@@ -243,6 +246,7 @@
         <tr><td>安全</td><td>Buddy（JWT + bcrypt）, XSS/CSRF 防护</td></tr>
         <tr><td>前端</td><td>ClojureScript, Shadow-CLJS, Reagent 2.0, React 19, Ant Design 6, re-frame</td></tr>
         <tr><td>任务调度</td><td>Quartz</td></tr>
+        <tr><td>移动端(可选)</td><td>ClojureDart 0.9 → Dart,Flutter 3.35 Material,re-dash(re-frame 移植),package:http</td></tr>
         <tr><td>脚手架</td><td><code>bb new-module</code> 一条命令生成可运行的 CRUD 模块并自动登记</td></tr>
       </tbody>
     </table>
@@ -349,7 +353,12 @@
 │   ├── antd.cljs               # Ant Design 组件封装
 │   └── pages/                  # 页面组件
 ├── test/clj · test/cljs        # 后端 / 前端单元测试
-└── tests/e2e                   # Playwright 端到端测试
+├── tests/e2e                   # Playwright 端到端测试
+└── mobile/                     # 可选:ClojureDart 移动端(独立工程,不进 bb ci)
+    ├── deps.edn · pubspec.yaml # 与根依赖表无关
+    ├── src/ruoyi/*.cljd        # config/json/api/fx/model/events/subs/theme/views
+    ├── test/ruoyi/*_test.cljd  # bb mobile:test
+    └── lib/main.dart           # 入口垫片(bb mobile:create 生成)
 </code></pre>
 
     <h2 id="quickstart">快速开始</h2>
@@ -368,7 +377,7 @@ JDBC_URL="jdbc:mysql://127.0.0.1:3308/ruoyi?user=root&amp;password=password&amp;
     <pre><code>bb new-module customer --label 客户 --fields "name:string:required:名称,level:int:等级,remark:text:备注"</code></pre>
 
     <h3>3. 测试与构建</h3>
-    <pre><code>bb ci            # lint + 格式 + 前后端单元测试(与 CI 相同)
+    <pre><code>bb ci            # lint + 格式 + 前后端单元测试(与 CI 相同;不含移动端)
 bb e2e           # Playwright(需后端已运行)
 bb uberjar       # 前端 release + 后端 uberjar
 JWT_SECRET=$(openssl rand -hex 32) COOKIE_SECRET=$(openssl rand -hex 8) java -jar target/ruoyi-standalone.jar</code></pre>
@@ -376,11 +385,12 @@ JWT_SECRET=$(openssl rand -hex 32) COOKIE_SECRET=$(openssl rand -hex 8) java -ja
     <h2 id="hot-reload">热重载</h2>
 
     <h3>后端（Clojure）</h3>
-    <p>通过 nREPL 端口 7000 热重载，无需重启进程：</p>
-    <pre><code>clj-nrepl-eval -p 7000 '(user/rd)'      ; 重载域服务
-clj-nrepl-eval -p 7000 '(user/rroutes)' ; 重载路由（需 rr 生效）
-clj-nrepl-eval -p 7000 '(user/ra)'      ; 重载所有命名空间
-clj-nrepl-eval -p 7000 '(user/rr)'      ; 完全重启系统</code></pre>
+    <p>通过 nREPL 端口 7000 热重载，无需重启进程（macOS 上 7000 被 ControlCenter 占用时改用 <code>NREPL_PORT=7200 bb dev</code>）：</p>
+    <pre><code>clj-nrepl-eval -p 7200 '(user/rd)'      ; 只重载磁盘上改过的命名空间
+clj-nrepl-eval -p 7200 '(user/rr)'      ; 重载源码后重建组件（.sql / system.edn / 路由数据变了用它）
+clj-nrepl-eval -p 7200 '(user/rs)'      ; 看运行中的组件数与连接池
+clj-nrepl-eval -p 7200 '(user/q :find-user-by-name {:user_name "admin"})'   ; 跑命名查询
+clj-nrepl-eval -p 7200 '(user/req :get "/system/post" :params {:page 1 :size 2})'  ; 进程内打真实接口</code></pre>
 
     <h3>前端（ClojureScript）</h3>
     <p>shadow-cljs watch 已自动编译，保存 .cljs 后刷新浏览器即可。</p>
@@ -399,6 +409,42 @@ clj-nrepl-eval -p 7000 '(user/rr)'      ; 完全重启系统</code></pre>
       <li>Dropdown 的 <code>:label</code> 必须用 <code>r/as-element</code> 包裹。</li>
       <li>颜色对齐 Element UI：新增 #409eff、修改 #67c23a、删除 #f56c6c、导入 #909399、导出 #e6a23c。</li>
     </ul>
+
+    <h2 id="mobile">移动端 App（可选 · ClojureDart）</h2>
+    <p>
+      需要手机 App 时用 <code>mobile/</code>：<strong>ClojureDart</strong> 把 Clojure 编译成 Dart，界面是 <strong>Flutter Material</strong>，
+      状态管理是 <strong>re-dash</strong>（re-frame 的 ClojureDart 移植）。它打的是与网页端<strong>完全同一套</strong>接口
+      （<code>{:code :msg :data}</code>、<code>page</code>/<code>size</code>、JWT + <code>sys_online</code> 会话），后端不为此开专用路由或信封。
+      当前规模：12 个命名空间 / 785 行、21 个事件、11 个订阅、1 类效果（HTTP）。
+    </p>
+    <table>
+      <thead><tr><th>命令</th><th>作用</th></tr></thead>
+      <tbody>
+        <tr><td><code>bb mobile:doctor</code></td><td>检查 flutter/clojure/xcode、平台目录、macOS 出站网络权限</td></tr>
+        <tr><td><code>bb mobile:create macos</code></td><td>生成平台工程目录（<code>macos/ android/ ios/ …</code> 不入库，由它重建）并补齐 entitlements</td></tr>
+        <tr><td><code>bb mobile:compile</code></td><td><code>clj -M:cljd compile</code> —— 移动端唯一的静态检查（CI 用它）</td></tr>
+        <tr><td><code>bb mobile:test</code></td><td>跑 <code>mobile/test</code> 下的 <code>.cljd</code> 单元测试</td></tr>
+        <tr><td><code>bb mobile:run</code></td><td>编译并前台运行，改 <code>.cljd</code> 热重载；接口地址用 <code>--dart-define</code> 注入</td></tr>
+        <tr><td><code>bb mobile:web</code></td><td>编译网页版并部署到 <code>resources/public/mobile</code>（演示与录屏，同源 <code>/api</code> 不触发 CORS）</td></tr>
+        <tr><td><code>bb video:mobile</code></td><td>录制 <code>tests/e2e/mobile</code> 的四段分镜并合成带旁白的成片</td></tr>
+      </tbody>
+    </table>
+    <ul>
+      <li><strong>独立工程</strong>：<code>mobile/deps.edn</code> 与 <code>mobile/pubspec.yaml</code> 跟根依赖表无关，根 <code>deps.edn</code> 的 <code>:paths</code> 里没有 <code>mobile</code>，所以 <code>bb test</code> / <code>bb uberjar</code> / Docker 镜像都不需要 Flutter，<code>bb ci</code> 也不含移动端 —— 改了 <code>mobile/</code> 要单独跑上面两条门禁。</li>
+      <li><strong>状态只有一份</strong>：全部数据在 re-dash 的 <code>app-db</code> 里，界面只经订阅派生；<code>reg-event-*</code> / <code>reg-sub</code> / <code>reg-fx</code> 必须写在 <code>register!</code> 内，Dart 树摇会删掉顶层从未被调用的注册代码（表现为运行期「Event not found」）。</li>
+      <li><strong>通讯用 JSON，不用 transit</strong>：<code>package:http</code> + <code>json.cljd</code>（读回来把字符串键转成关键字）。注意后端目前<em>仍能</em>协商 <code>application/transit+json</code>，那是 muuntaja 的默认格式表残留，见设计文档「设计债」#25。</li>
+      <li><strong>配置只走 <code>--dart-define</code></strong>（<code>RUOYI_API_BASE_URL</code>、<code>RUOYI_REQUEST_TIMEOUT_MS</code>），编译期固化，不是运行期环境变量；且 ClojureDart 只把<strong>键名为字面量</strong>的那层编成 <code>const String.fromEnvironment</code>，包一层函数传键名会静默用回默认地址。</li>
+      <li><strong>三条运行期坑</strong>（都表现为「不报错但没效果」）：关键字读不到 Dart 对象字段（写 <code>(.-statusCode resp)</code> 加类型提示）；函数内 <code>await</code> 过就变异步，调用方漏 <code>await</code> 拿到的全是 <code>nil</code>；<code>await</code> 不能写在 <code>let</code> 的解构绑定里。</li>
+      <li><strong>规模约束对 <code>.cljd</code> 生效</strong>：<code>bb check</code> 覆盖 <code>mobile/src</code>、<code>mobile/test</code>（单文件 ≤500 行、单函数 ≤50 行）；<code>.cljd</code> 不进 clj-kondo，因为它的 ClojureDart 支持不可靠会报一堆假错。</li>
+      <li><strong>改名一起搬</strong>：<code>bb rename</code> 会改写 <code>mobile/src/&lt;旧名&gt;</code>、<code>mobile/test/&lt;旧名&gt;</code>、pubspec 与 <code>deps.edn</code>，改完必须重跑 <code>bb mobile:compile</code> 与 <code>bb mobile:test</code>。</li>
+    </ul>
+    <div class="warning">
+      <strong>已知缺口</strong><br>
+      移动端没有验证码流程（prod 默认开验证码时登不进）、令牌不自动续期、状态不持久化（令牌/主题刷新即丢）、
+      <code>bb new-module</code> 不生成移动端页面、权限集合取了但界面没用、只有公告一个业务模块、界面未国际化。
+      逐条见 <a href="architecture/c4-model.html">C4 架构文档</a>「设计债」#20–#26;文档滞后本身是 #27。
+    </div>
+    <p>细节见 <code>mobile/README.md</code>；架构视角见 C4 文档 §2/§3（容器）、§5.3–§5.5（组件与规模）、§7.5（登录时序）、§8.3（构建与演示形态）、§9.8（两端共用契约）、ADR-013（选型与放弃的方案）。</p>
 
     <h2 id="kit-overview">Kit 框架概览</h2>
     <p>
@@ -553,13 +599,18 @@ VALUES (:user_name, :password)</code></pre>
       </tbody>
     </table>
     <p>进入 REPL 后：</p>
-    <pre><code>(go)    ;; 启动系统
-(halt)  ;; 停止系统
-(reset) ;; 刷新系统</code></pre>
+    <pre><code>(go)        ;; 启动系统
+(halt)      ;; 停止系统
+(reset-db)  ;; 删库、跑全部迁移后重启</code></pre>
     <p>
-      本项目的 <code>user.clj</code> 还提供了更细粒度的热重载 helper：
-      <code>(user/rd)</code> 重载领域服务，<code>(user/rroutes)</code> 重载路由，
-      <code>(user/ra)</code> 重载所有命名空间，<code>(user/rr)</code> 完全重启系统。
+      日常改代码不用碰这三个：<code>bb dev</code> 起的 nREPL（默认 7000，macOS 上 7000 被 Control Center
+      占用时 <code>NREPL_PORT=7200 bb dev</code>）里用 <code>user.clj</code> 的短名字 ——
+      <code>(user/rd)</code> 重载磁盘上改过的命名空间（不重建组件），
+      <code>(user/rr)</code> halt 后按新的 <code>system.edn</code> 重新 init（改 <code>.sql</code>、
+      配置或路由数据时用它，REPL 和 3000 端口都还在），
+      <code>(user/rs)</code> 看系统实时状态，<code>(user/q …)</code> 在运行中的库上跑命名查询，
+      <code>(user/req :get "/system/post" :params {:page 1 :size 2})</code> 进程内打真实接口、
+      完整走认证与权限中间件。<code>(user/ra)</code> 是 <code>rd</code> 的别名。
     </p>
 
     <h2 id="performance">性能调优（async-profiler）</h2>

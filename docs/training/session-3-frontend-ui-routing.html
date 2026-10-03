@@ -80,7 +80,7 @@
       <p class="diagram-note">⚠ 交互图依赖 Mermaid.js CDN，需联网渲染。文字内容已完整覆盖架构要点。</p>
       <div class="mermaid">
 flowchart TD
-    A["浏览器"] --> B["Router<br/>bidi / accountant"]
+    A["浏览器"] --> B["Router<br/>bidi + pushState/popstate"]
     B --> C["Layout<br/>Sider / Header / Tabs"]
     C --> D["Page 组件"]
     D --> E["Ant Design 组件"]
@@ -132,7 +132,7 @@ flowchart TD
           <strong>Events</strong>：组件通过 <code>rf/dispatch</code> 触发事件，事件处理后再更新 app-db 或发起 API effect。
         </div>
         <div class="detail-panel" data-step="api">
-          <strong>API 层</strong>：<code>api.cljs</code> 统一封装 HTTP，自动附加 JWT token。详情见第2讲。
+          <strong>API 层</strong>：<code>api/transport.cljs</code> 统一封装 HTTP（各领域 <code>api/&lt;module&gt;.cljs</code> 调用它），自动附加 JWT token、401 派发 <code>:auth/session-expired</code>。详情见第2讲。
         </div>
         <div class="detail-panel" data-step="boundary">
           <strong>Error Boundary</strong>：用 Reagent class 组件包裹内容区，捕获渲染异常，避免整个 SPA 白屏。

@@ -144,7 +144,7 @@ flowchart TD
           <strong>数据库 live</strong>：新增 migration 后 <code>(user/migrate)</code>，新增 HugSQL 查询后 <code>(user/rd)</code>，即可在 REPL 里直接调用新查询。
         </div>
         <div class="detail-panel" data-step="route">
-          <strong>路由 live</strong>：新增 Reitit 路由条目后，先 <code>(user/rroutes)</code> 再 <code>(user/rr)</code> 重置系统，新接口就上线了。
+          <strong>路由 live</strong>：新增 Reitit 路由条目后，跑 <code>(user/rr)</code>（它会先刷新源码再重建组件），新接口就上线了。
         </div>
         <div class="detail-panel" data-step="cljs-repl">
           <strong>shadow-cljs 浏览器 REPL</strong>：通过 <code>npx shadow-cljs cljs-repl app</code> 连接浏览器，DOM、app-db、re-frame 事件都触手可及。
@@ -282,12 +282,11 @@ user_name  list-users  +
 
     <h3>6.2 shadow-cljs.edn</h3>
     <p>前端构建由 shadow-cljs 负责，入口模块为 <code>com.ruoyi.frontend.app/init</code>：</p>
-    <pre><code class="language-edn">{<span class="edn-key">:source-paths</span> [<span class="edn-str">"src/cljs"</span>]
+    <pre><code class="language-edn">{<span class="edn-key">:source-paths</span> [<span class="edn-str">"src/cljs"</span> <span class="edn-str">"test/cljs"</span>]
  <span class="edn-key">:dependencies</span> [[reagent <span class="edn-str">"2.0.1"</span>]
-                [re-frame <span class="edn-str">"1.4.3"</span>]
+                [re-frame <span class="edn-str">"1.4.7"</span>]
                 [cljs-ajax <span class="edn-str">"0.8.4"</span>]
-                [bidi <span class="edn-str">"2.1.6"</span>]
-                [venantius/accountant <span class="edn-str">"0.2.5"</span>]]
+                [bidi <span class="edn-str">"2.1.6"</span>]]
  <span class="edn-key">:builds</span>
  {<span class="edn-key">:app</span>
   {<span class="edn-key">:target</span>     <span class="edn-key">:browser</span>
@@ -306,9 +305,10 @@ user_name  list-users  +
       <tr><td>安全</td><td>buddy-auth / sign / hashers</td><td>JWT、bcrypt</td></tr>
       <tr><td>前端框架</td><td>Reagent 2 + React Hooks</td><td>组件渲染</td></tr>
       <tr><td>前端状态</td><td>Re-frame</td><td>单向数据流</td></tr>
-      <tr><td>前端路由</td><td>bidi + accountant（本项目手动实现）</td><td>页面路由</td></tr>
+      <tr><td>前端路由</td><td>bidi + 手写 <code>router.cljs</code>（<code>history.pushState</code> + <code>popstate</code>，已不用 accountant，见 ADR-007）</td><td>页面路由</td></tr>
       <tr><td>UI 组件</td><td>Ant Design 6</td><td>企业级组件库</td></tr>
       <tr><td>构建</td><td>shadow-cljs</td><td>ClojureScript 编译</td></tr>
+      <tr><td>移动端（可选）</td><td>ClojureDart + Flutter Material + re-dash</td><td>独立工程 <code>mobile/</code>，打同一套 <code>/api</code>，见 <a href="../index.html#mobile">移动端 App</a></td></tr>
     </table>
 
     <h2>8. LLM + nREPL 探索式开发</h2>
@@ -323,16 +323,17 @@ user_name  list-users  +
     <p>这意味着迭代周期从“分钟级”降到“秒级”，尤其适合和 LLM 一起探索：生成候选实现 → 发送求值 → 观察结果 → 根据反馈再生成。</p>
 
     <h3>8.2 后端热重载工作流（来自 env/dev/clj/user.clj）</h3>
-    <pre><code class="language-bash">clj-nrepl-eval -p 7000 '(user/rd)'      ; 重载 domain 服务（业务逻辑、HugSQL 查询）
-clj-nrepl-eval -p 7000 '(user/rroutes)' ; 重载路由定义文件
-clj-nrepl-eval -p 7000 '(user/ra)'      ; 重载所有命名空间
-clj-nrepl-eval -p 7000 '(user/rr)'      ; 完全重启 Integrant 系统（halt → go）</code></pre>
+    <pre><code class="language-bash">clj-nrepl-eval -p 7200 '(user/rd)'      ; 只重载磁盘上改过的命名空间（域服务、控制器、路由定义）
+clj-nrepl-eval -p 7200 '(user/rr)'      ; 刷新源码 → halt（不 halt nREPL）→ 重建组件
+clj-nrepl-eval -p 7200 '(user/rs)'      ; 看运行中的组件数、连接池实时数字
+clj-nrepl-eval -p 7200 '(user/q :find-user-by-name {:user_name "admin"})'   ; 跑命名查询
+clj-nrepl-eval -p 7200 '(user/req :get "/system/post" :params {:page 1 :size 2})'  ; 进程内打真实接口</code></pre>
     <p>选择建议：</p>
     <ul>
       <li><strong>domain 逻辑、HugSQL、控制器改动</strong> → <code>(user/rd)</code> 最快。</li>
-      <li><strong>新增/修改路由条目</strong> → 先 <code>(user/rroutes)</code> 让新定义加载，再 <code>(user/rr)</code> 让 Integrant 重新注册路由。</li>
+      <li><strong>新增/修改路由条目</strong> → <code>(user/rd)</code> 会重载路由命名空间，但 Reitit 树在组件里，要 <code>(user/rr)</code> 重新注册。</li>
       <li><strong>修改 <code>system.edn</code>、组件结构、中间件栈</strong> → <code>(user/rr)</code> 完全重置。</li>
-      <li><strong>项目结构大改后不确定状态</strong> → <code>(user/ra)</code> 重新加载所有命名空间，再 <code>(user/rr)</code>。</li>
+      <li><strong>验证一个接口</strong> → <code>(user/req …)</code> 走真实的认证/权限/异常/分页中间件，路径不带 <code>/api</code>。</li>
     </ul>
 
     <h3>8.3 在线添加 / 修改数据库</h3>
@@ -365,7 +366,7 @@ SELECT demo_id, demo_name, create_time FROM sys_demo ORDER BY demo_id;</code></p
       <li>在 <code>src/clj/com/ruoyi/web/routes/system.clj</code> 新增 Reitit 路由条目。</li>
       <li>在 <code>src/clj/com/ruoyi/web/controllers/system/...</code> 新增控制器函数。</li>
       <li>如需业务逻辑，在 domain service 添加函数。</li>
-      <li><code>(user/rroutes)</code> 重载路由定义，然后 <code>(user/rr)</code> 重置系统，新路由注册完成。</li>
+      <li><code>(user/rr)</code> 刷新源码并重建组件，新路由注册完成（只改控制器逻辑用 <code>(user/rd)</code> 就够）。</li>
       <li>用 curl 或 Swagger UI（<code>/api</code>）验证。</li>
     </ol>
     <pre><code class="language-clojure">;; system.clj
@@ -373,11 +374,11 @@ SELECT demo_id, demo_name, create_time FROM sys_demo ORDER BY demo_id;</code></p
  {:get {:summary "演示接口"
         :handler (partial demo/hello {:demo-service demo-service})}}]
 
-;; demo.clj
+;; demo.clj — 控制器只用 com.ruoyi.web.response 的 ok / fail / deny
 (defn hello [_ _]
-  (response/response {:code 200 :msg "ok" :data "hello from nREPL"}))</code></pre>
-    <pre><code class="language-bash">clj-nrepl-eval -p 7000 '(user/rroutes)'
-clj-nrepl-eval -p 7000 '(user/rr)'
+  (res/ok "hello from nREPL"))   ; → {:status 200, :body {:code 200 :msg "操作成功" :data "hello from nREPL"}}
+                                ; 业务失败不要在控制器里 try/catch,领域层 (errors/fail! "中文原因") 即可</code></pre>
+    <pre><code class="language-bash">clj-nrepl-eval -p 7200 '(user/rr)'
 curl -H "Authorization: Bearer &lt;token&gt;" http://localhost:3000/api/system/demo/hello</code></pre>
 
     <h3>8.5 前端 nREPL：查看与修改 re-frame 状态</h3>
@@ -693,10 +694,10 @@ clojure -J-Djdk.attach.allowAttachSelf \
     <p>一条命令同时启动后端(3000 / nREPL 7000)与前端 shadow-cljs watch(端口 3000 由后端统一服务静态资源,watch 负责增量编译)：</p>
     <pre><code class="language-bash">bb dev                 <span class="comment">;; --reset-db 清空本地库,--backend-only 只起后端</span></code></pre>
     <p>后端 nREPL 热重载（端口 7000）：</p>
-    <pre><code class="language-bash">clj-nrepl-eval -p 7000 '(user/rd)'      <span class="comment">;; 重载域服务</span>
-clj-nrepl-eval -p 7000 '(user/rroutes)' <span class="comment">;; 重载路由定义</span>
-clj-nrepl-eval -p 7000 '(user/ra)'      <span class="comment">;; 重载所有命名空间</span>
-clj-nrepl-eval -p 7000 '(user/rr)'      <span class="comment">;; 完全重启 Integrant 系统</span></code></pre>
+    <pre><code class="language-bash">clj-nrepl-eval -p 7200 '(user/rd)'      <span class="comment">;; 只重载磁盘上改过的命名空间</span>
+clj-nrepl-eval -p 7200 '(user/rr)'      <span class="comment">;; 刷新源码 → halt(不 halt nREPL)→ 重建组件</span>
+clj-nrepl-eval -p 7200 '(user/rs)'      <span class="comment">;; 看运行中的组件数与连接池</span>
+clj-nrepl-eval -p 7200 '(user/req :get "/system/post" :params {:page 1 :size 2})'  <span class="comment">;; 进程内打真实接口</span></code></pre>
     <p>测试与提交前检查：</p>
     <pre><code class="language-bash">bb test                <span class="comment">;; 后端测试</span>
 bb ci                  <span class="comment">;; lint + 格式 + 前后端测试,与 CI 相同</span></code></pre>
