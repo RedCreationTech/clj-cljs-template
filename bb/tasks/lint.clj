@@ -190,6 +190,18 @@
           (u/fail! "分页约定未通过:服务端分页用 pagination/table-pagination,本地翻页用 client-pagination"))
       (println "✔ 分页约定通过:" (count files) "个页面表格的分页属性都来自 components/pagination"))))
 
+;; ─── 脚手架登记点 ──────────────────────────────────────────────────
+
+(defn scaffold-conventions!
+  "bb new-module 的登记点(`;; [new-module] <tag>` 标记行)必须还在源码里。
+   曾经丢过一次(user.clj 的 reload-domain),那次是直到 CI 跑 scaffold 冒烟才发现。"
+  []
+  (let [problems (nm/scaffold-marker-problems)]
+    (if (seq problems)
+      (do (doseq [p problems] (println "  ✖" p))
+          (u/fail! "脚手架登记点未通过:重构时请把 `;; [new-module] <tag>` 标记行留在对应集合的末尾(见 AGENTS.md)"))
+      (println "✔ 脚手架登记点通过"))))
+
 ;; ─── 开发期助手(env/dev/clj)──────────────────────────────────────
 
 (def dev-helpers-dir "env/dev/clj")

@@ -67,10 +67,12 @@
                     :task (u/exec! (into (u/clojure-cmd) ["-M:coverage"]))}
 
   ;; ── 质量 ──────────────────────────────────────────────
-  lint             {:doc  "全部静态检查:clj-kondo + 迁移文件 + 规模约束 + 分页约定 + 开发期约定 + E2E 用例约定"
-                    :depends [lint:kondo lint:migrations check lint:pagination lint:dev lint:e2e]}
+  lint             {:doc  "全部静态检查:clj-kondo + 迁移文件 + 规模约束 + 分页约定 + 脚手架登记点 + 开发期约定 + E2E 用例约定"
+                    :depends [lint:kondo lint:migrations check lint:pagination lint:scaffold lint:dev lint:e2e]}
   lint:kondo       {:doc  "clj-kondo,warning 即失败"
                     :task (lint/kondo!)}
+  lint:scaffold    {:doc  "bb new-module 的 ;; [new-module] <tag> 登记点还在源码里"
+                    :task (lint/scaffold-conventions!)}
   lint:pagination  {:doc  "页面表格的 :pagination 必须来自 components/pagination"
                     :task (lint/pagination-conventions!)}
   lint:e2e         {:doc  "E2E 用例约定:不残留 only/fixme、分页只用 page/size、不写死绝对地址、spec 必须有断言"

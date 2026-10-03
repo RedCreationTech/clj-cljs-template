@@ -48,9 +48,10 @@
             (str cljs "/pages/" snake ".cljs") (frontend/page ctx)
             (str "tests/e2e/" module ".spec.js") (frontend/e2e ctx)})))
 
-(defn- registrations
-  "[文件 标记 要插入的行];行内缩进相对于标记行。"
-  [{:keys [ns-root module snake label service-key service-arg menu-path] :as ctx}]
+(defn registrations
+  "[文件 标记 要插入的行];行内缩进相对于标记行。
+   公开是为了 `bb lint:scaffold` 能在不改工作区的前提下核对每个标记行还在源码里。"
+  [{:keys [module snake label service-key service-arg menu-path] :as ctx}]
   (let [{:keys [clj cljs]} (dirs ctx)
         kw (str ":" module)]
     [["resources/system.edn" "components"
@@ -58,7 +59,9 @@
      ["resources/system.edn" "route-services" [(str ":" service-arg " #ig/ref " service-key)]]
      ["resources/system.edn" "sql-files" [(str "\"sql/" snake ".sql\"")]]
      [(str clj "/web/routes/api.clj") "routes" [(str "(" module "-routes/routes opts)")]]
-     ["env/dev/clj/user.clj" "reload-domain" [(str "(require '" ns-root ".domain." module " :reload)")]]
+     ;; 不再往 env/dev/clj/user.clj 插 (require … :reload):待重载集合由
+     ;; com.ruoyi.dev 从源码时间戳派生,生成的 domain ns 已经被 core.clj require 过,
+     ;; 手抄一份 reload 清单正是「开发期约定」要避免的(见 bb lint:dev)。
      [(str cljs "/router.cljs") "routes" [(str "\"" menu-path "\" " kw)]]
      [(str cljs "/router.cljs") "page-names" [(str kw " \"" label "\"")]]
      [(str cljs "/pages/layout/menu_data.cljs") "menu-keys" [(str kw " \"" menu-path "\"")]]
@@ -169,6 +172,27 @@
                   "  4. 权限标识 " perm-prefix ":list/query/add/edit/remove 已登记为按钮菜单并授权给 admin;\n"
                   "     其他角色在「角色管理 → 分配权限」里勾选\n"
                   "  5. 按业务修改生成的代码;撤销生成可用 git checkout + git clean"))))
+
+(defn scaffold-marker-problems
+  "登记点自检,给 `bb lint:scaffold` 用(不写任何文件):
+   模板里的 `;; [new-module] <tag>` 被删掉、改名,或 require 块被挪走时,
+   bb new-module 要到运行期才失败,CI 的 scaffold 冒烟也会挂在同一个地方;
+   这里在静态检查阶段就把话说清楚。"
+  []
+  (let [ctx (m/build {:module "demo" :label "示例" :fields "name:string:名称"
+                      :project (u/project) :now (java.util.Date.)})
+        marker? (fn [file tag]
+                  (and (fs/exists? file)
+                       (some #(= (str ";; [new-module] " tag) (str/trim %))
+                             (lines-of (slurp file)))))]
+    (concat
+     (for [[file tag] (registrations ctx)
+           :when (not (marker? file tag))]
+       (str file " 缺少标记行 `;; [new-module] " tag "`"))
+     (for [[file _entry] (requires ctx)
+           :when (not (and (fs/exists? file)
+                           (str/includes? (slurp file) "(:require")))]
+       (str file " 里找不到 (:require 块")))))
 
 (defn generate!
   [args]
