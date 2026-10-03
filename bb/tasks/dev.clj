@@ -7,7 +7,9 @@
    [tasks.util :as u]
    [tasks.vendor :as vendor]))
 
-(defn- backend-cmd []
+(defn backend-cmd
+  "后端启动命令(录屏任务要在指定端口上单独起一个后端,和 bb backend 用同一条)。"
+  []
   (let [{:keys [ns-name]} (u/project)]
     ;; -e 先加载 user:它记录 tools.namespace 的时间基准并给出 (user/rd) (user/rr) 这些短名字,
     ;; 连上 nREPL 就能直接用,不用先 require 一次。

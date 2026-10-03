@@ -1,10 +1,12 @@
 (ns tasks.tour
-  "功能导览录像:跑 tests/e2e/tour 的全部分镜(编号 01~NN,一个测试一段),
-   按分镜顺序拼成 target/tour/tour.mp4,
+  "功能导览录像:跑分镜用例(编号 01~NN,一个测试一段),
+   按分镜顺序拼成 <out-dir>/<video-name>,
    并生成内嵌章节、时间轴 chapters.txt 与分镜脚本 storyboard.md。
 
-   台词由 tests/e2e/tour/tour-helper.js 直接画在页面上,字幕天然录在视频里,不需要后期压制。
-   左侧常驻章节目录由 tests/e2e/tour/toc-band.js 渲染成图片,合成阶段贴在画面左边。
+   台词由分镜引擎(tour-helper.js / mobile-helper.js)直接画在页面上,字幕天然录在视频里,不需要后期压制。
+   网页端的左侧常驻目录条由 tests/e2e/tour/toc-band.js 渲染成图片,合成阶段贴在画面左边;
+   移动端舞台页自己就带目录,把 *toc-band-script* 绑成 nil 即可跳过这一步。
+   默认值就是网页端那一套;bb video:mobile 用 binding 换掉输出目录、用例配置与画面参数。
    环境变量:TOUR_SPEED(默认 1,调小只用于改脚本)、TOUR_WIDTH / TOUR_HEIGHT(默认 1440x900)、
    TOUR_TOC_WIDTH(目录条宽度,默认 300)。"
   (:require
@@ -16,7 +18,21 @@
    [tasks.util :as u]
    [tasks.vendor :as vendor]))
 
-(def out-dir "target/tour")
+;; 全部用 dynamic 绑定,让移动端复用同一条合成流水线(见 tasks.mobile/video!)。
+
+(def ^:dynamic out-dir "target/tour")
+
+(def ^:dynamic video-name "tour.mp4")
+
+(def ^:dynamic playwright-config "playwright.tour.config.js")
+
+(def ^:dynamic toc-band-script "tests/e2e/tour/toc-band.js")
+
+(def ^:dynamic base-url (or (System/getenv "BASE_URL") "http://localhost:3000"))
+
+(def ^:dynamic record-env {})
+
+(def ^:dynamic film-title "功能导览")
 
 (def app-width (u/env-int "TOUR_WIDTH" 1440))
 (def app-height (u/env-int "TOUR_HEIGHT" 900))
@@ -128,18 +144,21 @@
                        (str "台词:\n"
                             (str/join "\n"
                                       (for [l (:lines storyboard)]
-                                        (format "- `%s` %s"
-                                                (clock (+ start (long (:at l 0)))) (:text l ""))))))])))
+                                        ;; 带 :code 的是代码卡上逐行打出来的源码/命令:旁白不念,分镜脚本里也标出来
+                                        (format "- `%s` %s%s"
+                                                (clock (+ start (long (:at l 0))))
+                                                (if (:code l) "(画面,不念)" "")
+                                                (:text l ""))))))])))
 
 (defn- write-storyboard-md!
   [segments]
   (spit (str out-dir "/storyboard.md")
         (str (str/join "\n\n"
-                       (concat [(str "# 功能导览 · 分镜脚本\n\n"
-                                     "成片 `" out-dir "/tour.mp4`,共 " (count segments)
+                       (concat [(str "# " film-title " · 分镜脚本\n\n"
+                                     "成片 `" out-dir "/" video-name "`,共 " (count segments)
                                      " 段,总时长 " (clock (+ (:start (last segments))
                                                          (:duration (last segments))))
-                                     "。\n\n台词由 `tour-helper.js` 画在页面上,时间点为该句在成片里的出现时刻。")]
+                                     "。\n\n台词由分镜引擎画在页面上,时间点为该句在成片里的出现时刻。")]
                                (map segment-script segments)))
              "\n")))
 
@@ -183,12 +202,12 @@
              last-idx toc-width app-width (total-secs segments)))))
 
 (defn- toc-band!
-  "用 Chromium 把每段目录渲染成 target/tour/toc/NN.png(高亮当前分镜)。"
+  "用 Chromium 把每段目录渲染成 <out-dir>/toc/NN.png(高亮当前分镜)。"
   []
-  (u/exec! [(or (u/exe "node") (u/fail! "找不到 node")) "tests/e2e/tour/toc-band.js"]))
+  (u/exec! [(or (u/exe "node") (u/fail! "找不到 node")) toc-band-script]))
 
 (defn- composite!
-  "tour-raw.mp4 + 每段一张目录图 + 章节元数据 → tour.mp4(成片)。"
+  "tour-raw.mp4 + 每段一张目录图 + 章节元数据 → 成片。"
   [segments]
   (let [meta-idx (inc (count segments))
         images (map #(format "%s/toc/%02d.png" out-dir (:no %)) segments)]
@@ -200,29 +219,37 @@
                        "-map" "[v]" "-map_metadata" (str meta-idx)
                        "-c:v" "libx264" "-crf" "23" "-preset" "medium" "-pix_fmt" "yuv420p"
                        "-movflags" "+faststart"
-                       (str out-dir "/tour.mp4")])))))
+                       (str out-dir "/" video-name)])))))
+
+(defn- finish!
+  "舞台页自带目录时不贴目录条:原片挪过去即为成片(避免第二次全片重编码)。"
+  []
+  (fs/move (io/file out-dir "tour-raw.mp4") (io/file out-dir video-name)
+           {:replace-existing true}))
 
 (defn video!
   "录制 + 合成一条龙:bb video:tour [--compose-only] [额外的 playwright 参数]。
    --compose-only 跳过录制,用已有的分镜视频重新合成(调目录条/字幕样式时用)。"
   [args]
-  (let [base (or (System/getenv "BASE_URL") "http://localhost:3000")
-        compose-only? (some #{"--compose-only"} args)
+  (let [compose-only? (some #{"--compose-only"} args)
         playwright-args (remove #{"--compose-only"} args)]
     (tool! "ffmpeg")
     (if compose-only?
       (u/info "跳过录制,直接用 " out-dir "/results 里已有的分镜视频重新合成")
-      (do (when-not (u/http-ok? (str base "/api/health"))
-            (u/fail! "后端未运行:先 bb dev(或 bb backend),再跑 bb video:tour"))
+      (do (when-not (u/http-ok? (str base-url "/api/health"))
+            (u/fail! "后端未运行:" base-url " —— 先把它起起来再录"))
           (vendor/ensure-npm-deps!)
           (vendor/ensure-browsers!)
-          (u/exec! (into [(u/npx-cmd) "playwright" "test" "--config" "playwright.tour.config.js"]
-                         playwright-args))))
+          (u/exec! (into [(u/npx-cmd) "playwright" "test" "--config" playwright-config]
+                         playwright-args)
+                   {:extra-env (merge {"TOUR_OUT_DIR" (str out-dir "/storyboard")} record-env)})))
     (let [segs (segments)]
       (write-inputs! segs)
       (write-storyboard-md! segs)
       (concat!)
-      (toc-band!)
-      (composite! segs)
-      (u/info "成片 " out-dir "/tour.mp4(" (total-secs segs) " 秒)," (count segs)
-              " 段,左侧常驻目录;分镜脚本 storyboard.md,时间轴 chapters.txt"))))
+      (if (nil? toc-band-script)
+        (finish!)
+        (do (toc-band!)
+            (composite! segs)))
+      (u/info "成片 " out-dir "/" video-name "(" (total-secs segs) " 秒)," (count segs)
+              " 段" (when toc-band-script ",左侧常驻目录") ";分镜脚本 storyboard.md,时间轴 chapters.txt"))))

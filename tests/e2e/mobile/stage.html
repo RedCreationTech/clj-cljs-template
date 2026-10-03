@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<!--
+  移动端导览录像的「舞台页」。
+
+  Flutter(ClojureDart)编译出来的是 canvas,页面上没有任何可选中的 DOM,
+  所以字幕、假鼠标、分镜卡都不能像网页端那样叠在应用自己的 DOM 里。
+  这一页把 1440x900 的录像画面搭出来:左边常驻章节目录、中间是真机尺寸的 App、
+  右边是本段要点与代码、底部是字幕条;App 用同域 iframe 嵌进来,
+  于是 mobile/ 的产物和这一页由同一个后端进程(:3210 之类)托管,不需要额外的静态服务器。
+
+  这个文件由 `bb mobile:web` 复制到 resources/public/mobile/stage.html,不要手写第二份。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>若依移动端 · ClojureDart 导览</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  body {
+    background: linear-gradient(140deg, #0f1626 0%, #172033 55%, #1d2b45 100%);
+    color: #e6efff;
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  #root { position: relative; width: 1440px; height: 900px; }
+
+  /* ── 顶栏 ─────────────────────────────────────────── */
+  #head { position: absolute; left: 36px; right: 36px; top: 22px; height: 40px;
+          display: flex; align-items: center; justify-content: space-between; }
+  #head .brand { font-size: 21px; font-weight: 600; letter-spacing: 1px; }
+  #head .brand b { color: #7fb2ff; }
+  #head .chip { font-size: 14px; color: #cfe0ff; background: rgba(17,20,24,.6);
+                padding: 6px 14px; border-radius: 999px; letter-spacing: .5px; }
+
+  /* ── 左:常驻章节目录 ──────────────────────────────── */
+  #toc { position: absolute; left: 36px; top: 92px; width: 268px; }
+  #toc h4 { margin: 0 0 12px; font-size: 13px; letter-spacing: 3px; color: #7d8ca3; font-weight: 500; }
+  #toc ol { list-style: none; margin: 0; padding: 0; }
+  #toc li { font-size: 16px; color: #93a4bd; padding: 9px 12px; border-radius: 8px;
+            border-left: 3px solid transparent; }
+  #toc li.on { color: #fff; background: rgba(64,158,255,.16); border-left-color: #409eff; }
+  #toc li span { color: #5f7494; margin-right: 8px; font-variant-numeric: tabular-nums; }
+  #toc li.on span { color: #7fb2ff; }
+
+  /* ── 中:真机尺寸的手机框 ──────────────────────────── */
+  #phone { position: absolute; left: 336px; top: 62px; width: 420px; height: 730px;
+           display: flex; align-items: center; justify-content: center; }
+  #shell { width: 400px; height: 856px; padding: 8px; border-radius: 46px;
+           background: #05070c; border: 1px solid #2b3a55;
+           box-shadow: 0 30px 70px rgba(0,0,0,.6), inset 0 0 0 2px #101826;
+           transform: scale(.842); transform-origin: center center; }
+  #screen { width: 384px; height: 840px; border-radius: 38px; overflow: hidden;
+            background: #f5f7fa; position: relative; }
+  #app { width: 390px; height: 844px; border: 0; transform: scale(.9846);
+         transform-origin: top left; }
+
+  /* ── 右:本段要点与代码 ────────────────────────────── */
+  #notes { position: absolute; left: 796px; right: 36px; top: 92px; }
+  #notes .ttl { font-size: 30px; font-weight: 600; margin: 0 0 6px; }
+  #notes .sub { font-size: 17px; color: #a8bad6; margin: 0 0 20px; }
+  #points { list-style: none; margin: 0 0 22px; padding: 0; font-size: 18px; line-height: 1.6; }
+  #points li { margin: 9px 0; color: #dbe7fb; }
+  #points li::before { content: "·"; color: #409eff; font-weight: 700; margin-right: 11px; }
+  #term { border-radius: 12px; overflow: hidden; border: 1px solid #223050; background: #0e1420; }
+  #term .bar { display: flex; align-items: center; gap: 7px; padding: 9px 14px;
+               background: #162032; border-bottom: 1px solid #223050; }
+  #term .bar i { width: 10px; height: 10px; border-radius: 50%; }
+  #term .r { background: #ff5f57; } #term .y { background: #febc2e; } #term .g { background: #28c840; }
+  #term .bar span { color: #8b9ab0; font-size: 12px; margin-left: 8px;
+                    font-family: ui-monospace, Menlo, Consolas, monospace; }
+  #code { margin: 0; padding: 15px 18px 18px; min-height: 210px; max-height: 470px; overflow: auto;
+          font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px;
+          line-height: 1.66; color: #c9d6e8; white-space: pre-wrap; }
+  #code b { color: #7ee787; font-weight: 600; }
+  #code u { color: #7c8ea8; text-decoration: none; }
+  #code em { color: #ffd166; font-style: normal; font-weight: 600; }
+  #term.off { display: none; }
+
+  /* ── 底部字幕 ─────────────────────────────────────── */
+  #caption { pointer-events: none; position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
+             max-width: 74%; padding: 12px 24px; border-radius: 12px;
+             background: rgba(17,20,24,.88); color: #fff; font-size: 20px; line-height: 1.5;
+             text-align: center; box-shadow: 0 6px 24px rgba(0,0,0,.35);
+             white-space: pre-wrap; display: none; }
+
+  /* ── 分镜卡(段间转场) ─────────────────────────────── */
+  #card { position: absolute; inset: 0; display: none; flex-direction: column;
+          justify-content: center; align-items: center; background: #0b111d; z-index: 5; }
+  #card .idx { font-size: 19px; letter-spacing: 6px; color: #7fb2ff; }
+  #card .ttl { font-size: 52px; font-weight: 600; margin: 18px 0 8px; text-align: center; }
+  #card .sub { font-size: 22px; color: #b9c6da; margin-bottom: 34px; text-align: center; }
+  #card ul { list-style: none; padding: 0; margin: 0; font-size: 21px; color: #e6efff; }
+  #card li { margin: 10px 0; }
+  #card li::before { content: "·"; color: #409eff; margin-right: 12px; font-weight: 700; }
+  #card .foot { position: absolute; bottom: 40px; font-size: 16px; color: #7d8ca3; letter-spacing: 2px; }
+
+  /* ── 假鼠标:canvas 收不到父页面的 mousemove,坐标由录制脚本显式摆 ──
+     pointer-events 必须关掉:它正好摆在点击坐标上,不关掉就会把真点击吃掉,
+     表现是「点了输入框但打不进字」,而且时好时坏(取决于命中的是不是那个像素)。 */
+  #cursor { position: absolute; left: 0; top: 0; display: none; z-index: 6;
+            pointer-events: none;
+            transition: transform .12s cubic-bezier(.22,.7,.3,1); will-change: transform; }
+  #cursor svg { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+  #cursor .ring { position: absolute; left: -16px; top: -16px; width: 38px; height: 38px;
+                  border-radius: 50%; border: 2px solid rgba(255,255,255,.95);
+                  background: rgba(64,158,255,.32); opacity: 0; }
+  #cursor.press .ring { animation: pop .5s ease-out; }
+  @keyframes pop { 0% { opacity: .95; transform: scale(.3); } 100% { opacity: 0; transform: scale(1.3); } }
+</style>
+</head>
+<body>
+<div id="root">
+  <div id="head">
+    <div class="brand">若依移动端 · <b>ClojureDart</b> + Flutter + re-dash</div>
+    <div class="chip" id="chip"></div>
+  </div>
+
+  <div id="toc">
+    <h4>目 录</h4>
+    <ol id="toc-list"></ol>
+  </div>
+
+  <div id="phone">
+    <div id="shell"><div id="screen">
+      <iframe id="app" title="ruoyi-mobile" src="index.html"></iframe>
+    </div></div>
+  </div>
+
+  <div id="notes">
+    <h3 class="ttl" id="n-ttl"></h3>
+    <p class="sub" id="n-sub"></p>
+    <ul id="points"></ul>
+    <div id="term" class="off"><div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i>
+      <span id="term-label"></span></div><pre id="code"></pre></div>
+  </div>
+
+  <div id="caption"></div>
+  <div id="card"></div>
+  <div id="cursor"><span class="ring"></span>
+    <svg width="22" height="29" viewBox="0 0 22 29">
+      <path d="M2 1 L2 22 L7.6 17.2 L11 25.4 L15 23.7 L11.6 15.7 L19.6 15.2 Z"
+            fill="#fff" stroke="#111418" stroke-width="1.7" stroke-linejoin="round"/></svg>
+  </div>
+</div>
+
+<script>
+// 舞台的全部状态都在 window.__stage 上;录制脚本(tests/e2e/mobile/*)只调这里的方法。
+// 手机框用 CSS transform 缩放过,所以「App 内坐标 → 屏幕坐标」必须按 iframe 的实际
+// 渲染尺寸换算,不能假设 1:1 —— 换算一次算好放在 screen 里给 Node 侧用。
+(function () {
+  const chapters = (window.STAGE_CHAPTERS || [
+    '移动端是什么', '通讯方式', '状态管理', '主题设置',
+  ]);
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const rich = (s) => esc(s).replace(/\*\*([^*]+)\*\*/g, '<em>$1</em>');
+
+  let current = 0;
+
+  function renderToc() {
+    $('toc-list').innerHTML = chapters
+      .map((c, i) => `<li class="${i === current ? 'on' : ''}"><span>${String(i + 1).padStart(2, '0')}</span>${esc(c)}</li>`)
+      .join('');
+  }
+
+  window.__stage = {
+    chapter(n) {
+      current = n - 1;
+      renderToc();
+    },
+    chip(text) { $('chip').textContent = text; },
+    notes({ title, subtitle, points }) {
+      if (title !== undefined) $('n-ttl').textContent = title;
+      if (subtitle !== undefined) $('n-sub').textContent = subtitle;
+      if (points) $('points').innerHTML = points.map((p) => `<li>${esc(p)}</li>`).join('');
+    },
+    code(html, label) {
+      const term = $('term');
+      if (!html) { term.classList.add('off'); return; }
+      term.classList.remove('off');
+      $('term-label').textContent = label || '';
+      const pre = $('code');
+      pre.innerHTML = html;
+      pre.scrollTop = pre.scrollHeight;
+    },
+    say(text) {
+      const el = $('caption');
+      el.textContent = text || '';
+      el.style.display = text ? 'block' : 'none';
+    },
+    card(html) {
+      const el = $('card');
+      el.innerHTML = html || '';
+      el.style.display = html ? 'flex' : 'none';
+    },
+    cardHtml({ n, title, subtitle, points, foot }) {
+      return `<div class="idx">分镜 ${String(n).padStart(2, '0')} / ${chapters.length}</div>`
+        + `<div class="ttl">${esc(title)}</div>`
+        + (subtitle ? `<div class="sub">${esc(subtitle)}</div>` : '')
+        + `<ul>${(points || []).map((p) => `<li>${esc(p)}</li>`).join('')}</ul>`
+        + `<div class="foot">${esc(foot || 'CLOJUREDART + FLUTTER + RE-DASH')}</div>`;
+    },
+    line(s) { return `<b>$ ${rich(s)}</b>`; },
+    out(s) { return `<u>${rich(s)}</u>`; },
+    // iframe 在页面上的实际位置与缩放后的尺寸:Node 侧据此把 App 内坐标换成点击坐标。
+    rect() {
+      const r = $('app').getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height };
+    },
+    moveTo(x, y) {
+      const c = $('cursor');
+      c.style.display = 'block';
+      c.style.transform = `translate(${x}px, ${y}px)`;
+    },
+    press() {
+      const c = $('cursor');
+      c.classList.remove('press');
+      void c.offsetWidth; // 重启动画:连点两次要看到两圈涟漪
+      c.classList.add('press');
+    },
+    hideCursor() { $('cursor').style.display = 'none'; },
+    ready() { return true; },
+  };
+  renderToc();
+  $('chip').textContent = '准备中';
+}());
+</script>
+</body>
+</html>

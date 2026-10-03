@@ -1,5 +1,5 @@
 (ns tasks.narrate
-  "给 target/tour/tour.mp4 加旁白音轨:把 storyboard/NN.json 里的台词逐句合成语音,
+  "给出成的导览视频加旁白音轨:把 storyboard/NN.json 里的台词逐句合成语音,
    按每句的 at 换算到整片时间轴上统一排句,再混进视频。at 是相对分镜卡(深色标题页)的
    毫秒数,卡片前面的登录/导航空白靠读画面亮度现场量出来,所以音频能对上烧录字幕。
    排句是全片一次完成的,所以一句语音可以自然跨过章节边界,不会被分镜切掉。每句先剪掉
@@ -25,10 +25,12 @@
    [clojure.string :as str]
    [tasks.util :as u]))
 
-(def out-dir "target/tour")
-(def audio-dir (str out-dir "/narration"))
-(def video-path (str out-dir "/tour.mp4"))
-(def ffmeta-path (str out-dir "/chapters.ffmeta"))
+(def ^:dynamic out-dir "target/tour")
+(def ^:dynamic video-name "tour.mp4")
+
+(defn- audio-dir [] (str out-dir "/narration"))
+(defn- video-path [] (str out-dir "/" video-name))
+(defn- ffmeta-path [] (str out-dir "/chapters.ffmeta"))
 (def api-url "https://api.xiaomimimo.com/v1/chat/completions")
 
 (def sample-rate 48000)
@@ -90,28 +92,30 @@
       acc)))
 
 (defn- api-key
-  "密钥只在本地:环境变量优先,其次 target/tour/mimo.key。"
+  "密钥只在本地:环境变量优先,其次 <out-dir>/mimo.key,最后 target/tour/mimo.key
+   (移动端录屏复用同一份密钥,不必再抄一份到它的输出目录)。"
   []
   (or (some-> (System/getenv "MIMO_API_KEY") not-empty)
-      (some-> (when (fs/exists? (fs/file out-dir "mimo.key"))
-                (str/trim (slurp (fs/file out-dir "mimo.key"))))
+      (some-> (some #(when (fs/exists? %) (not-empty (str/trim (slurp %))))
+                    (distinct [(fs/file out-dir "mimo.key") (fs/file "target/tour" "mimo.key")]))
               not-empty)
-      (u/fail! "没有 MiMo 密钥:export MIMO_API_KEY=…,或把它写进 target/tour/mimo.key"
+      (u/fail! "没有 MiMo 密钥:export MIMO_API_KEY=…,或把它写进 " out-dir "/mimo.key"
                "\n  (target/ 已被 gitignore;不要把密钥提交到仓库,建议用环境变量注入)"
                "\n  只想先出一版能听的:bb video:narrate --provider say")))
 
 (defn- chapter-times
   "chapters.ffmeta → {分镜号 {:start 毫秒 :end 毫秒}}(相对成片时间轴)。"
   []
-  (when-not (fs/exists? ffmeta-path)
-    (u/fail! "缺少 " ffmeta-path ",先跑 bb video:tour"))
+  (when-not (fs/exists? (ffmeta-path))
+    (u/fail! "缺少 " (ffmeta-path) ",先跑录制任务"))
   (into {}
         (map (fn [[_ s e n]] [(parse-long n) {:start (parse-long s) :end (parse-long e)}]))
         (re-seq #"TIMEBASE=1/1000\s+START=(\d+)\s+END=(\d+)\s+title=(\d+)｜"
-                (slurp ffmeta-path))))
+                (slurp (ffmeta-path)))))
 
-(def card-luma
-  "分镜卡是整屏深色底,画面平均亮度会掉到这个阈值以下;台词的 at 就从卡片出现那一刻算起。"
+(def ^:dynamic card-luma
+  "分镜卡是整屏深色底,画面平均亮度会掉到这个阈值以下;台词的 at 就从卡片出现那一刻算起。
+   舞台整体偏暗的录屏(移动端)要把这个值绑得更低,见 tasks.mobile/video!。"
   95)
 
 (defn- luma-series
@@ -121,7 +125,7 @@
         (re-seq #"YAVG=([0-9.]+)"
                 (run [ffmpeg "-hide_banner" "-nostats"
                       "-ss" (format "%.3f" (/ (max from-ms 0) 1000.0))
-                      "-t" (str secs) "-i" video-path
+                      "-t" (str secs) "-i" (video-path)
                       "-vf" "fps=4,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-"
                       "-an" "-f" "null" "-"]))))
 
@@ -155,11 +159,13 @@
         nos))
 
 (defn- spoken-lines
-  "一段分镜要念的句子;假终端里回放的命令($ bb ci)只留在画面上,不念出来。"
+  "一段分镜要念的句子;假终端里回放的命令($ bb ci)、以及代码卡逐行(带 :code 标记)
+   只留在画面上,不念出来——逐字念 Clojure 不是解说。"
   [n]
   (let [path (format "%s/storyboard/%02d.json" out-dir n)]
     (when (fs/exists? path)
       (->> (:lines (json/parse-string (slurp path) true))
+           (remove :code)
            (remove #(str/starts-with? (str (:text %)) "$ "))
            (filter #(seq (:text %)))
            (sort-by :at)
@@ -176,7 +182,7 @@
   "缓存文件名带上提供方、音色、模型/语速与(风格提示 + 台词)的哈希,换任一项都会重合成。"
   [{:keys [provider voice model rate]} text]
   (let [tag (if (= "say" provider) (str "r" rate) (str/replace model #"[^0-9A-Za-z._-]" "-"))]
-    (format "%s/%s-%s-%s-%s.wav" audio-dir provider (text-hash (str style-prompt "::" text))
+    (format "%s/%s-%s-%s-%s.wav" (audio-dir) provider (text-hash (str style-prompt "::" text))
             (str/replace voice #"[^0-9A-Za-z_-]" "") tag)))
 
 (defn- mimo-post
@@ -254,7 +260,7 @@
 
 (defn- trimmed-path
   [path]
-  (str audio-dir "/trimmed/" trim-tag "-" (fs/file-name path)))
+  (str (audio-dir) "/trimmed/" trim-tag "-" (fs/file-name path)))
 
 (defn- trim!
   "剪掉一句语音首尾的静音:MiMo 每句头部约 0.15 秒、尾部约 0.35 秒是空白,
@@ -368,14 +374,17 @@
   (doseq [{:keys [n text]} (take 10 lost)] (u/warn "  分镜 " n " 没念: " text)))
 
 (defn- mux!
-  "旁白混进成片:视频流 copy,章节元数据从 chapters.ffmeta 重新带上。"
+  "旁白混进成片:视频流 copy,章节元数据从 chapters.ffmeta 重新带上。
+   音轨一定落成双声道:QuickTime 对单声道 AAC 会「画面照播、一声不出」;
+   但不要用裸 -ac 2 做单→双(实测偷偷掉了约 3 dB),用 pan 明确复制同一声道。"
   [narration]
-  (let [tmp (str video-path ".mux.mp4")]
+  (let [tmp (str (video-path) ".mux.mp4")]
     (run [(tool! "ffmpeg") "-v" "error" "-y"
-          "-i" video-path "-i" narration "-i" ffmeta-path
-          "-map" "0:v" "-map" "1:a" "-c:v" "copy" "-c:a" "aac" "-b:a" "192k"
+          "-i" (video-path) "-i" narration "-i" (ffmeta-path)
+          "-map" "0:v" "-map" "1:a" "-c:v" "copy"
+          "-af" "pan=stereo|c0=c0|c1=c0" "-ac" "2" "-c:a" "aac" "-b:a" "192k"
           "-map_chapters" "2" "-movflags" "+faststart" tmp])
-    (fs/move (fs/file tmp) (fs/file video-path) {:replace-existing true})))
+    (fs/move (fs/file tmp) (fs/file (video-path)) {:replace-existing true})))
 
 (defn- prepare-clips!
   "把每句映射到缓存文件,缺的并发合成,剪掉首尾静音后量出每句的实际时长。"
@@ -392,7 +401,7 @@
             (when (and (:force cfg) (= "mimo" (:provider cfg))) "(--force:缓存的也重灌)")
             "…")
     (run-parallel! #(synth! cfg %) pending (:parallel cfg))
-    (fs/create-dirs (fs/file audio-dir "trimmed"))
+    (fs/create-dirs (fs/file (audio-dir) "trimmed"))
     (u/info "剪首尾静音、量时长…")
     (run-parallel!
      (fn [{:keys [path] :as c}]
@@ -408,10 +417,10 @@
      jobs (:parallel cfg))))
 
 (defn narrate!
-  "生成旁白并写入 target/tour/tour.mp4(画面不重编码,可反复执行)。"
+  "生成旁白并写进成片(画面不重编码,可反复执行)。"
   [args]
-  (when-not (fs/exists? video-path) (u/fail! "找不到 " video-path ",先跑 bb video:tour"))
-  (fs/create-dirs (fs/file audio-dir))
+  (when-not (fs/exists? (video-path)) (u/fail! "找不到 " (video-path) ",先跑录制任务"))
+  (fs/create-dirs (fs/file (audio-dir)))
   (let [ffmpeg (tool! "ffmpeg")
         cfg (-> (parse-args args) with-voice)
         cfg (if (= "mimo" (:provider cfg)) (assoc cfg :key (api-key)) cfg)
@@ -436,6 +445,6 @@
           narration (narration-track! window cs)]
       (report! (count (filter #(> (:tempo %) 1.01) cs)) overflow lost)
       (mux! narration)
-      (u/info "旁白已写入 " video-path ":" (count cs) "句,"
+      (u/info "旁白已写入 " (video-path) ":" (count cs) "句,"
               (:provider cfg) " / " (:voice cfg) ",时长 "
               (format "%.1f 秒" (/ (dur-ms narration) 1000.0))))))
