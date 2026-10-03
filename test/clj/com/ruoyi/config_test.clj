@@ -69,6 +69,8 @@
 
 (deftest pool-keys-reach-hikari-test
   (testing "兜底值要真的落到 HikariCP 上:键名写成 max-active 会被 conman 静默忽略"
+    ;; target/ 未必存在(干净克隆、bb rename 之后第一件事就是跑测试),SQLite 打不开不存在的目录
+    (io/make-parents pool-file)
     (let [spec (:db.sql/connection
                 (config/with-dialect-pool (cfg (str "jdbc:sqlite:" pool-file)) {}))
           conn ((get-method ig/init-key :db.sql/connection) :db.sql/connection spec)

@@ -94,6 +94,7 @@
 
 (deftest close-pool-reaches-hikari-test
   (testing "真池:close-pool! 透过代理关掉它,再调一次不会重复关闭"
+    (io/make-parents pool-file)          ;; target/ 在干净克隆里可能还不存在
     (let [spec (:db.sql/connection
                 (config/with-dialect-pool {:db.sql/connection {:jdbc-url (str "jdbc:sqlite:" pool-file)}} {}))
           conn ((get-method ig/init-key :db.sql/connection) :db.sql/connection spec)

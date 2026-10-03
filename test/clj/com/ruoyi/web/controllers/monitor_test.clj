@@ -11,6 +11,7 @@
   "在临时 SQLite 连接池上调用 f,结束关闭池并删掉库文件。"
   [f]
   (let [file (io/file "target/monitor-test.db")
+        _ (io/make-parents file)         ;; target/ 在干净克隆里未必存在
         pool (db/make-hikari-datasource (str "jdbc:sqlite:" (.getPath file)))]
     (try
       (f pool)
