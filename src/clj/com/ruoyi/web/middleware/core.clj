@@ -73,6 +73,6 @@
            (assoc-in site-defaults-config [:session :store] cookie-store))
           (wrap-cors (parse-origins cors-origins))
           wrap-revalidate-static
-          operlog/wrap-oper-log
+          (operlog/wrap-oper-log (:router opts))
           (wrap-query-fn query-fn)
           wrap-json-body))))

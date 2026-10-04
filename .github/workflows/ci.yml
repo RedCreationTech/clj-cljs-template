@@ -4,7 +4,7 @@
 #   test-mysql  后端测试 + 迁移往返(MySQL 8.4 service)
 #   e2e         前端单元测试 + 生产构建(warning 即失败)+ Playwright
 #   scaffold    bb new-module 生成一个模块后,整套检查、测试与生成的 E2E 都要通过
-#   mobile      ClojureDart 移动端:编译(= 类型检查)+ .cljd 单元测试
+#   mobile      ClojureDart 移动端:编译 + .cljd 单元测试 + Flutter Web真实界面回归
 name: CI
 
 on:
@@ -35,6 +35,8 @@ jobs:
         run: bb lint
       - name: cljfmt
         run: bb fmt:check
+      - name: 开发任务回归(不连接Docker/数据库)
+        run: bb test:tasks
 
   test-sqlite:
     name: 后端测试(SQLite)
@@ -148,14 +150,16 @@ jobs:
           retention-days: 7
 
   # 移动端是独立工程(mobile/ 有自己的 deps.edn 与 pubspec.yaml),所以不进 bb ci:
-  # 后端与网页端的门禁不应该要求装 Flutter。这里单独一个 job,只依赖 JDK + Clojure CLI + Flutter。
+  # 后端与网页端的门禁不应该要求装 Flutter。独立 job 再装 Flutter 与 Chromium。
   mobile:
     name: 移动端(ClojureDart)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
+        with:
+          node: "true"
       - uses: subosito/flutter-action@v2
         with:
           # 与 mobile/pubspec.yaml 的 environment: sdk 以及本地开发用的版本一致;
@@ -169,3 +173,23 @@ jobs:
         run: bb mobile:compile
       - name: 单元测试(cljd.test,不连后端)
         run: bb mobile:test
+      - name: Flutter Web构建(Dart类型检查与界面回归)
+        run: bb mobile:web
+      - name: 启动独立移动端验收后端
+        run: |
+          nohup bb backend > mobile-backend.log 2>&1 &
+          timeout 300 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 2; done'
+      - name: 安装 Chromium
+        run: npx playwright install --with-deps chromium
+      - name: 登录、分页、主题、账号、空态与重试
+        run: MOBILE_UI_REQUIRED=1 bb e2e tests/e2e/mobile-shell.spec.js
+      - name: 上传移动端验收截图与日志
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-ui-report
+          path: |
+            test-results/
+            playwright-report/
+            mobile-backend.log
+          retention-days: 7

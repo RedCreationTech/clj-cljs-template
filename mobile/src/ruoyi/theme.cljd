@@ -1,71 +1,57 @@
 (ns ruoyi.theme
-  "颜色与间距只在这一处定义。
-
-   与网页端的规矩一样:不要把色值散落在各个视图里写死,否则换深色主题时
-   会出现「一块白底配不认识的深色字」。视图一律从订阅 [:ui/palette] 拿到一套配色,
-   按 :text-main / :border 这样的键取名,不认具体色值;这里两套色板键名完全一致。
-   取值对齐 resources/public/css/app.css 里的 --app-btn-* 与 Element UI 色系
-   (新增 #409eff / 危险 #f56c6c / 文字 #303133),深色那套是同一批色的暗版。
-   Flutter 的尺寸参数是 double,所以数值一律写成 8.0 这种形式。"
+  "可定制品牌与明暗两套语义色板。视图不散落色值，操作与状态沿用若依色系。
+   更换品牌时修改 brand / accent，新增操作仍用 primary 蓝色。"
   (:require ["package:flutter/material.dart" :as m]))
 
-(defn- hex
-  "0xFFRRGGBB 形式的颜色;Clojure 里十六进制写成 16r…,所以在这里集中换算。"
-  [r g b]
-  (m/Color.fromARGB 255 r g b))
+(defn- hex [r g b] (m/Color.fromARGB 255 r g b))
 
-;; 主色与状态色两套主题共用:蓝色还是蓝、危险还是红,只把底色和文字反过来。
 (def primary (hex 0x40 0x9e 0xff))
 (def danger (hex 0xf5 0x6c 0x6c))
+(def brand (hex 0x16 0x32 0x4f))
+(def accent (hex 0xe9 0x85 0x3a))
 
 (def light
-  "浅色配色(与 Element UI 亮色主题一致)。"
-  {:primary primary
-   :danger danger
-   :danger-bg (hex 0xfe 0xf0 0xf0)
-   :text-main (hex 0x30 0x31 0x33)
-   :text-regular (hex 0x60 0x62 0x66)
-   :border (hex 0xdc 0xdf 0xe6)
-   :bg (hex 0xf5 0xf7 0xfa)})
+  {:primary primary :on-primary (hex 0x0b 0x27 0x42)
+   :brand brand :on-brand m/Colors.white
+   :accent accent :accent-text (hex 0x9b 0x49 0x12) :accent-bg (hex 0xff 0xf2 0xe7)
+   :danger danger :danger-text (hex 0xb8 0x32 0x32) :danger-bg (hex 0xfe 0xf0 0xf0)
+   :success (hex 0x67 0xc2 0x3a) :success-text (hex 0x36 0x73 0x1b) :success-bg (hex 0xf0 0xf9 0xeb)
+   :text-main (hex 0x18 0x2c 0x3a) :text-regular (hex 0x5b 0x6d 0x7d)
+   :border (hex 0xde 0xe6 0xed) :bg (hex 0xf3 0xf6 0xf8)
+   :surface m/Colors.white :surface-soft (hex 0xee 0xf3 0xf7)})
 
 (def dark
-  "深色配色:#303133 的文字放在 #17181c 的底上是看不见的,这里换成浅灰。"
-  {:primary primary
-   :danger danger
-   :danger-bg (hex 0x2b 0x1b 0x1e)
-   :text-main (hex 0xe5 0xe6 0xeb)
-   :text-regular (hex 0xa3 0xa6 0xad)
-   :border (hex 0x4c 0x4d 0x4f)
-   :bg (hex 0x17 0x18 0x1c)})
+  {:primary (hex 0x8e 0xc5 0xff) :on-primary (hex 0x0b 0x27 0x42)
+   :brand brand :on-brand m/Colors.white
+   :accent (hex 0xf5 0xa2 0x61) :accent-text (hex 0xf5 0xa2 0x61) :accent-bg (hex 0x3a 0x2b 0x20)
+   :danger (hex 0xff 0x93 0x93) :danger-text (hex 0xff 0x93 0x93) :danger-bg (hex 0x3a 0x24 0x2a)
+   :success (hex 0x85 0xca 0xad) :success-text (hex 0x85 0xca 0xad) :success-bg (hex 0x1b 0x35 0x2d)
+   :text-main (hex 0xe6 0xee 0xf5) :text-regular (hex 0xa4 0xb5 0xc5)
+   :border (hex 0x35 0x49 0x5d) :bg (hex 0x11 0x20 0x2d)
+   :surface (hex 0x1a 0x2d 0x3e) :surface-soft (hex 0x24 0x38 0x4b)})
 
-(defn palette-of
-  "视图取配色的入口:主题开关是一个数据(:theme :dark?),配色由它派生。"
-  [dark?]
-  (if dark? dark light))
-
+(defn palette-of [dark?] (if dark? dark light))
 (def gap 8.0)
 (def gap-lg 16.0)
 
-;; ColorScheme 的构造器里 brightness / onPrimary / secondary… 全是必填项,
-;; 手写一份只会漏色;fromSeed 让 Flutter 自己按主色配平整套配色,
-;; 深色只要把 brightness 换成 dark,Card / AppBar 文字一类的默认色会跟着翻。
-(defn- theme-of
-  [p brightness]
+(defn- theme-of [p brightness]
   (m/ThemeData
-    .colorScheme (m/ColorScheme.fromSeed .seedColor primary .brightness brightness)
+    .useMaterial3 true
+    .colorScheme (.copyWith (m/ColorScheme.fromSeed .seedColor brand .brightness brightness)
+                   .primary (:primary p) .onPrimary (:on-primary p)
+                   .secondary (:accent p) .surface (:surface p) .onSurface (:text-main p)
+                   .error (:danger-text p) .onSurfaceVariant (:text-regular p))
     .scaffoldBackgroundColor (:bg p)
-    .appBarTheme (m/AppBarTheme .backgroundColor primary
-                                .foregroundColor m/Colors.white)))
+    .dividerColor (:border p)
+    .appBarTheme (m/AppBarTheme .backgroundColor (:surface p)
+                    .foregroundColor (:text-main p) .elevation 0.0 .scrolledUnderElevation 0.0)
+    .inputDecorationTheme (m/InputDecorationTheme
+                            .filled true .fillColor (:surface-soft p)
+                            .contentPadding (m/EdgeInsets.all 16.0)
+                            .border (m/OutlineInputBorder
+                                      .borderRadius (m/BorderRadius.circular 12.0)
+                                      .borderSide m/BorderSide.none))))
 
-(def data
-  "整套应用的 ThemeData。移动端不追求与网页逐像素一致,但主色与状态色必须是同一套。"
-  (theme-of light m/Brightness.light))
-
-(def dark-data
-  "深色主题的 ThemeData;两份都是 def 出来的常量,订阅反复返回同一个对象,视图不会因此重建。"
-  (theme-of dark m/Brightness.dark))
-
-(defn theme-for
-  "按主题开关取 ThemeData(MaterialApp 的 .theme 由订阅 [:ui/theme] 得到)。"
-  [dark?]
-  (if dark? dark-data data))
+(def data (theme-of light m/Brightness.light))
+(def dark-data (theme-of dark m/Brightness.dark))
+(defn theme-for [dark?] (if dark? dark-data data))

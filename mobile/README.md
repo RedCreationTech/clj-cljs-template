@@ -12,11 +12,23 @@
 
 ## 这是一个独立工程
 
+界面使用Material 3，品牌入口、表单、岗位卡片与账号面板共用 `views/components.cljd`。品牌名、登录介绍和静态界面文案集中在 `brand.cljd`；语义颜色集中在 `theme.cljd`，品牌海军蓝/橙色与若依操作蓝、成功/危险状态分别配置，明暗主题同时维护。登录在宽屏显示双列，窄屏允许滚动；组件避免固定文字高度，状态标签使用独立高对比文字色。模板仍演示岗位、身份、权限和分页，业务内容来自真实接口。
+
+以下为真实 Flutter Web 验收截图，品牌文案和配色均可直接在上述文件中调整：
+
+| 浅色主题 | 深色主题 |
+|---|---|
+| ![移动登录浅色](../docs/images/mobile-login-light.png) | ![移动登录深色](../docs/images/mobile-login-dark.png) |
+
+请求同时绑定令牌与 `:session-revision`。每次登录或退出推进轮次；延迟返回的旧请求和旧401、以及已经排队的旧回调都不能污染新会话。退出立即清除当前身份与岗位；提示条定时器也携带序号，旧计时器不能关闭新消息。会话仍只存内存，未默认增加安全存储或自动登录策略。
+
+`bb mobile:web` 后可用 `MOBILE_UI_REQUIRED=1 bb e2e tests/e2e/mobile-shell.spec.js` 验证真实Flutter界面。E2E启用Flutter辅助功能语义树并按标签/按钮定位，不依赖固定坐标；录屏的假光标跟随目标实际边界。截图位于 `test-results/`。录制与截图优先使用机器上的中日韩字体，可通过 `MOBILE_CJK_FONT` 指定本地字体；这只控制测试环境，不改变应用发布字体。独立mobile CI job会构建Web并运行该回归，缺少构建时必须失败。
+
 | | 后端 / 网页端 | 移动端 |
 |---|---|---|
 | 依赖表 | 根 `deps.edn`、`shadow-cljs.edn`、`package.json` | `mobile/deps.edn`、`mobile/pubspec.yaml` |
 | 工具链 | Clojure CLI + Node | Clojure CLI + **Flutter SDK** |
-| 门禁 | `bb ci`(lint / fmt / test / test:cljs) | `bb mobile:compile` + `bb mobile:test`,CI 里是独立的 `mobile` job |
+| 门禁 | `bb ci`(lint / fmt / test:tasks / test / test:cljs) | `bb mobile:compile` + `bb mobile:test` + Web构建与真实UI回归，CI 里是独立的 `mobile` job |
 
 `mobile/` 不在根 `deps.edn` 的 `:paths` 里,所以 `bb test`、`bb uberjar`、Docker 镜像都不需要 Flutter;
 反过来 `bb ci` 也不管移动端 —— 移动端改了要单独跑 `bb mobile:compile`。
@@ -39,12 +51,14 @@ mobile/
 │   ├── config.cljd       # 接口地址 / 超时 / 每页条数(--dart-define 注入)
 │   ├── json.cljd         # JSON <-> Clojure 数据(键转关键字)
 │   ├── api.cljd          # 唯一的后端出口:带令牌、解信封、把失败归类
+│   ├── response.cljd     # HTTP状态与业务信封的纯分类逻辑
 │   ├── fx.cljd           # re-dash 的自定义效果 :app/request(请求 → 成功/失败事件)
 │   ├── model.cljd        # app-db 初值 + register!(装配 fx / events / subs)
 │   ├── events.cljd       # 唯一改 app-db 的地方
 │   ├── subs.cljd         # 唯一读 app-db 的地方(派生值在这里算,视图不写算法)
-│   ├── theme.cljd        # 配色
-│   └── views/            # login.cljd / posts.cljd / shell.cljd(页面 = 订阅 + dispatch)
+│   ├── brand.cljd        # 品牌、静态界面文案
+│   ├── theme.cljd        # 明暗主题、语义配色
+│   └── views/            # components.cljd共用组件；login/posts/shell(页面 = 订阅 + dispatch)
 └── test/<app>/           # cljd.test 单元测试(json 换算、事件与订阅),bb mobile:test
 ```
 
@@ -101,6 +115,8 @@ MOBILE_DART_DEFINES="--dart-define=RUOYI_API_BASE_URL=https://api.example.com/ap
    画面是 1440x900 的舞台页(`tests/e2e/mobile/stage.html`),App 以真机尺寸 390x844 嵌在同域 iframe 里,
    台词、假鼠标、要点与代码卡都画在舞台上,所以字幕**烧在视频里**,不需要后期压制;
 4. ffmpeg 拼接 + 内嵌章节 → `target/mobile-tour/mobile.mp4`,旁白与网页导览共用 `tasks.narrate`(MiMo TTS)。
+
+旁白合成完成同时写入 `caption-timing.json` 与可编辑的 `mobile.zh-CN.srt`。需要只重新导出字幕时运行 `bb video:subtitles target/mobile-tour mobile.mp4`；章节或台词改动后必须先重配旁白更新对齐记录。分镜卡搜索窗口可通过 `tasks.narrate/card-scan-seconds` 绑定，移动录像使用40秒以覆盖Flutter冷启动导航。
 
 `--compose-only` 用已有 webm 重合成(调节奏/字幕样式时用),`--no-narrate` 不出音轨。
 移动端**不贴左侧目录带**(舞台自带),原片直接就是成片,少一次全片重编码。
@@ -179,7 +195,7 @@ MOBILE_DART_DEFINES="--dart-define=RUOYI_API_BASE_URL=https://api.example.com/ap
     写 `[toggle-button dark?]` 是把「函数本身」和「它的参数」当成两个 children 塞进向量,
     编译照样通过,渲染时 Dart 才说拿到了非 Widget(见 `views/shell.cljd` 的注释)。
 13. **`flutter create` 附带的 `test/widget_test.dart` 会让 `bb mobile:test` 必挂**:那是计数器示例,
-    import 的 `MyApp` 在本工程里不存在(`lib/main.dart` 只 export `<ns>.main/main`)。`bb mobile:create` 生成平台目录后顺手删掉它。
+    import 的 `MyApp` 在本工程里不存在(`lib/main.dart` 只 export `<ns>.main/main`)。平台补齐任务会识别并删除它，适用于 `bb mobile:create` 与 Web首次生成平台目录；自定义同名测试不会被删除。
 14. **跑过 `bb mobile:test` 之后不能直接 `flutter build web`**:测试会在 `lib/cljd-out` 里留下测试命名空间的 import,
    构建报 `Error when reading 'lib/test/cljd-out/…_test.dart'`。`bb mobile:web` 先清 `lib/cljd-out` 与 `test/cljd-out` 再编。
 
@@ -191,4 +207,3 @@ MOBILE_DART_DEFINES="--dart-define=RUOYI_API_BASE_URL=https://api.example.com/ap
 `mobile/src/<旧名>`、`mobile/test/<旧名>` 两个目录搬到新名字;
 平台工程目录不用管,`bb mobile:create` 会按新的 `kit.edn` 重新生成。
 改名后先 `bb mobile:clean` 再 `bb mobile:compile`、`bb mobile:test`(见坑 11)。
-

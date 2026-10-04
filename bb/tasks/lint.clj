@@ -337,9 +337,9 @@
     (str f " 一条断言都没有:只点不验的用例发现不了回归")))
 
 (defn- tour-is-excluded? []
-  ;; 导览录像要 17 分钟,只归 playwright.tour.config.js 管;这条 testIgnore 一旦被删,
-  ;; bb e2e 会把录像当常规门禁跑,CI 的前端任务直接超时。
-  (boolean (re-find #"testIgnore\s*:\s*['\"].*tour" (slurp e2e-config))))
+  ;; 网页与移动导览各有独立录屏配置，不应进入普通CI。
+  (let [ignore (second (re-find #"testIgnore\s*:\s*['\"]([^'\"]+)['\"]" (slurp e2e-config)))]
+    (and ignore (every? #(str/includes? ignore %) ["tour" "mobile"]))))
 
 (defn e2e-conventions!
   "E2E 用例的静态约定:不残留 only/fixme、分页只用 page/size、不写死绝对地址、spec 不 sleep 且必须有断言、tour 仍被排除。"
@@ -350,9 +350,9 @@
                          (mapcat #(line-problems % spec-forbidden) specs)
                          (assertion-problems specs)
                          (when-not (tour-is-excluded?)
-                           [(str e2e-config " 不再 testIgnore tour:bb e2e 会把 17 分钟的录像当常规门禁跑")]))]
+                           [(str e2e-config " 必须testIgnore tour和mobile目录:录像不能混入常规门禁")]))]
     (if (seq problems)
       (do (doseq [p problems] (println "  ✖" p))
           (u/fail! "E2E 用例约定未通过(" (count problems) " 处)"))
       (println "✔ E2E 用例约定通过:" (count files) "个用例文件 /" (count specs)
-               "条 spec 都有断言;tour 仍由 playwright.tour.config.js 单独跑"))))
+               "条 spec 都有断言;网页与移动录像由专用配置单独跑"))))

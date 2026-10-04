@@ -1,9 +1,9 @@
 (ns com.ruoyi.integrant.trace
   "Integrant 函数组件的运行时调用追踪。"
   (:require
-   [clojure.string :as str]
    [com.ruoyi.infra.clock :as clock]
    [com.ruoyi.infra.datasource :as ds]
+   [com.ruoyi.infra.redact :as redact]
    [com.ruoyi.integrant.state :as state]
    [com.ruoyi.web.handler :as handler]
    [integrant.core :as ig]
@@ -100,27 +100,6 @@
 
 (def ^:private max-log-entries 200)
 
-(defn- sensitive-key? [k]
-  (let [s (str/lower-case (name k))]
-    (boolean (some #(str/includes? s %)
-                   ["authorization" "cookie" "token" "password" "passwd" "secret"]))))
-
-(defn- safe-snapshot
-  "把任意值转成可 JSON 序列化的简短摘要。"
-  [v]
-  (cond
-    (nil? v) nil
-    (map? v) (into {} (map (fn [[k v]] [(str k) (if (sensitive-key? k) "<redacted>" (safe-snapshot v))])) v)
-    (sequential? v) (mapv safe-snapshot v)
-    (set? v) (mapv safe-snapshot v)
-    (fn? v) "<function>"
-    (instance? Throwable v) (str (class v) ": " (ex-message v))
-    :else
-    (let [s (pr-str v)]
-      (if (> (count s) 400)
-        (str (subs s 0 400) "...")
-        s))))
-
 (defn- now []
   (System/currentTimeMillis))
 
@@ -128,6 +107,7 @@
   (fn [& args]
     (let [rec (get @registry key-str)
           active? (:active? rec)
+          options (:snapshot-options rec)
           t0 (now)]
       (try
         (let [ret (apply original args)]
@@ -137,8 +117,8 @@
                      (->> (conj logs
                                 {:time (now)
                                  :duration (- (now) t0)
-                                 :args (safe-snapshot args)
-                                 :result (safe-snapshot ret)})
+                                 :args (redact/snapshot args options)
+                                 :result (redact/snapshot ret options)})
                           (take-last max-log-entries)
                           vec))))
           ret)
@@ -149,8 +129,8 @@
                      (->> (conj logs
                                 {:time (now)
                                  :duration (- (now) t0)
-                                 :args (safe-snapshot args)
-                                 :error (safe-snapshot e)})
+                                 :args (redact/snapshot args options)
+                                 :error (redact/snapshot e options)})
                           (take-last max-log-entries)
                           vec))))
           (throw e))))))
@@ -171,20 +151,20 @@
     (swap! state/system assoc k f)))
 
 (defn start!
-  "开始对某个 Integrant key 对应的函数进行调用追踪。"
-  [key-str]
-  (let [k (kw key-str)
-        f (current-actual k)]
-    (when (fn? f)
-      (swap! registry
-             (fn [reg]
-               (if (get-in reg [key-str :wrapper])
-                 (assoc-in reg [key-str :active?] true)
-                 (let [wrapper (make-wrapper key-str f)]
-                   (assoc reg key-str {:original f :wrapper wrapper :active? true :logs []})))))
-      (let [wrapper (get-in @registry [key-str :wrapper])]
-        (set-actual! k wrapper))
-      true)))
+  "开启追踪；可用第二参数的 :sensitive-keys 扩展业务字段脱敏。"
+  ([key-str] (start! key-str {}))
+  ([key-str snapshot-options]
+   (let [k (kw key-str)
+         f (current-actual k)]
+     (when (fn? f)
+       (swap! registry
+              (fn [reg]
+                (let [entry (or (get reg key-str)
+                                {:original f :wrapper (make-wrapper key-str f) :logs []})]
+                  (assoc reg key-str (assoc entry :active? true
+                                            :snapshot-options snapshot-options)))))
+       (set-actual! k (get-in @registry [key-str :wrapper]))
+       true))))
 
 (defn stop!
   "停止追踪并清空日志，恢复原始函数。"

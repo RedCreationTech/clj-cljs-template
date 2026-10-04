@@ -15,6 +15,7 @@
             [hti.re-dash.core :as rd]
             [hti.re-dash.testing.core :as rdt]
             [ruoyi.model :as model]
+            [ruoyi.fx :as fx]
             [ruoyi.theme :as theme]))
 
 (defn- register-handlers!
@@ -91,3 +92,20 @@
     (is (false? (query [:ui/dark?])))
     (is (= :login (query [:app/route])))
     (is (= [] (query [:posts/rows])))))
+
+(deftest old-notice-timer-does-not-dismiss-new-notice
+  (await (rd/dispatch-sync [:ui/notify "第一条提示"]))
+  (await (rd/dispatch-sync [:ui/notify "第二条提示"]))
+  (await (rd/dispatch-sync [:ui/dismiss-notice 1]))
+  (is (= "第二条提示" (:msg (query [:ui/notice]))))
+  (await (rd/dispatch-sync [:ui/dismiss-notice 2]))
+  (is (nil? (:msg (query [:ui/notice])))))
+
+(deftest queued-old-session-callback-cannot-restore-private-data
+  (let [old {:token "previous" :session-revision 0}]
+    (await (rd/dispatch-sync [:posts/loaded {:data {:rows [{:post_id 99}] :total 1} ::fx/context old}]))
+    (is (= [] (query [:posts/rows])))
+    (await (rd/dispatch-sync [:auth/session-expired "旧会话失效" old]))
+    (is (nil? (:msg (query [:login/state]))))
+    (await (rd/dispatch-sync [:auth/login-failed {:msg "旧失败" ::fx/context old}]))
+    (is (nil? (:msg (query [:login/state]))))))

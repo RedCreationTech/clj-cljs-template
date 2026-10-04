@@ -1,97 +1,90 @@
 (ns ruoyi.views.login
-  "登录页。用户名与密码属于输入控件自己的状态(Flutter 的 controller),不进 app-db;
-   「提交中」与「失败原因」是跨组件共享的状态,才走 re-dash。
-
-   与网页端一致的两点:失败提示只用后端给的中文 msg(不区分「用户不存在」与「密码错」);
-   验证码是后端开关,移动端这一版按关闭处理,开验证码时在这里补一次 /captcha/image。"
+  "响应式品牌入口与登录表单。输入仍由 Flutter controller 管理，认证走共享事件。"
   (:require ["package:flutter/material.dart" :as m]
             [cljd.flutter :as f]
             [hti.re-dash.core :as rd]
-            [ruoyi.theme :as theme]))
+            [ruoyi.brand :as brand]
+            [ruoyi.views.components :as ui]))
 
 (def username-ctrl (m/TextEditingController))
-
 (def password-ctrl (m/TextEditingController))
 
-(defn- text-of [^m/TextEditingController controller]
-  (.-text controller))
+(defn- text-of [^m/TextEditingController controller] (.-text controller))
 
 (defn- submit []
-  (let [u (text-of username-ctrl)
-        p (text-of password-ctrl)]
+  (let [u (text-of username-ctrl) p (text-of password-ctrl)]
     (if (or (= "" u) (= "" p))
-      (rd/dispatch [:ui/notify "用户名和密码都要填"])
+      (rd/dispatch [:ui/notify (brand/label :required)])
       (rd/dispatch [:auth/login u p]))))
 
-(defn- field
-  "一个带标签的输入框;密码框遮住内容,回车即提交。"
-  [controller label obscure?]
-  (m/TextField
-    .controller controller
-    .obscureText obscure?
+(defn- field [controller label obscure? icon pending?]
+  (m/TextField .controller controller .obscureText obscure? .enabled (not pending?)
     .textInputAction m/TextInputAction.done
-    .decoration (m/InputDecoration
-                  .labelText label
-                  .border (m/OutlineInputBorder
-                            .borderRadius (m/BorderRadius.circular 8.0)))
-    .onSubmitted (fn [_] (submit))))
+    .autocorrect false .enableSuggestions (not obscure?)
+    .decoration (m/InputDecoration .labelText label .prefixIcon (m/Icon icon))
+    .onSubmitted (fn [_] (when-not pending? (submit)))))
 
-(defn- error-tip
-  [palette msg]
-  (m/Container
-    .margin (m/EdgeInsets.only .top theme/gap)
-    .padding (m/EdgeInsets.all 8.0)
-    .decoration (m/BoxDecoration
-                  .color (:danger-bg palette)
-                  .borderRadius (m/BorderRadius.circular 6.0))
-    .child (m/Text msg .style (m/TextStyle .color (:danger palette) .fontSize 13.0))))
+(defn- brand-card [palette]
+  (m/Container .padding (m/EdgeInsets.all 26.0)
+    .decoration (m/BoxDecoration .color (:brand palette)
+                  .borderRadius (m/BorderRadius.circular 24.0))
+    .child (ui/stack
+             [(m/Row .crossAxisAlignment m/CrossAxisAlignment.start
+                .children [(m/Icon m/Icons.dashboard_outlined .color (:accent palette) .size 28.0)
+                           (m/SizedBox .width 12.0)
+                           (m/Expanded .child (m/Text brand/name
+                             .style (m/TextStyle .color (:on-brand palette)
+                                       .fontSize 17.0 .height 1.5 .fontWeight m/FontWeight.w600)))])
+              (ui/gap 24.0)
+              (m/Text brand/headline .style (m/TextStyle .color (:on-brand palette)
+                                             .fontSize 28.0 .height 1.4 .fontWeight m/FontWeight.w700))
+              (ui/gap 12.0)
+              (m/Text brand/description .style (m/TextStyle .color (:on-brand palette)
+                                                .fontSize 14.0 .height 1.7))
+              (ui/gap 20.0)
+              (m/Wrap .spacing 8.0 .runSpacing 8.0
+                .children (mapv #(ui/chip palette % :accent-text :accent-bg) brand/features))])))
 
-(defn- press
-  "提交按钮的回调:提交中返回 nil,Flutter 会把按钮变灰。
-   一定要经过这个函数返回——内联的 (if pending? nil submit) 会被 ClojureDart
-   提成 `Function?` 类型的临时变量,Dart 不接受它赋给 VoidCallback?;
-   函数调用的返回类型是 dynamic,类型检查才通得过。"
-  [pending?]
-  (if pending? nil submit))
+(defn- press [pending?] (if pending? nil submit))
 
-(defn- login-button
-  [palette pending?]
-  (m/ElevatedButton
-    .onPressed (press pending?)
-    .style (m/ElevatedButton.styleFrom
-             .backgroundColor (:primary palette)
-             .minimumSize (m/Size 0.0 44.0)
-             .shape (m/RoundedRectangleBorder
-                      .borderRadius (m/BorderRadius.circular 8.0)))
+(defn- login-button [palette pending?]
+  (m/FilledButton .onPressed (press pending?)
+    .style (m/FilledButton.styleFrom .minimumSize (m/Size 0.0 50.0)
+             .padding (m/EdgeInsets.symmetric .vertical 14.0 .horizontal 20.0)
+             .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 12.0)))
     .child (if pending?
-             (m/CircularProgressIndicator .color m/Colors.white .strokeWidth 2.0)
-             (m/Text "登 录" .style (m/TextStyle .color m/Colors.white .fontSize 16.0)))))
+             (m/Semantics .label (brand/label :login-pending) .liveRegion true
+               .child (m/SizedBox .width 20.0 .height 20.0
+                        .child (m/CircularProgressIndicator .color (:on-primary palette) .strokeWidth 2.0)))
+             (m/Text (brand/label :login) .style (m/TextStyle .fontSize 15.0 .fontWeight m/FontWeight.w600)))))
+
+(defn- form [palette {:keys [pending? msg]}]
+  (ui/card palette
+    [(ui/text palette (brand/label :welcome) 23.0 true)
+     (ui/muted palette (brand/label :login-subtitle))
+     (ui/gap 22.0)
+     (field username-ctrl (brand/label :username) false m/Icons.person_outline pending?)
+     (ui/gap 14.0)
+     (field password-ctrl (brand/label :password) true m/Icons.lock_outline pending?)
+     (ui/gap 14.0)
+     (when (some? msg) (ui/message palette msg))
+     (ui/gap 10.0)
+     (login-button palette pending?)
+     (ui/gap 16.0)
+     (ui/muted palette (brand/label :login-note))]))
+
+(defn- layout [palette login ^m/BoxConstraints constraints]
+  (if (>= (.-maxWidth constraints) 800.0)
+    (m/Row .crossAxisAlignment m/CrossAxisAlignment.start
+      .children [(m/Expanded .child (brand-card palette)) (m/SizedBox .width 24.0)
+                 (m/Expanded .child (form palette login))])
+    (ui/stack [(brand-card palette) (ui/gap 20.0) (form palette login)])))
 
 (def view
-  (f/widget
-    :watch [login (rd/subscribe [:login/state])
-            palette (rd/subscribe [:ui/palette])]
-    (m/SafeArea
-      .child (m/Center
-               .child (m/SingleChildScrollView
-                        .padding (m/EdgeInsets.all 24.0)
-                        .child (let [{:keys [pending? msg]} login]
-                                  (m/Column
-                                    .crossAxisAlignment m/CrossAxisAlignment.stretch
-                                    .children
-                                    [(m/Text "若依移动端"
-                                             .style (m/TextStyle .fontSize 26.0
-                                                                 .fontWeight m/FontWeight.bold
-                                                                 .color (:primary palette)))
-                                     (m/SizedBox .height 6.0)
-                                     (m/Text "ClojureDart + re-dash"
-                                             .style (m/TextStyle .color (:text-regular palette)))
-                                     (m/SizedBox .height 28.0)
-                                     (field username-ctrl "用户名" false)
-                                     (m/SizedBox .height theme/gap)
-                                     (field password-ctrl "密码" true)
-                                     (if (some? msg)
-                                       (error-tip palette msg)
-                                       (m/SizedBox .height 0.0))
-                                     (m/SizedBox .height theme/gap)
-                                     (login-button palette pending?)])))))))
+  (f/widget :watch [login (rd/subscribe [:login/state])
+                    palette (rd/subscribe [:ui/palette])]
+    (m/SafeArea .child (m/Center
+      .child (m/SingleChildScrollView .padding (m/EdgeInsets.all 20.0)
+        .child (ui/centered
+                 (m/LayoutBuilder .builder (fn [_ constraints] (layout palette login constraints)))
+                 960.0))))))

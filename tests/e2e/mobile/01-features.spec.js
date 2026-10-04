@@ -2,11 +2,6 @@
 const { test, expect } = require('@playwright/test');
 const m = require('./mobile-helper');
 
-// App 内坐标(390x844 逻辑像素);舞台会缩放手机框,helper 负责换算。
-// 数值来自实测:量出 iframe 在舞台上的矩形(k = 宽/390),再 (页面坐标 - 原点)/k。
-const X = { prev: 122, next: 271, logout: 366, theme: 329 };
-const Y = { pager: 822, bar: 24 };
-
 test('01｜功能:登录、列表、服务端分页、退出', async ({ page }) => {
   await m.open(page);
 
@@ -30,7 +25,7 @@ test('01｜功能:登录、列表、服务端分页、退出', async ({ page }) 
   ], { label: 'babashka' });
   await m.codeOff(page);
 
-  await m.say(page, '首屏是登录页。App 是画在 canvas 上的,没有 DOM 可点,所以每一步都按坐标落在真正的输入框上。');
+  await m.say(page, '首屏是登录页。App 由 Flutter 画在 canvas 上,同时提供辅助功能语义树,演示按输入框和按钮的名称操作。');
   await m.step(page, '提交之后连着三个请求:签令牌、取身份、取列表,一条事件链串起来。', async () => {
     // 监听必须在点提交之前挂好:登录响应回来之后几百毫秒列表就取完了,
     // 事后再 waitForResponse 会永远等不到已经发生的那一次。
@@ -52,7 +47,7 @@ test('01｜功能:登录、列表、服务端分页、退出', async ({ page }) 
 
   await m.step(page, '底部分页条写的是「1 / 2 页 · 共 24 条」,点右箭头翻到第 2 页。', async () => {
     const res = m.expectRequest(page, 'page=2');
-    await m.tap(page, X.next, Y.pager, { ms: 200 });
+    await m.button(page, '下一页', { ms: 200 });
     const body = await (await res).json();
     expect(body.data.rows.length).toBeGreaterThan(0);
     expect(body.data.rows[0].post_id).not.toBe(1);
@@ -61,16 +56,16 @@ test('01｜功能:登录、列表、服务端分页、退出', async ({ page }) 
   await m.say(page, '翻回来的请求带的是 page=1:页码存在 app-db 里,不是控件的私有状态,所以刷新、切主题都不会把它弄丢。');
   await m.step(page, '再点左箭头回第一页。', async () => {
     const res = m.expectRequest(page, 'page=1');
-    await m.tap(page, X.prev, Y.pager, { ms: 200 });
+    await m.button(page, '上一页', { ms: 200 });
     expect((await (await res).json()).data.rows[0].post_id).toBe(1);
   });
 
   await m.say(page, '列表还能下拉刷新:手指往下拽一下,重新派发 :posts/refresh,页码保持不变。');
   await m.quiet(page, 900);
 
-  await m.step(page, '右上角两个按钮:主题的亮暗开关,和退出登录。', async () => {
+  await m.step(page, '右上角提供账号信息、主题切换和退出登录,这里演示退出。', async () => {
     const res = m.expectRequest(page, '/auth/logout');
-    await m.tap(page, X.logout, Y.bar, { ms: 200 });
+    await m.button(page, '退出登录', { ms: 200 });
     expect((await res).status()).toBe(200);
   });
   await m.say(page, '退出之后令牌、身份、列表数据一次清干净,画面回到登录页。');

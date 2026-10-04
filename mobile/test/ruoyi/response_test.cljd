@@ -1,0 +1,19 @@
+(ns ruoyi.response-test
+  (:require [cljd.test :refer [deftest is]]
+            [ruoyi.response :as response]))
+
+(deftest gateway-errors-retain-authentication-classification
+  (is (= :unauthorized (:error (response/classify 401 nil))))
+  (is (= :forbidden (:error (response/classify 403 "HTML"))))
+  (is (= :server (:error (response/classify 502 nil))))
+  (is (= :server (:error (response/classify 404 {:code 200 :data "misleading"}))))
+  (is (false? (:ok? (response/classify 500 {:code 200}))))
+  (is (false? (:ok? (response/classify 200 ["invalid-envelope"])))))
+
+(deftest business-errors-and-success-use-the-shared-envelope
+  (let [failed (response/classify 200 {:code 500 :msg "业务规则不通过"})
+        success (response/classify 200 {:code 200 :msg "操作成功" :data {:rows []}})]
+    (is (= :business (:error failed)))
+    (is (= "业务规则不通过" (:msg failed)))
+    (is (true? (:ok? success)))
+    (is (= {:rows []} (:data success)))))

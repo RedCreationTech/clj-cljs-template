@@ -2,9 +2,6 @@
 const { test, expect } = require('@playwright/test');
 const m = require('./mobile-helper');
 
-const X = { next: 271, theme: 329 };
-const Y = { pager: 822, bar: 24 };
-
 test('03｜状态管理:app-db、纯事件与订阅', async ({ page }) => {
   await m.open(page);
 
@@ -39,7 +36,7 @@ test('03｜状态管理:app-db、纯事件与订阅', async ({ page }) => {
 
   await m.step(page, '翻到第 2 页:页码并进 app-db 的 :posts 里再发请求。', async () => {
     const res = m.expectRequest(page, 'page=2');
-    await m.tap(page, X.next, Y.pager, { ms: 300 });
+    await m.button(page, '下一页', { ms: 300 });
     const body = await (await res).json();
     expect(body.data.rows[0].post_id).toBe(21);
   });
@@ -47,7 +44,7 @@ test('03｜状态管理:app-db、纯事件与订阅', async ({ page }) => {
   const posts = m.counter(page, '/system/post');
   await m.step(page, '现在换一次主题:数据没变,所以一条请求都不该再发。', async () => {
     const before = posts.n;
-    await m.tap(page, X.theme, Y.bar, { ms: 300 });
+    await m.toggleTheme(page, { ms: 300 });
     await m.wait(page, 2000);
     expect(posts.n).toBe(before);
     expect(await m.tone(page)).toBeLessThan(120);
@@ -57,7 +54,7 @@ test('03｜状态管理:app-db、纯事件与订阅', async ({ page }) => {
 
   await m.step(page, '再点一次换回亮色,同样不发请求。', async () => {
     const before = posts.n;
-    await m.tap(page, X.theme, Y.bar, { ms: 300 });
+    await m.toggleTheme(page, { ms: 300 });
     await m.wait(page, 1800);
     expect(posts.n).toBe(before);
     expect(await m.tone(page)).toBeGreaterThan(150);

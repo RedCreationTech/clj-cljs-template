@@ -83,14 +83,38 @@
     (fs/delete-if-exists "test.db"))
   (u/exec! (into (u/clojure-cmd) (cons "-M:test" args))))
 
-(def ^:private compose-url
-  "jdbc:mysql://127.0.0.1:3308/ruoyi?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai")
+(defn- mysql-test-environment []
+  (select-keys (System/getenv) ["JDBC_URL" "MYSQL_TEST_PORT" "COMPOSE_PROJECT_NAME"]))
+
+(defn- mysql-test-port []
+  (let [setting (get (mysql-test-environment) "MYSQL_TEST_PORT")
+        port (if (str/blank? setting) 3308 (parse-long setting))]
+    (when-not (and port (<= 1 port 65535))
+      (u/fail! "MYSQL_TEST_PORT 必须是 1~65535 之间的整数"))
+    port))
+
+(defn- compose-project-name
+  "用 checkout 路径区分同名模板副本;显式 COMPOSE_PROJECT_NAME 仍可覆盖。"
+  []
+  (if-let [setting (not-empty (get (mysql-test-environment) "COMPOSE_PROJECT_NAME"))]
+    setting
+    (let [project-name (-> (:name (u/project)) str/lower-case
+                           (str/replace #"[^a-z0-9_-]" "-")
+                           (str/replace #"^[^a-z0-9]+" ""))
+          digest (.digest (java.security.MessageDigest/getInstance "SHA-256")
+                          (.getBytes (str (fs/canonicalize ".")) "UTF-8"))
+          suffix (subs (apply str (map #(format "%02x" (bit-and % 255)) digest)) 0 12)]
+      (str (if (str/blank? project-name) "app" project-name) "-test-" suffix))))
+
+(defn- compose-url [port]
+  (str "jdbc:mysql://127.0.0.1:" port "/ruoyi?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai"))
 
 (defn- docker-compose-cmd []
-  (cond
-    (u/exe "docker") [(u/exe "docker") "compose"]
-    (u/exe "docker-compose") [(u/exe "docker-compose")]
-    :else (u/fail! "没有 docker;请自行准备 MySQL 并设置 JDBC_URL 后重试")))
+  (let [project-name (compose-project-name)]
+    (cond
+      (u/exe "docker") [(u/exe "docker") "compose" "-p" project-name]
+      (u/exe "docker-compose") [(u/exe "docker-compose") "-p" project-name]
+      :else (u/fail! "没有 docker;请自行准备 MySQL 并设置 JDBC_URL 后重试"))))
 
 (defn- wait-mysql! [compose]
   (u/info "等待 MySQL 就绪 …")
@@ -98,18 +122,20 @@
     (let [{:keys [exit]} @(apply p/process {:out :string :err :string}
                                  (into compose ["exec" "-T" "mysql" "mysqladmin" "ping" "-h127.0.0.1" "-uroot" "-ppassword" "--silent"]))]
       (cond (zero? exit) true
-            (> n 90) (u/fail! "MySQL 90 秒内未就绪:docker compose logs mysql")
+            (> n 90) (u/fail! "MySQL 90 秒内未就绪:" (str/join " " (into compose ["logs" "mysql"])))
             :else (do (Thread/sleep 1000) (recur (inc n)))))))
 
 (defn test-mysql!
   "在 MySQL 上跑后端测试。设置了 JDBC_URL(jdbc:mysql://…)就直接用它;
-   否则用 docker compose 起 docker-compose.yml 里的 MySQL(端口 3308)。每次先清空库再迁移。"
+   否则起当前 checkout 独立的 MySQL,MYSQL_TEST_PORT 默认 3308。每次先清空库再迁移。"
   [args]
-  (let [url (or (some-> (System/getenv "JDBC_URL") (#(when (str/starts-with? % "jdbc:mysql") %)))
-                (let [compose (docker-compose-cmd)]
+  (let [url (or (some-> (get (mysql-test-environment) "JDBC_URL") (#(when (str/starts-with? % "jdbc:mysql") %)))
+                (let [port (mysql-test-port)
+                      compose (docker-compose-cmd)]
+                  (u/info "MySQL 测试 Compose 项目:" (last compose) ",端口:" port)
                   (u/exec! (into compose ["up" "-d" "mysql"]))
                   (wait-mysql! compose)
-                  compose-url))
+                  (compose-url port)))
         env {"JDBC_URL" url "MIGRATION_DIR" "migrations"}]
     (u/info "清空 MySQL 库:" (str/replace url #"password=[^&]*" "password=***"))
     (u/exec! (into (u/clojure-cmd) ["-M:dev" "scripts/db.clj" "reset"]) {:extra-env env})

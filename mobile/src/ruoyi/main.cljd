@@ -4,6 +4,7 @@
   (:require ["package:flutter/material.dart" :as m]
             [cljd.flutter :as f]
             [hti.re-dash.core :as rd]
+            [ruoyi.brand :as brand]
             [ruoyi.model :as model]
             [ruoyi.views.shell :as shell]))
 
@@ -14,7 +15,7 @@
   (f/widget
     :watch [theme-data (rd/subscribe [:ui/theme])]
     (m/MaterialApp
-      .title "若依移动端"
+      .title brand/name
       .debugShowCheckedModeBanner false
       .theme theme-data
       .home shell/view)))

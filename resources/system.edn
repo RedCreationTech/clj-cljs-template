@@ -105,7 +105,7 @@
                    :demo-account?     #profile {:dev true :test true :prod false}}
   ;; 上传限制(见 com.ruoyi.infra.files):上传根目录、单文件大小上限(MB)与扩展名白名单(逗号分隔,留空用默认)
   ;; 目录相对 JVM 工作目录;容器里请挂到持久卷上,否则换容器就丢文件
-  :upload-config  {:dir        #or [#env UPLOAD_DIR "uploads"]
+  :upload-config  {:dir        #or [#env UPLOAD_DIR #profile {:test "target/test-uploads" :default "uploads"}]
                    :max-mb     #long #or [#env UPLOAD_MAX_MB 10]
                    :extensions #or [#env UPLOAD_EXTENSIONS ""]}
   :query-fn       #ig/ref :db.sql/query-fn

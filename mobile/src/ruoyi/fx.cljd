@@ -22,22 +22,34 @@
   [event-id result]
   (-> [] (conj event-id) (conj result)))
 
-(defn- perform!
-  [{:keys [request ok bad]}]
-  ;; api/call 是异步的(内部 await 了 http),这里必须 await,
-  ;; 否则拿到的是 Future,:ok?/:msg 全是 nil,界面永远转圈。
-  (let [result (await (api/call request))
-        {:keys [ok? error msg]} result]
-    (case error
-      :unauthorized (rd/dispatch [:auth/session-expired msg])
-      (if ok?
-        (rd/dispatch (event-with ok result))
-        (do (rd/dispatch (event-with bad result))
-            (when (= :forbidden error)
-              (rd/dispatch [:ui/notify msg])))))))
+(defn current-context? [db context]
+  (= context (select-keys db [:token :session-revision])))
+
+(defn current-result? [db result]
+  (or (not (contains? result ::context)) (current-context? db (::context result))))
+
+(defn delivery-effect
+  "旧令牌或旧登录轮次的IO结果不进入新会话，包括延迟返回的401。"
+  [db context ok bad result]
+  (if-not (current-context? db context) {}
+    (let [result (assoc result ::context context)]
+      (case (:error result)
+      :unauthorized {:dispatch [:auth/session-expired (:msg result) context]}
+      (if (:ok? result)
+        {:dispatch (event-with ok result)}
+        {:fx (cond-> [[:dispatch (event-with bad result)]]
+               (= :forbidden (:error result)) (conj [:dispatch [:ui/notify (:msg result) context]]))})))))
+
+(defn- perform! [{:keys [request ok bad]}]
+  ;; await后把结果交回事件层，重新核对当前会话，而不是直接派发成功事件。
+  (let [result (await (api/call request))]
+    (rd/dispatch [:api/deliver (select-keys request [:token :session-revision]) ok bad result])))
 
 (defn register!
   "登记效果。所有 reg-* 都要放在被调用的 register! 里,
    否则 Dart 的树摇会把这些没人显式引用的处理函数删掉。"
   []
+  (rd/reg-event-fx :api/deliver
+    (fn [{:keys [db]} [_ context ok bad result]]
+      (delivery-effect db context ok bad result)))
   (rd/reg-fx api-effect perform!))

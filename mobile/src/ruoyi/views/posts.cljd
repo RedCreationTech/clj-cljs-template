@@ -1,71 +1,96 @@
 (ns ruoyi.views.posts
-  "岗位列表的正文:服务端分页,页码与总数都以后端返回的 {:rows :total} 为准,
-   与网页端 components/pagination 的口径一致(这里不写前端假搜索)。
-   Scaffold、AppBar 和提示条在 ruoyi.views.shell 里,页面只提供正文。"
+  "岗位卡片与服务端分页。加载、空态和失败均可刷新，页码与总数由接口返回。"
   (:require ["dart:async" :as a]
             ["package:flutter/material.dart" :as m]
             [cljd.flutter :as f]
             [hti.re-dash.core :as rd]
-            [ruoyi.theme :as theme]))
+            [ruoyi.brand :as brand]
+            [ruoyi.views.components :as ui]))
 
-(defn- status-text [status]
-  (if (= "0" status) "正常" "停用"))
+(defn- status-chip [palette status]
+  (if (= "0" status)
+    (ui/chip palette (brand/label :normal) :success-text :success-bg)
+    (ui/chip palette (brand/label :disabled) :danger-text :danger-bg)))
 
-(defn- row [palette post]
-  (let [{:keys [post_id post_name post_code status remark]} post]
-    (m/Card
-      .margin (m/EdgeInsets.only .left theme/gap-lg .right theme/gap-lg .top theme/gap)
-      .child (m/ListTile
-               .title (m/Text (str post_name)
-                              .style (m/TextStyle .fontSize 15.0
-                                                  .color (:text-main palette)))
-               .subtitle (m/Text (str "编号 " post_id " · " post_code " · "
-                                      (status-text status)
-                                      (if (some? remark) (str " · " remark) ""))
-                              .style (m/TextStyle .color (:text-regular palette)))
-               .trailing (m/Icon m/Icons.chevron_right .color (:border palette))))))
+(defn- row [palette {:keys [post_id post_name post_code status remark]}]
+  (ui/card palette
+    [(m/Row .crossAxisAlignment m/CrossAxisAlignment.start
+       .children [(m/Icon m/Icons.work_outline .color (:primary palette) .size 24.0)
+                  (m/SizedBox .width 12.0)
+                  (m/Expanded .child (ui/text palette (str post_name) 17.0 true))])
+     (ui/gap 12.0)
+     (m/Wrap .spacing 8.0 .runSpacing 8.0
+       .children [(status-chip palette status)
+                  (ui/chip palette (str (brand/label :post-id) " " post_id) :text-regular :surface-soft)])
+     (ui/gap 10.0)
+     (ui/muted palette (str (brand/label :post-code) " · " post_code))
+     (when (and (some? remark) (not= "" remark)) (ui/muted palette remark))]))
 
-(defn- goto
-  "翻到第 target 页的回调;不可翻时返回 nil(按钮变灰)。
-   和 ruoyi.views.login/press 一样,必须经过函数返回,
-   否则内联 (if … #(...) nil) 的 Function? 类型过不了 Dart 的 VoidCallback? 检查。"
-  [enabled? target]
+(defn- goto [enabled? target]
   (when enabled? #(rd/dispatch [:posts/change-page target])))
 
 (defn- pager [palette {:keys [page total-pages total pending?]}]
   (let [moves? (not pending?)]
-    (m/Row
-      .mainAxisAlignment m/MainAxisAlignment.center
-      .children
-      [(m/IconButton
-         .icon (m/Icon m/Icons.chevron_left .color (:text-main palette))
-         .onPressed (goto (and moves? (> page 1)) (dec page)))
-       (m/Text (str page " / " total-pages " 页 · 共 " total " 条")
-               .style (m/TextStyle .color (:text-regular palette)))
-       (m/IconButton
-         .icon (m/Icon m/Icons.chevron_right .color (:text-main palette))
-         .onPressed (goto (and moves? (< page total-pages)) (inc page)))])))
+    (m/SafeArea .top false
+      .child (m/Container .color (:surface palette)
+               .padding (m/EdgeInsets.symmetric .horizontal 16.0 .vertical 10.0)
+               .child (m/Row .children
+                        [(m/IconButton .tooltip (brand/label :previous)
+                           .icon (m/Icon m/Icons.chevron_left)
+                           .onPressed (goto (and moves? (> page 1)) (dec page)))
+                         (m/Expanded .child (m/Text
+                           (str page " / " total-pages " " (brand/label :page) " · "
+                                (brand/label :total-prefix) " " total " " (brand/label :total-suffix))
+                           .textAlign m/TextAlign.center
+                           .style (m/TextStyle .fontSize 13.0 .height 1.5 .color (:text-regular palette))))
+                         (m/IconButton .tooltip (brand/label :next)
+                           .icon (m/Icon m/Icons.chevron_right)
+                           .onPressed (goto (and moves? (< page total-pages)) (inc page)))])))))
+
+(defn- header [palette paging]
+  (ui/card palette
+    [(ui/heading palette (brand/label :posts) (brand/label :posts-subtitle) m/Icons.workspaces_outline)
+     (ui/gap 14.0)
+     (m/Row .children
+       [(m/Expanded .child (ui/muted palette
+          (str (brand/label :total-prefix) " " (:total paging 0) " " (brand/label :total-suffix))))
+        (m/IconButton .tooltip (brand/label :refresh) .icon (m/Icon m/Icons.refresh)
+          .onPressed (ui/press (not (:pending? paging)) [:posts/refresh]))])]))
+
+(defn- state-card [palette paging]
+  (let [{:keys [pending? msg]} paging
+        title (cond pending? :loading (some? msg) :load-error :else :empty)
+        note (cond pending? (brand/label :loading-note) (some? msg) msg :else (brand/label :empty-note))]
+    (ui/card palette
+      [(ui/gap 20.0)
+       (m/Icon (if (some? msg) m/Icons.cloud_off_outlined m/Icons.inventory_2_outlined)
+         .size 42.0 .color (:text-regular palette))
+       (ui/gap 16.0)
+       (ui/text palette (brand/label title) 19.0 true)
+       (ui/muted palette note) (ui/gap 16.0)
+       (ui/button (brand/label (if (some? msg) :retry :refresh)) [:posts/refresh] (not pending?))
+       (ui/gap 16.0)])))
 
 (defn- body [palette rows paging]
-  (if (empty? rows)
-    (m/Center
-      .child (m/Text (or (:msg paging) "暂无数据")
-                     .style (m/TextStyle .color (:text-regular palette))))
-    (m/ListView .children (mapv #(row palette %) rows))))
+  (m/ListView .physics (m/AlwaysScrollableScrollPhysics)
+    .padding (m/EdgeInsets.all 16.0)
+    .children [(ui/centered
+                 (ui/stack
+                   (into [(header palette paging)]
+                         (if (empty? rows) [(state-card palette paging)]
+                           (into (if (:msg paging) [(ui/message palette (:msg paging)) (ui/gap 14.0)] [])
+                                 (mapv #(row palette %) rows)))))
+                 760.0)]))
 
 (def view
-  (f/widget
-    :watch [paging (rd/subscribe [:posts/paging])
-            rows (rd/subscribe [:posts/rows])
-            palette (rd/subscribe [:ui/palette])]
-    (m/Column
-      .children
+  (f/widget :watch [paging (rd/subscribe [:posts/paging])
+                    rows (rd/subscribe [:posts/rows])
+                    palette (rd/subscribe [:ui/palette])]
+    (m/Column .children
       [(if (:pending? paging)
-         (m/CircularProgressIndicator .color (:primary palette))
-         (m/SizedBox .height 0.0))
-       ;; RefreshIndicator 要求子树里可滚动,所以它包的是正文而不是整个 Column。
-       (m/Expanded
-         .child (m/RefreshIndicator
-                  .onRefresh (fn [] (rd/dispatch [:posts/refresh]) (await (a/Future.value nil)))
-                  .child (body palette rows paging)))
+         (m/LinearProgressIndicator .color (:primary palette) .backgroundColor (:surface-soft palette))
+         (m/SizedBox .height 4.0))
+       (m/Expanded .child (m/RefreshIndicator
+                            .onRefresh (fn [] (rd/dispatch [:posts/refresh]) (await (a/Future.value nil)))
+                            .child (body palette rows paging)))
        (pager palette (update paging :total-pages (fn [n] (max 1 (or n 1)))))])))

@@ -1,0 +1,68 @@
+(ns ruoyi.views.components
+  "通用排版、卡片、状态与操作组件。颜色取语义色板，尺寸随文字自然增长。"
+  (:require ["package:flutter/material.dart" :as m]
+            [hti.re-dash.core :as rd]))
+
+(defn gap [height] (m/SizedBox .height height))
+
+(defn text [palette content size bold?]
+  (m/Text (str content) .style (m/TextStyle .fontSize size .height 1.5
+                               .fontWeight (if bold? m/FontWeight.w600 m/FontWeight.normal)
+                               .color (:text-main palette))))
+
+(defn muted [palette content]
+  (m/Text (str content) .style (m/TextStyle .fontSize 13.0 .height 1.6
+                               .color (:text-regular palette))))
+
+(defn stack [children]
+  (m/Column .crossAxisAlignment m/CrossAxisAlignment.stretch
+            .mainAxisSize m/MainAxisSize.min .children (vec (remove nil? children))))
+
+(defn card [palette children]
+  (m/Container .margin (m/EdgeInsets.only .bottom 14.0) .padding (m/EdgeInsets.all 20.0)
+               .decoration (m/BoxDecoration .color (:surface palette)
+                                            .border (m/Border.all .color (:border palette))
+                                            .borderRadius (m/BorderRadius.circular 20.0))
+               .child (stack children)))
+
+(defn heading [palette title subtitle icon]
+  (m/Row .crossAxisAlignment m/CrossAxisAlignment.start
+         .children [(m/Icon icon .color (:accent palette) .size 24.0)
+                    (m/SizedBox .width 12.0)
+                    (m/Expanded .child (stack [(text palette title 20.0 true)
+                                               (when subtitle (muted palette subtitle))]))]))
+
+(defn chip [palette label foreground background]
+  (m/Container .padding (m/EdgeInsets.symmetric .horizontal 10.0 .vertical 5.0)
+               .decoration (m/BoxDecoration .color (get palette background)
+                                            .borderRadius (m/BorderRadius.circular 8.0))
+               .child (m/Text label .style (m/TextStyle .fontSize 12.0 .height 1.4
+                                                        .fontWeight m/FontWeight.w600 .color (get palette foreground)))))
+
+(defn press [enabled? event] (when enabled? #(rd/dispatch event)))
+
+(defn button [label event enabled?]
+  (m/FilledButton .onPressed (press enabled? event)
+                  .style (m/FilledButton.styleFrom .minimumSize (m/Size 0.0 48.0)
+                                                   .padding (m/EdgeInsets.symmetric .horizontal 20.0 .vertical 12.0)
+                                                   .shape (m/RoundedRectangleBorder .borderRadius (m/BorderRadius.circular 12.0)))
+                  .child (m/Text label .textAlign m/TextAlign.center)))
+
+(defn centered [child width]
+  (m/Align .alignment m/Alignment.topCenter
+           .child (m/ConstrainedBox .constraints (m/BoxConstraints .maxWidth width) .child child)))
+
+(defn message [palette message]
+  (m/Semantics .liveRegion true
+               .child (m/Container .padding (m/EdgeInsets.all 14.0)
+                                   .decoration (m/BoxDecoration .color (:danger-bg palette)
+                                                                .borderRadius (m/BorderRadius.circular 12.0))
+                                   .child (m/Row .crossAxisAlignment m/CrossAxisAlignment.start
+                                                 .children [(m/Icon m/Icons.info_outline .color (:danger-text palette) .size 20.0)
+                                                            (m/SizedBox .width 10.0)
+                                                            (m/Expanded .child (m/Text message
+                                                                        .style (m/TextStyle .color (:danger-text palette) .height 1.5)))]))))
+
+(defn detail [palette label value]
+  (m/Padding .padding (m/EdgeInsets.symmetric .vertical 10.0)
+             .child (stack [(muted palette label) (text palette value 15.0 false)])))

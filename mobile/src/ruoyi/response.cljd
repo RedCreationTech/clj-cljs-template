@@ -1,0 +1,16 @@
+(ns ruoyi.response
+  "HTTP状态优先于业务信封；不依赖网络的响应分类可直接单元测试。")
+
+(defn classify [status envelope]
+  (let [env (when (map? envelope) envelope) code (:code env)]
+    (cond
+      (= 401 status) {:ok? false :error :unauthorized :code 401
+                      :msg (or (:msg env) "登录已失效,请重新登录")}
+      (= 403 status) {:ok? false :error :forbidden :code 403
+                      :msg (or (:msg env) "没有权限")}
+      (>= status 500) {:ok? false :error :server :code status
+                       :msg (or (:msg env) "服务暂时不可用")}
+      (or (nil? env) (< status 200) (>= status 300))
+      {:ok? false :error :server :code status :msg (str "服务异常(" status ")")}
+      (= 200 code) {:ok? true :error nil :code code :msg (:msg env) :data (:data env)}
+      :else {:ok? false :error :business :code code :msg (or (:msg env) "操作失败")})))

@@ -1,0 +1,28 @@
+(ns ruoyi.fx-test
+  (:require [cljd.test :refer [deftest is]]
+            [ruoyi.fx :as fx]))
+
+(deftest session-results-never-cross-login-boundaries
+  (let [db {:token "new-session" :session-revision 3}
+        current {:token "new-session" :session-revision 3}
+        old {:token "old-session" :session-revision 1}
+        success {:ok? true :data {:user_name "old-user"}}
+        expired {:ok? false :error :unauthorized :msg "失效"}]
+    (is (= {} (fx/delivery-effect db old :loaded :failed success)))
+    (is (= {} (fx/delivery-effect db old :loaded :failed expired)))
+    (is (= {} (fx/delivery-effect {:token nil :session-revision 4} current :loaded :failed success)))
+    (is (= {:dispatch [:loaded (assoc success ::fx/context current)]} (fx/delivery-effect db current :loaded :failed success)))
+    (is (= {:dispatch [:auth/session-expired "失效" current]}
+           (fx/delivery-effect db current :loaded :failed expired)))))
+
+(deftest tokenless-login-results-also-have-a-generation
+  (let [db {:token nil :session-revision 2} success {:ok? true :data {:token "old-login"}}]
+    (is (= {} (fx/delivery-effect db {:token nil :session-revision 1} :loaded :failed success)))
+    (is (= {:dispatch [:loaded (assoc success ::fx/context db)]}
+           (fx/delivery-effect db {:token nil :session-revision 2} :loaded :failed success)))))
+
+(deftest current-forbidden-results-stop-loading-and-notify
+  (let [db {:token "session" :session-revision 1}
+        denied {:ok? false :error :forbidden :msg "拒绝"}]
+    (is (= {:fx [[:dispatch [:failed (assoc denied ::fx/context db)]] [:dispatch [:ui/notify "拒绝" db]]]}
+           (fx/delivery-effect db db :loaded :failed denied)))))

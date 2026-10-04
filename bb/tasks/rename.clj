@@ -12,7 +12,7 @@
 ;; 平台工程目录与 Dart 构建产物都由 bb mobile:create 按 kit.edn 重新生成,改名时不碰。
 (def ^:private skip-dirs #{"node_modules" ".git" "target" ".shadow-cljs" ".cpcache" ".clj-kondo/.cache" ".lsp/.cache"
                            "build" ".dart_tool" ".clojuredart" "cljd-out" ".plugin_symlinks" ".idea"})
-(def ^:private skip-paths #{"resources/public/js" "docs/training" "RUOYI_VUE_COMPARISON.md"
+(def ^:private skip-paths #{"resources/public/js" "resources/public/mobile" "docs/training" "RUOYI_VUE_COMPARISON.md"
                             "mobile/macos" "mobile/ios" "mobile/android" "mobile/linux" "mobile/windows" "mobile/web"})
 (def ^:private src-roots ["src/clj" "src/cljs" "test/clj" "test/cljs" "env/dev/clj" "env/prod/clj" "env/test/clj"])
 (def ^:private mobile-roots ["mobile/src" "mobile/test"])
@@ -35,12 +35,21 @@
 
 (defn- replacer [{:keys [old-ns new-ns old-path new-path old-name new-name]}]
   (let [old-prefixes (distinct [(key-prefix (last (str/split old-ns #"\."))) (key-prefix old-name)])
+        mobile-paths (for [root ["mobile/src/" "mobile/test/" "src/" "test/"]]
+                       [(re-pattern (java.util.regex.Pattern/quote (str root (ns->path old-name) "/")))
+                        (str root (ns->path new-name) "/")])
         rules (concat [[(re-pattern (java.util.regex.Pattern/quote old-ns)) new-ns]
                        [(re-pattern (java.util.regex.Pattern/quote old-path)) new-path]]
+                      mobile-paths
                       (for [p old-prefixes] [(re-pattern (str "\\b" (java.util.regex.Pattern/quote p))) (key-prefix new-name)])
-                      [[(re-pattern (str "\\b" (java.util.regex.Pattern/quote old-name) "\\b")) new-name]])]
+                      [[(re-pattern (str "\\b" (java.util.regex.Pattern/quote old-name) "\\b")) new-name]])
+        combined (re-pattern (str "(?:" (str/join "|" (map first rules)) ")"))]
     (fn [text]
-      (reduce (fn [t [re s]] (str/replace t re (str/re-quote-replacement s))) text rules))))
+      ;; 一次扫描:新名字包含旧名字时,不能把刚写进去的命名空间再次替换。
+      (str/replace text combined
+                   (fn [matched]
+                     (some (fn [[pattern replacement]]
+                             (when (re-matches pattern matched) replacement)) rules))))))
 
 (defn- move-tree! [base old-path new-path]
   (let [src (fs/path base old-path)
@@ -85,9 +94,10 @@
     ;; 移动端的命名空间就是项目名本身(ruoyi → myapp):上面的改写规则会把 (ns ruoyi.main)
     ;; 变成 (ns myapp.main),目录必须跟着搬,否则 clj -M:cljd compile 找不到源文件。
     (when (not= old-name new-name)
-      (doseq [root mobile-roots] (move-tree! root old-name new-name)))
+      (doseq [root mobile-roots] (move-tree! root (ns->path old-name) (ns->path new-name))))
     (println (str "\n完成。接着执行:\n"
                   "  bb clean && bb lint && bb test && bb test:cljs\n"
                   "  用了移动端再跑一遍:bb mobile:clean && bb mobile:compile && bb mobile:test"
                   "(旧项目名的 Dart 产物不清掉会被重复跑)\n"
-                  "  再改 src/cljs/" (:new-path ctx) "/frontend/config.cljs 里的 app-name / repo-url"))))
+                  "  再改 src/cljs/" (:new-path ctx) "/frontend/config.cljs 里的 app-name / repo-url\n"
+                  "  移动品牌与文案:mobile/src/" (ns->path new-name) "/brand.cljd;配色:theme.cljd"))))

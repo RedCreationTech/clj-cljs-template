@@ -1,0 +1,28 @@
+(ns ruoyi.brand
+  "模板的品牌与静态界面文案。改名或换品牌从这里开始，不携带客户项目内容。
+   接口返回的岗位、姓名和错误原因始终原样展示，不在这里伪造业务数据。")
+
+(def name "若依移动端")
+(def tagline "你的随身工作台")
+(def headline "工作，从容有序")
+(def description "让日常管理触手可及，清晰查看岗位与账号信息。")
+(def features ["岗位信息" "账号身份" "明暗主题"])
+
+(def labels
+  {:welcome "欢迎回来" :login-subtitle "使用你的账号登录，进入移动工作台。"
+   :username "用户名" :password "密码" :required "用户名和密码都要填"
+   :login "登录" :login-pending "正在登录" :login-note "需要账号或访问权限？请联系系统管理员。"
+   :light-theme "切换为浅色主题" :dark-theme "切换为深色主题"
+   :logout "退出登录" :account "我的账号" :close "关闭"
+   :workspace "工作台" :posts "岗位信息" :posts-subtitle "查看组织岗位，随时掌握基本信息。"
+   :post-code "岗位编码" :post-id "编号" :normal "正常" :disabled "停用"
+   :refresh "刷新列表" :retry "重新加载" :previous "上一页" :next "下一页"
+   :loading "正在加载岗位" :loading-note "请稍候，正在获取最新信息。"
+   :empty "暂无岗位" :empty-note "下拉刷新或点击刷新，查看最新的岗位信息。"
+   :load-error "岗位加载失败" :page "页" :total-prefix "共" :total-suffix "条"
+   :nickname "显示名称" :department "所属部门" :email "邮箱" :phone "手机号码"
+   :permissions "访问权限" :all-permissions "管理员全部权限" :permissions-suffix "项已授权"
+   :account-note "账号资料由系统管理员维护，访问权限以服务端验证为准。"
+   :unspecified "未设置"})
+
+(defn label [key] (get labels key (str key)))

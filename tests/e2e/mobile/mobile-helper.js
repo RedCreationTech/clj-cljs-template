@@ -4,12 +4,14 @@
 // 不做后期字幕压制;每段结束把 {标题, 要点, 台词与时间点} 落到
 // target/mobile-tour/storyboard/NN.json,供 bb video:mobile 汇总章节与分镜脚本。
 //
-// 差别在于:被录的是 ClojureDart + Flutter 编译出来的 canvas,应用内部没有可读的 DOM,
-// 所以一切「看得见」的东西都在舞台页上,而一切「点得动」的东西都要换算成 App 内坐标。
+// Flutter 内容通过语义树定位;假光标按目标在舞台上的实际边界摆放,不依赖布局坐标。
 
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { installFonts } = require('../mobile-fonts');
+const { expect } = require('@playwright/test');
+const semantics = require('../mobile-semantics');
 
 const SPEED = Number(process.env.TOUR_SPEED || 1);
 const OUT_DIR = process.env.TOUR_OUT_DIR || path.join('target', 'mobile-tour', 'storyboard');
@@ -38,47 +40,29 @@ async function call(page, fn, arg) {
   return page.evaluate(({ fn, arg }) => window.__stage[fn](arg), { fn, arg });
 }
 
-/** 本机就有的中日韩字体,按顺序取第一个存在的。 */
-function localFont() {
-  const candidates = [
-    process.env.MOBILE_CJK_FONT,
-    '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
-    '/System/Library/Fonts/Hiragino Sans GB.ttc',
-    'resources/public/fonts/NotoSansSC-Regular.ttf',
-  ].filter(Boolean);
-  return candidates.find((f) => fs.existsSync(f)) || null;
+function app(page) {
+  return page.frameLocator('#app');
 }
 
-/**
- * 换掉 Flutter CanvasKit 的中文字体兜底来源。
- * CanvasKit 不带 CJK 字形,缺字时去 fonts.gstatic.com 拉 Noto Sans SC;
- * 录制环境没有外网,拉不到就整屏文字隐形(画面有颜色、有控件,唯独没有字)。
- * 所以只在录制层把这些请求接住,换成机器上就有的字体,不动 App 的构建产物。
- */
-async function installFonts(page) {
-  const file = localFont();
-  if (!file) {
-    console.warn('⚠️ 没找到本地 CJK 字体,录屏里可能没有中文(可用 MOBILE_CJK_FONT 指定一个 ttf/ttc)');
-    return;
-  }
-  const bytes = fs.readFileSync(file);
-  await page.route('**fonts.gstatic.com/**', (route) => route.fulfill({
-    status: 200,
-    body: bytes,
-    headers: { 'content-type': 'font/ttf', 'access-control-allow-origin': '*' },
-  }));
+async function appReady(page) {
+  const surface = app(page);
+  await surface.locator('flt-semantics-placeholder, flt-semantics').first()
+    .waitFor({ state: 'attached', timeout: 60000 });
+  await semantics.enableSemantics(surface);
+  await expect(surface.getByRole('textbox', { name: '用户名', exact: true })).toBeVisible({ timeout: 60000 });
 }
 
-/** 打开舞台页并等 Flutter 起画布:canvas 没有可等的选择器,只能等固定时间。 */
+/** 打开舞台页,启用 Flutter 语义树,等待真正的登录输入框就绪。 */
 async function open(page, { boot = 4200 } = {}) {
   await installFonts(page);
   await page.goto(STAGE);
   await page.waitForFunction(() => window.__stage && window.__stage.ready(), null, { timeout: 15000 });
   await wait(page, boot);
+  await appReady(page);
   await call(page, 'say', '');
 }
 
-/** 手机框在舞台上的实际渲染矩形(App 内坐标 → 页面坐标靠它换算)。 */
+/** 手机框在舞台上的实际渲染矩形,供截图裁剪使用。 */
 async function rect(page) {
   const r = await call(page, 'rect');
   return { ...r, k: r.w / APP_W };
@@ -146,48 +130,49 @@ async function quiet(page, ms = 800) {
   await wait(page, ms);
 }
 
-/** 点 App 内的一个坐标:先把假鼠标摆过去,再派发真实点击。 */
-async function tap(page, x, y, { ms = 900 } = {}) {
-  const r = await rect(page);
-  await page.evaluate(({ px, py }) => { window.__stage.moveTo(px, py); window.__stage.press(); },
-    { px: r.x + x * r.k, py: r.y + y * r.k });
+/** 语义目标的 boundingBox 已是舞台坐标,可直接驱动假光标。 */
+async function cursorAt(page, target) {
+  await expect(target).toBeVisible();
+  await target.scrollIntoViewIfNeeded();
+  const box = await target.boundingBox();
+  expect(box).not.toBeNull();
+  await page.evaluate(({ x, y }) => { window.__stage.moveTo(x, y); window.__stage.press(); },
+    { x: box.x + box.width / 2, y: box.y + box.height / 2 });
   await wait(page, 160);
-  await page.mouse.click(r.x + x * r.k, r.y + y * r.k);
+}
+
+async function click(page, target, { ms = 900 } = {}) {
+  await expect(target).toBeEnabled();
+  await cursorAt(page, target);
+  await target.click();
   await wait(page, ms);
 }
 
-/** 把假鼠标挪到某个位置(打字时让观众看到焦点在哪)。 */
-async function hover(page, x, y) {
-  const r = await rect(page);
-  await page.evaluate(({ px, py }) => window.__stage.moveTo(px, py),
-    { px: r.x + x * r.k, py: r.y + y * r.k });
-  await wait(page, 260);
+async function button(page, name, options = {}) {
+  return click(page, app(page).getByRole('button', { name, exact: true }), options);
 }
 
-/** Flutter 的输入框在 canvas 里,只能走焦点链:Tab 换字段,再敲键盘。 */
-async function pressKey(page, key, { ms = 350 } = {}) {
-  await page.keyboard.press(key);
-  await wait(page, ms);
-}
-
-async function type(page, text, { delay = 55 } = {}) {
-  await page.keyboard.type(text, { delay });
+async function enter(page, name, value) {
+  await cursorAt(page, app(page).getByRole('textbox', { name, exact: true }));
+  await semantics.enter(app(page), name, value);
   await wait(page, 300);
 }
 
-/**
- * 登录:点用户名框 → 打字 → 点密码框 → 打字 → 点登录按钮。
- * 必须先真点一下:canvas 里的 Flutter 只有拿到焦点才吃得下键盘事件,
- * 而 Tab / 直接打字在没点过的 iframe 上是送不进去的(实测请求根本不发)。
- */
-async function login(page, { user = 'admin', password = 'admin123', at = null, ms = 900 } = {}) {
-  const pos = at || { user: [195, 443], pass: [195, 504], submit: [195, 552] };
-  await tap(page, pos.user[0], pos.user[1], { ms: 500 });
-  await type(page, user);
-  await tap(page, pos.pass[0], pos.pass[1], { ms: 500 });
-  await type(page, password);
+async function submit(page, options = { ms: 200 }) {
+  return button(page, '登录', options);
+}
+
+async function toggleTheme(page, options = {}) {
+  return click(page, app(page).getByRole('button', { name: /切换为(?:深|浅)色主题/ }), options);
+}
+
+/** 登录动作与常规移动端回归共用语义输入和焦点断言。 */
+async function login(page, { user = 'admin', password = 'admin123', ms = 900 } = {}) {
+  await semantics.enableSemantics(app(page));
+  await enter(page, '用户名', user);
+  await enter(page, '密码', password);
   await wait(page, ms);
-  await tap(page, pos.submit[0], pos.submit[1], { ms: 200 });
+  await submit(page);
 }
 
 /**
@@ -253,6 +238,7 @@ async function codeOff(page, ms = 400) {
 async function reload(page, { boot = 4200 } = {}) {
   await page.evaluate(() => document.getElementById('app').contentWindow.location.reload());
   await wait(page, boot);
+  await appReady(page);
 }
 
 /** 等某个接口真的发生(录屏里看不到 DOM,断言就落在网络层)。 */
@@ -269,7 +255,7 @@ function counter(page, urlPart) {
 
 /**
  * 手机屏幕的平均亮度(0-255)。
- * canvas 里没有可读的 DOM,主题到底换没换只能问像素:截下屏幕 → 缩到 1x1 → 读那三个字节。
+ * 语义树验证操作对象,屏幕像素验证实际主题:截下屏幕 → 缩到 1x1 → 读那三个字节。
  * 用 ffmpeg 而不是浏览器内 canvas,是因为 CanvasKit 的画布是 WebGL 背书的,
  * drawImage 抄过去常常是一张黑图,亮暗就分不出来了。
  */
@@ -295,6 +281,6 @@ async function healApi(page, pattern = '**/api/**') {
 
 module.exports = {
   SPEED, scaled, wait, open, chapter, say, step, quiet,
-  tap, hover, pressKey, type, login, signIn, code, codeOff, reload,
+  app, click, button, enter, submit, toggleTheme, login, signIn, code, codeOff, reload,
   expectRequest, counter, tone, breakApi, healApi, rect, dump, APP_W, APP_H,
 };

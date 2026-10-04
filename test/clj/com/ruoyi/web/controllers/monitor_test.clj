@@ -3,9 +3,12 @@
   (:require
    [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing]]
+   [com.ruoyi.config :as config]
    [com.ruoyi.infra.datasource :as ds]
    [com.ruoyi.infra.db :as db]
-   [com.ruoyi.web.controllers.monitor :as monitor]))
+   [com.ruoyi.integrant.state :as state]
+   [com.ruoyi.web.controllers.monitor :as monitor]
+   [integrant.core :as ig]))
 
 (defn- with-temp-pool
   "在临时 SQLite 连接池上调用 f,结束关闭池并删掉库文件。"
@@ -45,3 +48,18 @@
     (let [info (data nil)]
       (is (= "unknown" (:db_version info)))
       (is (= 0 (:active_connections info))))))
+
+(deftest integrant-monitor-hides-secrets-and-keeps-dependency-graph
+  (let [cfg {:example/storage {:password "private-password" :jwt-secret "private-jwt"}
+             :example/client {:store (ig/ref :example/storage) :api-key "private-api"}}
+        system {:example/storage (StringBuilder. "private-runtime")
+                :example/client {:status :ready}}]
+    (with-redefs [config/active-config (atom cfg) state/system (atom system)]
+      (let [result (-> (monitor/integrant-info nil nil) :body :data)]
+        (is (= "<redacted>" (get-in result [:config :example/storage :password])))
+        (is (= "<redacted>" (get-in result [:config :example/storage :jwt-secret])))
+        (is (= "<redacted>" (get-in result [:config :example/client :api-key])))
+        (is (= {:__ig_ref true :key ":example/storage"}
+               (get-in result [:config :example/client :store])))
+        (is (= ["example/storage"] (get-in result [:dependencies "example/client"])))
+        (is (= "<opaque>" (get-in result [:system "example/storage" :value])))))))

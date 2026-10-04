@@ -16,12 +16,9 @@
 
 (defn- request-fx
   "声明一次接口调用:成功回 ok 事件、失败回 bad 事件,结果由效果层附在事件尾部。"
-  [request ok bad]
-  {fx/api-effect {:request request :ok ok :bad bad}})
-
-(defn- with-token
-  [db request]
-  (assoc request :token (:token db)))
+  [db request ok bad]
+  {fx/api-effect {:request (merge request (select-keys db [:token :session-revision]))
+                  :ok ok :bad bad}})
 
 (defn- empty-posts []
   {:page 1 :size config/page-size :rows [] :total 0 :pending? false :msg nil})
@@ -31,21 +28,24 @@
   []
   (rd/reg-event-fx :auth/login
     (fn [{:keys [db]} [_ username password]]
-      (merge {:db (assoc-in db [:login :pending?] true)}
-             (request-fx {:method :post :path "/auth/login"
-                          :body {:username username :password password}}
-                         :auth/logged-in :auth/login-failed))))
+      (let [db (-> db (update :session-revision inc)
+                   (assoc-in [:login] {:pending? true :msg nil}))]
+        (merge {:db db}
+               (request-fx db {:method :post :path "/auth/login"
+                               :body {:username username :password password}}
+                           :auth/logged-in :auth/login-failed)))))
 
   (rd/reg-event-fx :auth/logged-in
-    (fn [{:keys [db]} [_ {:keys [data]}]]
+    (fn [{:keys [db]} [_ {:keys [data] :as result}]]
+      (if-not (fx/current-result? db result) {}
       {:db (-> db
                (assoc :token (:token data) :route :posts)
                (assoc-in [:login :pending?] false))
-       :dispatch [:app/session-opened]}))
+       :dispatch [:app/session-opened]})))
 
   (rd/reg-event-db :auth/login-failed
-    (fn [db [_ {:keys [msg]}]]
-      (assoc-in db [:login] {:pending? false :msg msg}))))
+    (fn [db [_ {:keys [msg] :as result}]]
+      (if (fx/current-result? db result) (assoc-in db [:login] {:pending? false :msg msg}) db))))
 
 (defn- register-profile-events!
   "会话建立后取身份(getInfo),再取首页数据。"
@@ -57,53 +57,62 @@
 
   (rd/reg-event-fx :profile/load
     (fn [{:keys [db]} _]
-      (request-fx (with-token db {:method :get :path "/auth/getInfo"})
+      (request-fx db {:method :get :path "/auth/getInfo"}
                   :profile/loaded :profile/failed)))
 
   (rd/reg-event-fx :profile/loaded
-    (fn [{:keys [db]} [_ {:keys [data]}]]
+    (fn [{:keys [db]} [_ {:keys [data] :as result}]]
+      (if-not (fx/current-result? db result) {}
       {:db (-> db
                (assoc :profile (:user data))
                (assoc :permissions (set (:permissions data []))))
-       :dispatch [:posts/load]}))
+       :dispatch [:posts/load]})))
 
   (rd/reg-event-fx :profile/failed
-    (fn [_ [_ {:keys [msg]}]]
-      {:dispatch [:ui/notify msg]})))
+    (fn [{:keys [db]} [_ {:keys [msg] :as result}]]
+      (if (fx/current-result? db result) {:dispatch [:ui/notify msg (::fx/context result)]} {}))))
 
 (defn- register-session-events!
   "会话失效与登出:不管是 401 还是主动退出,都一次清干净回到登录页。"
   []
   ;; 效果层遇到 401 只派发这一条:令牌、身份、列表数据一次清干净并回到登录页。
   (rd/reg-event-db :auth/session-expired
-    (fn [db [_ msg]]
+    (fn [db [_ msg context]]
+      (if (and context (not (fx/current-context? db context))) db
       (-> db
+          (update :session-revision inc)
           (assoc :route :login :token nil :profile nil :permissions #{})
           (assoc :posts (empty-posts))
           (assoc :login {:pending? false
-                         :msg (or msg "登录已失效,请重新登录")}))))
+                         :msg (or msg "登录已失效,请重新登录")})))))
 
   (rd/reg-event-fx :auth/logout
     (fn [{:keys [db]} _]
-      (merge {:db (assoc db :route :login)}
-             (request-fx (with-token db {:method :post :path "/auth/logout"})
+      (merge {:db (-> db (update :session-revision inc)
+                      (assoc :route :login :token nil :profile nil :permissions #{}
+                             :posts (empty-posts) :login {:pending? false :msg nil}))}
+             (request-fx db {:method :post :path "/auth/logout"}
                          :auth/logged-out :auth/logged-out))))
 
   (rd/reg-event-db :auth/logged-out
     (fn [db _]
-      (assoc db :token nil :profile nil :permissions #{} :posts (empty-posts)))))
+      (-> db (update :session-revision inc)
+          (assoc :token nil :profile nil :permissions #{} :posts (empty-posts))))))
 
 (defn- register-ui-events!
   "全局提示条:通知 3 秒后自动收,计时由 re-dash 的 :dispatch-later 排,视图不需要自己计时。"
   []
   (rd/reg-event-fx :ui/notify
-    (fn [{:keys [db]} [_ msg]]
-      {:db (assoc db :notice {:msg msg :seq (inc (:seq (:notice db) 0))})
-       :dispatch-later {:ms 3000 :dispatch [:ui/dismiss-notice]}}))
+    (fn [{:keys [db]} [_ msg context]]
+      (if (and context (not (fx/current-context? db context))) {}
+      (let [sequence (inc (:seq (:notice db) 0))]
+        {:db (assoc db :notice {:msg msg :seq sequence})
+         :dispatch-later {:ms 3000 :dispatch [:ui/dismiss-notice sequence]}}))))
 
   (rd/reg-event-db :ui/dismiss-notice
-    (fn [db _]
-      (update db :notice (fn [n] (assoc n :msg nil)))))
+    (fn [db [_ sequence]]
+      (if (or (nil? sequence) (= sequence (get-in db [:notice :seq])))
+        (assoc-in db [:notice :msg] nil) db)))
 
   ;; 主题只翻一个布尔:配色与 ThemeData 由订阅派生,这里不碰任何颜色值。
   (rd/reg-event-db :ui/toggle-theme
@@ -117,21 +126,23 @@
     (fn [{:keys [db]} [_ overrides]]
       (let [query (merge (:posts db) overrides)]
         (merge {:db (update db :posts (fn [p] (-> p (merge query) (assoc :pending? true))))}
-               (request-fx (with-token db {:method :get :path "/system/post"
+               (request-fx db {:method :get :path "/system/post"
                                            :query {:page (:page query 1)
-                                                   :size (:size query config/page-size)}})
+                                                   :size (:size query config/page-size)}}
                            :posts/loaded :posts/failed)))))
 
   (rd/reg-event-db :posts/loaded
-    (fn [db [_ {:keys [data]}]]
+    (fn [db [_ {:keys [data] :as result}]]
+      (if-not (fx/current-result? db result) db
       (update db :posts (fn [p] (-> p
                                     (assoc :rows (:rows data []) :total (:total data 0)
-                                           :pending? false :msg nil))))))
+                                           :pending? false :msg nil)))))))
 
   (rd/reg-event-fx :posts/failed
-    (fn [{:keys [db]} [_ {:keys [msg]}]]
+    (fn [{:keys [db]} [_ {:keys [msg] :as result}]]
+      (if-not (fx/current-result? db result) {}
       {:db (update db :posts (fn [p] (-> p (assoc :pending? false :msg msg))))
-       :dispatch [:ui/notify msg]}))
+       :dispatch [:ui/notify msg (::fx/context result)]})))
 
   (rd/reg-event-fx :posts/change-page
     (fn [_ [_ page]]

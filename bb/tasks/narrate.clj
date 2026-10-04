@@ -23,6 +23,7 @@
    [babashka.process :as p]
    [cheshire.core :as json]
    [clojure.string :as str]
+   [tasks.subtitles :as subtitles]
    [tasks.util :as u]))
 
 (def ^:dynamic out-dir "target/tour")
@@ -118,6 +119,10 @@
    舞台整体偏暗的录屏(移动端)要把这个值绑得更低,见 tasks.mobile/video!。"
   95)
 
+(def ^:dynamic card-scan-seconds
+  "分镜前导航/Flutter冷启动的搜索窗口；长启动视频可在任务中绑定更大的值。"
+  16)
+
 (defn- luma-series
   "从 from-ms 起 secs 秒内,每秒 4 帧的画面平均亮度。"
   [ffmpeg from-ms secs]
@@ -152,7 +157,7 @@
   (into {}
         (map (fn [n]
                (let [{:keys [start]} (times n)
-                     lead (some-> (luma-series ffmpeg (- start 500) 16) card-start (- 500))]
+                     lead (some-> (luma-series ffmpeg (- start 500) card-scan-seconds) card-start (- 500))]
                  (when (nil? lead)
                    (u/warn "分镜 " n " 没找到分镜卡,这一章的旁白可能比字幕早开口"))
                  [(long n) (max 0 (or lead 0))])))
@@ -200,9 +205,8 @@
                 :as :string
                 :throw false
                 :timeout 180000})
-    (catch Exception e
-      (u/fail! "MiMo 请求失败:" (or (.getMessage e) (str e))
-               " (密钥只从 MIMO_API_KEY / target/tour/mimo.key 读取,不会出现在这里)"))))
+    (catch Exception _
+      (u/fail! "MiMo 请求失败，请检查服务地址、网络与超时；响应和请求密钥不写入日志"))))
 
 (defn- write-bytes!
   [path bytes]
@@ -215,15 +219,15 @@
         status (:status resp)
         body (str (:body resp))]
     (if-not (= 200 status)
-      (u/fail! "MiMo TTS 返回 " status ":"
-               (or (not-empty (first (str/split-lines body))) "无响应")
+      (u/fail! "MiMo TTS 返回 HTTP " status
                (if (= 402 status)
                  (str "\n  402 = 账号余额不足,充值后重跑即可(已合成的句子都在缓存里,不会重复计费);"
                       "\n  想先出一版能听的旁白:bb video:narrate --provider say")
                  ""))
-      (if-let [b64 (get-in (json/parse-string body true) [:choices 0 :message :audio :data])]
+      (if-let [b64 (get-in (try (json/parse-string body true) (catch Exception _ nil))
+                           [:choices 0 :message :audio :data])]
         (write-bytes! path (.decode (java.util.Base64/getDecoder) b64))
-        (u/fail! "MiMo 响应里没有音频数据:" (subs body 0 (min 400 (count body))))))))
+        (u/fail! "MiMo 响应中没有有效音频数据；原始响应不写入日志")))))
 
 (defn- say-synth!
   [{:keys [voice rate]} text path]
@@ -445,6 +449,11 @@
           narration (narration-track! window cs)]
       (report! (count (filter #(> (:tempo %) 1.01) cs)) overflow lost)
       (mux! narration)
+      (spit (str out-dir "/caption-timing.json")
+            (json/generate-string
+             {:version 1 :video video-name
+              :chapters (mapv (fn [n] (assoc (times n) :n n :lead (get leads n))) nos)}))
+      (subtitles/export! out-dir video-name)
       (u/info "旁白已写入 " (video-path) ":" (count cs) "句,"
               (:provider cfg) " / " (:voice cfg) ",时长 "
               (format "%.1f 秒" (/ (dur-ms narration) 1000.0))))))

@@ -93,7 +93,7 @@
 ;; ─── 工程引导 ──────────────────────────────────────────────────────
 
 (defn- flutter-project-name []
-  (str (:name (u/project)) "_mobile"))
+  (str (str/replace (:name (u/project)) "-" "_") "_mobile"))
 
 (defn- org
   "flutter create 的 --org:反域名包名,直接用项目的命名空间。"
@@ -118,6 +118,8 @@
                                         "    </dict>")))
           (println "  ✔" f "已补" network-entitlement)))))
 
+(declare drop-scaffold-test!)
+
 (defn- ensure-platforms!
   "平台目录(macos/ android/ …)缺了就用 flutter create 补齐。
    它只补不存在的文件,pubspec.yaml、lib/main.dart 与 .gitignore 会被保留。"
@@ -131,16 +133,19 @@
                     "--platforms" (str/join "," missing)]
                    {:dir dir}))
       (println "✔ 平台目录已就绪:" (str/join ", " platforms))))
+  (drop-scaffold-test!)
   (when (fs/exists? (str dir "/macos"))
     (u/info "检查 macOS 出站网络权限")
     (allow-outbound-network!)))
 
 (defn- drop-scaffold-test!
   "删掉 flutter create 附带的 test/widget_test.dart:那是计数器示例,它 import 的 MyApp
-   在我们这里不存在(lib/main.dart 只 export ruoyi.main/main),留着它 bb mobile:test 必挂。"
+   在我们这里不存在。只匹配生成示例，自定义同名测试保留。"
   []
   (let [f (str dir "/test/widget_test.dart")]
-    (when (fs/exists? f)
+    (when (and (fs/exists? f)
+               (every? #(str/includes? (slurp f) %)
+                       ["Verify that our counter starts at 0." "MyApp" "Icons.add"]))
       (fs/delete f)
       (println "  ✔ 已删除示例测试" f))))
 
@@ -153,7 +158,6 @@
       (when-not (contains? allowed p)
         (u/fail! "未知平台:" p " 可选" (str/join " " allowed))))
     (ensure-platforms! platforms)
-    (drop-scaffold-test!)
     (u/info "安装 Dart 依赖…")
     (u/exec! [(flutter-exe) "pub" "get"] {:dir dir})
     (cljd "init")
@@ -347,7 +351,8 @@
             tour/record-env {"MOBILE_BASE_URL" (demo-base)}
             narrate/out-dir demo-out-dir
             narrate/video-name "mobile.mp4"
-            narrate/card-luma 40]
+            narrate/card-luma 40
+            narrate/card-scan-seconds 40]
     (f)))
 
 (defn video!
@@ -361,6 +366,6 @@
         (if (some #{"--compose-only"} args)
           (tour/video! ["--compose-only"])
           (do (web!)
-              (record! args)))
+              (record! [])))
         (when-not (some #{"--no-narrate"} args)
           (narrate/narrate! (remove skip args)))))))

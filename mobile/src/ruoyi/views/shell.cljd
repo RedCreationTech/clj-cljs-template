@@ -1,61 +1,105 @@
 (ns ruoyi.views.shell
-  "外壳:一份 Scaffold,按 app-db 里的 :route 换正文,提示条挂在底部。
-   登录态是数据(:route),不是 Flutter 的导航栈,所以「会话失效」时
-   只需要一条事件把状态清回登录页,不会出现返回栈里残留已登录页面。
-
-   配色一律来自订阅 [:ui/palette](键名 → 色值),视图里不出现 #RRGGBB;
-   主题开关放在 AppBar 上,登录页也有,方便不换身份就能试深色。"
+  "通用应用外壳：品牌、账号详情、主题切换和全局反馈；认证路由仍由 app-db 驱动。"
   (:require ["package:flutter/material.dart" :as m]
             [cljd.flutter :as f]
             [hti.re-dash.core :as rd]
-            [ruoyi.theme :as theme]
+            [ruoyi.brand :as brand]
+            [ruoyi.views.components :as ui]
             [ruoyi.views.login :as login]
             [ruoyi.views.posts :as posts]))
 
-(defn- theme-icon
-  "开关按钮的图标:必须经函数返回 dynamic,内联 (if …) 的 IconData? 过不了类型检查。"
-  [dark?]
-  (if dark? m/Icons.light_mode m/Icons.dark_mode))
+(defn- theme-icon [dark?] (if dark? m/Icons.light_mode_outlined m/Icons.dark_mode_outlined))
 
 (defn- toggle-button [dark?]
-  (m/IconButton
-    .icon (m/Icon (theme-icon dark?) .color m/Colors.white)
-    .tooltip (if dark? "切换为浅色主题" "切换为深色主题")
-    .onPressed #(rd/dispatch [:ui/toggle-theme])))
+  (m/IconButton .icon (m/Icon (theme-icon dark?))
+                .tooltip (brand/label (if dark? :light-theme :dark-theme))
+                .onPressed #(rd/dispatch [:ui/toggle-theme])))
 
 (defn- logout-button []
-  (m/IconButton
-    .icon (m/Icon m/Icons.exit_to_app .color m/Colors.white)
-    .tooltip "退出登录"
-    .onPressed #(rd/dispatch [:auth/logout])))
+  (m/IconButton .icon (m/Icon m/Icons.logout_outlined) .tooltip (brand/label :logout)
+                .onPressed #(rd/dispatch [:auth/logout])))
 
-(defn- app-bar [route profile dark?]
-  ;; 注意是 [(toggle-button dark?)] 而不是 [toggle-button dark?]:后者是把函数本身
-  ;; 和参数塞进向量,AppBar 拿到的是两个非 Widget,Dart 侧只在渲染时才炸。
-  (m/AppBar
-    .title (m/Text (if (= :login route) "登录" (str (:nick_name profile "工作台"))))
-    .actions (if (= :login route)
-               [(toggle-button dark?)]
-               [(toggle-button dark?) (logout-button)])))
+(defn- profile-value [value]
+  (if (or (nil? value) (= "" value)) (brand/label :unspecified) (str value)))
+
+(defn- close-button [context]
+  (m/IconButton .tooltip (brand/label :close) .icon (m/Icon m/Icons.close)
+                .onPressed #(.pop (m/Navigator.of context))))
+
+(defn- account-logout [context]
+  (m/FilledButton .child (m/Text (brand/label :logout))
+                  .onPressed #(do (.pop (m/Navigator.of context)) (rd/dispatch [:auth/logout]))))
+
+(defn- account-content [palette profile permissions dark? context]
+  (ui/stack
+   [(m/Row .children
+           [(m/Expanded .child (ui/heading palette (brand/label :account) brand/tagline m/Icons.account_circle_outlined))
+            (close-button context)])
+    (ui/gap 20.0)
+    (ui/card palette
+             [(ui/text palette (profile-value (:nick_name profile)) 23.0 true)
+              (ui/muted palette (str (brand/label :username) " · " (profile-value (:user_name profile))))
+              (ui/gap 12.0)
+              (when-let [department (or (:dept_name profile) (get-in profile [:dept :dept_name]))]
+                (ui/detail palette (brand/label :department) (profile-value department)))
+              (ui/detail palette (brand/label :email) (profile-value (:email profile)))
+              (ui/detail palette (brand/label :phone) (profile-value (:phonenumber profile)))])
+    (ui/card palette
+             [(ui/text palette (brand/label :permissions) 17.0 true)
+              (ui/muted palette (if (contains? permissions "*:*:*") (brand/label :all-permissions)
+                                    (str (count permissions) " " (brand/label :permissions-suffix))))
+              (ui/gap 12.0) (ui/muted palette (brand/label :account-note))])
+    (m/Wrap .spacing 8.0 .runSpacing 8.0
+            .children [(toggle-button dark?) (account-logout context)])]))
+
+(defn- account-view [context]
+  (f/widget :watch [profile (rd/subscribe [:ui/profile])
+                    permissions (rd/subscribe [:ui/permissions])
+                    dark? (rd/subscribe [:ui/dark?])
+                    signed-in? (rd/subscribe [:auth/signed-in?])
+                    palette (rd/subscribe [:ui/palette])]
+            (m/Container .color (:bg palette)
+                         .child (m/SingleChildScrollView .padding (m/EdgeInsets.all 20.0)
+                                                         .child (ui/centered
+                                                                 (if signed-in? (account-content palette profile permissions dark? context)
+                                                                     (ui/stack [(ui/text palette (brand/label :welcome) 23.0 true)
+                                                                                (close-button context)]))
+                                                                 640.0)))))
+
+(defn- account-press
+  "回调经函数返回 dynamic，避免 Future 返回值被推断成 VoidCallback 的 return。"
+  [context]
+  (fn []
+    (m/showModalBottomSheet .context context .isScrollControlled true
+      .showDragHandle true .useSafeArea true
+      .builder (fn [sheet-context] (account-view sheet-context)))))
+
+(defn- account-button []
+  (f/widget :context context
+    (m/IconButton .icon (m/Icon m/Icons.account_circle_outlined) .tooltip (brand/label :account)
+      .onPressed (account-press context))))
+
+(defn- app-bar [palette route dark?]
+  (m/AppBar .centerTitle false .toolbarHeight 72.0
+            .title (m/Row .children
+            [(m/Icon m/Icons.dashboard_outlined .color (:accent palette) .size 23.0)
+             (m/SizedBox .width 10.0)
+             (m/Expanded .child (ui/text palette brand/name 16.0 true))])
+            .actions (if (= :login route) [(toggle-button dark?)]
+                         [(account-button) (toggle-button dark?) (logout-button)])))
 
 (defn- notice-bar [palette {:keys [msg seq]}]
-  (if (nil? msg)
-    (m/SizedBox .height 0.0)
-    ;; key 用 seq:同一条文案连续来两次也要重新显示,不然 Widget 被复用就看不出刷新过。
-    (m/Container
-      .key (m/ValueKey (str "notice-" seq))
-      .color (:danger-bg palette)
-      .padding (m/EdgeInsets.symmetric .vertical 10.0 .horizontal theme/gap-lg)
-      .child (m/Text msg .style (m/TextStyle .color (:danger palette))))))
+  (if (nil? msg) (m/SizedBox.shrink)
+      (m/SafeArea .top false
+                  .child (m/Container .key (m/ValueKey (str "notice-" seq))
+                                      .padding (m/EdgeInsets.all 12.0) .color (:bg palette)
+                                      .child (ui/message palette msg)))))
 
 (def view
-  (f/widget
-    :watch [route (rd/subscribe [:app/route])
-            profile (rd/subscribe [:ui/profile])
-            notice (rd/subscribe [:ui/notice])
-            dark? (rd/subscribe [:ui/dark?])
-            palette (rd/subscribe [:ui/palette])]
-    (m/Scaffold
-      .appBar (app-bar route profile dark?)
-      .body (if (= :login route) login/view posts/view)
-      .bottomNavigationBar (notice-bar palette notice))))
+  (f/widget :watch [route (rd/subscribe [:app/route])
+                    notice (rd/subscribe [:ui/notice])
+                    dark? (rd/subscribe [:ui/dark?])
+                    palette (rd/subscribe [:ui/palette])]
+            (m/Scaffold .appBar (app-bar palette route dark?)
+                        .body (if (= :login route) login/view posts/view)
+                        .bottomNavigationBar (notice-bar palette notice))))

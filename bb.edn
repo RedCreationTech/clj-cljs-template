@@ -61,6 +61,14 @@
                     :task (tour/video! *command-line-args*)}
   video:narrate    {:doc  "给 target/tour/tour.mp4 加旁白音轨:按 storyboard 台词逐句合成语音并对齐时间轴(默认小米 MiMo TTS,密钥走 MIMO_API_KEY;离线兜底 --provider say)"
                     :task (narrate/narrate! *command-line-args*)}
+  video:subtitles  {:doc "从旁白对齐记录导出中文字幕：bb video:subtitles [输出目录 视频文件名]"
+                    :task (do (require 'tasks.subtitles)
+                              ((resolve 'tasks.subtitles/export-args!) *command-line-args*))}
+  test:tasks       {:doc "开发任务回归检查，不连接数据库或Docker"
+                    :task (do (require 'tasks.subtitles 'tasks.dev-check 'tasks.rename-check)
+                              ((resolve 'tasks.subtitles/check!))
+                              ((resolve 'tasks.dev-check/check!))
+                              ((resolve 'tasks.rename-check/check!)))}
   db:roundtrip     {:doc  "迁移往返检查:up → down → up(默认临时 SQLite;设 JDBC_URL 则用该库,MySQL 自动选 migrations 目录)"
                     :task (dev/roundtrip!)}
   coverage         {:doc  "测试覆盖率(报告在 target/coverage/index.html)"
@@ -111,4 +119,4 @@
 
   ;; ── CI ────────────────────────────────────────────────
   ci               {:doc  "本地跑一遍与 CI 相同的快速检查(不含 MySQL 与 E2E)"
-                    :depends [lint fmt:check test test:cljs]}}}
+                    :depends [lint fmt:check test:tasks test test:cljs]}}}

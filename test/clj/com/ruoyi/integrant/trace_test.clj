@@ -85,3 +85,60 @@
                     (is (= "1" (get-in entry [:args 0 ":page"])) "非敏感字段照常留痕")
                     (is (not (str/includes? dumped "super-secret")) "整条记录里都不该出现原始令牌")
                     (is (not (str/includes? dumped "admin123"))))))))
+
+(deftest private-payloads-and-custom-fields-are-not-retained-test
+  (run-traced identity
+              (fn [_ in-system]
+                (trace/start! key-str {:sensitive-keys #{:customer-note}})
+                (let [input {:body {:name "private-body"} :apiKey "private-api-key"
+                             :customer-note "private-note" :page 2}]
+                  (is (= input (in-system input)) "脱敏不改变函数参数或返回值")
+                  (let [entry (first (trace/logs key-str))
+                        dumped (str entry)]
+                    (doseq [field [":body" ":apiKey" ":customer-note"]]
+                      (is (= "<redacted>" (get-in entry [:args 0 field])))
+                      (is (= "<redacted>" (get-in entry [:result field]))))
+                    (is (= "2" (get-in entry [:args 0 ":page"])))
+                    (is (not-any? #(str/includes? dumped %)
+                                  ["private-body" "private-api-key" "private-note"])))))))
+
+(deftest trace-errors-hide-message-and-still-rethrow-original-test
+  (let [failure (ex-info "password=private-error" {:secret "private-data"})]
+    (run-traced (fn [_] (throw failure))
+                (fn [_ in-system]
+                  (trace/start! key-str)
+                  (try
+                    (in-system :input)
+                    (is false "原异常必须继续抛给业务调用方")
+                    (catch clojure.lang.ExceptionInfo e
+                      (is (identical? failure e))))
+                  (let [entry (first (trace/logs key-str))]
+                    (is (= "<clojure.lang.ExceptionInfo>" (:error entry)))
+                    (is (not (str/includes? (str entry) "private-error")))
+                    (is (not (str/includes? (str entry) "private-data"))))))))
+
+(deftest unnamed-password-arguments-and-issued-tokens-never-enter-trace-test
+  (let [received (atom nil)
+        issued-token "private-issued-token"
+        implementation (fn [input]
+                         (reset! received input)
+                         (if (string? input) issued-token input))]
+    (run-traced implementation
+                (fn [_ in-system]
+                  (trace/start! key-str)
+                  (let [password "private-password"]
+                    (is (= issued-token (in-system password)))
+                    (is (identical? password @received)))
+                  (let [input ["private-password" "private-token"]]
+                    (is (identical? input (in-system input)))
+                    (is (identical? input @received)))
+                  (let [[scalar-entry vector-entry] (trace/logs key-str)
+                        dumped (str (trace/logs key-str))]
+                    (is (= ["<string length=16>"] (:args scalar-entry)))
+                    (is (= "<string length=20>" (:result scalar-entry)))
+                    (is (= [["<string length=16>" "<string length=13>"]]
+                           (:args vector-entry)))
+                    (is (= ["<string length=16>" "<string length=13>"]
+                           (:result vector-entry)))
+                    (is (not-any? #(str/includes? dumped %)
+                                  ["private-password" "private-token" issued-token])))))))

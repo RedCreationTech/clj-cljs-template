@@ -10,7 +10,8 @@
   (:require ["package:http/http.dart" :as http]
             [clojure.string :as str]
             [ruoyi.config :as config]
-            [ruoyi.json :as json]))
+            [ruoyi.json :as json]
+            [ruoyi.response :as response]))
 
 (defn- param-name [k]
   (if (keyword? k) (name k) (str k)))
@@ -57,21 +58,7 @@
 (defn- result
   "统一的返回形状:{:ok? :error :code :msg :data}。error 是归类关键字,给上层决定收尾动作。"
   [{:keys [status body]}]
-  (let [env (envelope body)
-        code (:code env)]
-    (cond
-      (nil? env) {:ok? false :error :server :code status
-                  :msg (str "服务异常(" status ")")}
-      (= 401 status) {:ok? false :error :unauthorized :code 401
-                      :msg (or (:msg env) "登录已失效,请重新登录")}
-      (= 403 status) {:ok? false :error :forbidden :code 403
-                      :msg (or (:msg env) "没有权限")}
-      (>= status 500) {:ok? false :error :server :code status
-                       :msg (or (:msg env) "服务暂时不可用")}
-      (= 200 code) {:ok? true :error nil :code code
-                    :msg (:msg env) :data (:data env)}
-      :else {:ok? false :error :business :code code
-             :msg (or (:msg env) "操作失败")})))
+  (response/classify status (envelope body)))
 
 (defn- response->map
   "把 Dart 的 http.Response 转成 Clojure 数据。

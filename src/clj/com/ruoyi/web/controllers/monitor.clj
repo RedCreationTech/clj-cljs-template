@@ -5,6 +5,7 @@
    [com.ruoyi.config :as config]
    [com.ruoyi.domain.system.data-scope :as data-scope]
    [com.ruoyi.infra.datasource :as ds]
+   [com.ruoyi.infra.redact :as redact]
    [com.ruoyi.integrant.state :as integrant-state]
    [com.ruoyi.integrant.trace :as trace]
    [com.ruoyi.web.response :as res]
@@ -116,7 +117,7 @@
      :startTime (format-instant (Instant/ofEpochMilli start-time))
      :runTime run-time
      :jvmHome (System/getProperty "java.home")
-     :inputArgs (str/join " " (.getInputArguments bean))}))
+     :inputArgs (str/join " " (map redact/url (.getInputArguments bean)))}))
 
 (defn- file-store-type [^File root]
   (try
@@ -203,7 +204,7 @@
   [{:keys [datasource]} _]
   (if-let [^HikariDataSource hikari (hikari-datasource datasource)]
     (let [pool (.getHikariPoolMXBean hikari)]
-      (res/ok {:db_name (some-> (.getJdbcUrl hikari) (str/replace "jdbc:" ""))
+      (res/ok {:db_name (some-> (.getJdbcUrl hikari) redact/url (str/replace "jdbc:" ""))
                :db_version (db-product hikari)
                :active_connections (.getActiveConnections pool)
                :idle_connections (.getIdleConnections pool)
@@ -225,16 +226,6 @@
     (subs (str k) 1)
     (str k)))
 
-(defn- sanitize-value
-  "把 #ig/ref 等不可 JSON 序列化的值转成可序列化结构。"
-  [v]
-  (cond
-    (ig/ref? v) {:__ig_ref true :key (str (:key v))}
-    (map? v) (into {} (map (fn [[k v]] [k (sanitize-value v)])) v)
-    (sequential? v) (mapv sanitize-value v)
-    (set? v) (into #{} (map sanitize-value v))
-    :else v))
-
 (defn- summarize-system-value
   "对运行时组件做摘要，避免直接序列化连接池等对象。"
   [v]
@@ -242,7 +233,7 @@
     (map? v) {:type (str (class v)) :kind "map" :keys (mapv sanitize-key (keys v))}
     (sequential? v) {:type (str (class v)) :kind "seq" :count (count v)}
     (fn? v) {:type "function" :kind "function"}
-    :else {:type (str (class v)) :kind "object" :value (str v)}))
+    :else {:type (str (class v)) :kind "object" :value "<opaque>"}))
 
 (defn integrant-info
   "返回 Integrant 静态配置、依赖图与运行时系统摘要。"
@@ -255,7 +246,7 @@
           dents (into {} (map (fn [k] [(sanitize-key k) (mapv sanitize-key (dep/immediate-dependents graph k))])) order)
           sys @integrant-state/system
           system-summary (into {} (map (fn [k] [(sanitize-key k) (summarize-system-value (get sys k))])) order)]
-      (res/ok {:config (sanitize-value cfg)
+      (res/ok {:config (redact/config cfg)
                :order (mapv sanitize-key order)
                :dependencies deps
                :dependents dents

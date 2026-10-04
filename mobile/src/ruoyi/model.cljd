@@ -15,6 +15,7 @@
    免得某处 (get-in db […]) 因为字段缺失而拿到 nil,又查不出为什么。"
   {:route :login
    :token nil
+   :session-revision 0
    :profile nil
    :permissions #{}
    :notice {:msg nil :seq 0}

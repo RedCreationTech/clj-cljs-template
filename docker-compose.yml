@@ -1,11 +1,11 @@
-# 本地 MySQL(可选):bb test:mysql 会自动 `docker compose up -d mysql`
+# 本地 MySQL(可选):bb test:mysql 为当前 checkout 自动起独立的 Compose 项目
+# MYSQL_TEST_PORT 默认 3308;COMPOSE_PROJECT_NAME 可显式指定项目名
 # 手动使用:docker compose up -d mysql 后
 #   JDBC_URL="jdbc:mysql://127.0.0.1:3308/ruoyi?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai" \
 #   MIGRATION_DIR=migrations bb dev
 services:
   mysql:
     image: mysql:8.4
-    container_name: ruoyi-mysql
     environment:
       MYSQL_ROOT_PASSWORD: password
       MYSQL_DATABASE: ruoyi
@@ -14,7 +14,7 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     ports:
-      - "3308:3306"
+      - "${MYSQL_TEST_PORT:-3308}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
