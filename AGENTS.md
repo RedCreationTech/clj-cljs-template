@@ -447,95 +447,20 @@ Database (SQLite)                 — ruoyi.db, auto-migrated on startup
 
 Both frontend and backend share port **3000**. The backend serves both API and static files.
 
-### Database Compatibility (SQLite / MySQL)
+### Database Compatibility
 
-项目同时支持 SQLite 和 MySQL，切换靠两个环境变量：
+配置与运行示例统一见 README「启动开发环境」的数据库选择说明,不要再维护第二份环境变量表。
 
-| 环境变量 | 默认值 | MySQL 用法 |
-|----------|--------|------------|
-| `JDBC_URL` | `jdbc:sqlite:ruoyi.db` | `jdbc:mysql://user:pass@host:port/db?useSSL=false&allowPublicKeyRetrieval=true` |
-| `MIGRATION_DIR` | 按 `JDBC_URL` 推导(MySQL → `migrations`,其它 → `migrations-sqlite`) | 一般不用设 |
-
-#### Migration 必须完全分开
-
-DDL 差异无法兼容，因此有两套目录：
-
-- `resources/migrations-sqlite/` —— SQLite 专用
-- `resources/migrations/` —— MySQL 专用
-
-新增/修改表时，**两个目录必须同步更新**。常见差异：
-
-| 场景 | SQLite | MySQL |
-|------|--------|-------|
-| 自增主键 | `INTEGER PRIMARY KEY` | `BIGINT AUTO_INCREMENT PRIMARY KEY` |
-| 时间字段 | `TEXT`（历史表带 `DEFAULT CURRENT_TIMESTAMP`，只是兜底） | `DATETIME` / `TIMESTAMP` |
-| 布尔/状态 | `CHAR(1)` / `INTEGER` | `CHAR(1)` / `TINYINT` |
-
-#### 查询 SQL 优先共用，必要时分支
-
-业务查询统一放在 `resources/sql/*.sql`，由 `conman` 加载。原则：
-
-1. **优先用两库都支持的语法**
-
-   ```sql
-   -- ✅ 推荐：两库都支持
-   AND (:job_name IS NULL OR INSTR(job_name, :job_name) > 0)
-   LIMIT :page_size OFFSET :offset
-   ```
-
-2. **禁止在共用 SQL 里写 SQLite-only 语法**
-
-   ```sql
-   -- ❌ 错误：|| 在 MySQL 默认 sql_mode 下是逻辑 OR
-   AND (:user_name IS NULL OR user_name LIKE '%' || :user_name || '%')
-
-   -- ✅ 正确
-   AND (:user_name IS NULL OR INSTR(user_name, :user_name) > 0)
-   ```
-
-3. **函数名不同就提供命名变体，在 Clojure 层选择**
-
-   例如 `resources/sql/system.sql`：
-
-   ```sql
-   -- :name last-insert-rowid :? :1
-   SELECT last_insert_rowid() AS last_insert_rowid
-
-   -- :name last-insert-rowid-mysql :? :1
-   SELECT LAST_INSERT_ID() AS last_insert_rowid
-   ```
-
-   由 `com.ruoyi.infra.db/detect-db-type` 判断后调用对应名字。
-
-4. **元数据/动态查询在 Clojure 层分支**
-
-   `com.ruoyi.infra.db` 里对 `paginate-query`、`adapt-sql` 等按 `:sqlite` / `:mysql` 分情况处理，不要把 `PRAGMA`、`sqlite_master`、`information_schema` 混进共用 `.sql`。
-
-#### 时间一律由应用生成（不要在 SQL 里取当前时间）
-
-SQLite 的 `CURRENT_TIMESTAMP` 是 UTC、MySQL 的是会话时区，两库写出来的时间不一致（仪表盘曾显示“8 小时前”）。规则：
-
-- 写时间用参数 `:now`：`create_time = :now`、`update_time = :now`。`infra.clock/with-now` 包在 query-fn 外层，**每次调用自动注入** `:now`（JVM 默认时区的本地时间，`yyyy-MM-dd HH:mm:ss`），不用手动传；需要指定时间时自己传 `:now` 即可覆盖。
-- `resources/sql/*.sql` 里禁止 `CURRENT_TIMESTAMP`、`NOW()`、`datetime(`、`||`，`bb lint:migrations` 会检查（`bb new-module` 生成的 SQL 同样用 `:now`）。
-- 接口返回的时间由 `com.ruoyi.infra.json` 统一编码成本地 `yyyy-MM-dd HH:mm:ss`（日期 `yyyy-MM-dd`）：MySQL 驱动返回的 `Timestamp` / `java.time` 对象与 SQLite 的文本在前端看起来一样。控制器里直接返回时间对象，不要自己 `str`。后端 JSON 编解码只用 `infra.json`（`write-str` / `read-str`，基于 jsonista，与 muuntaja 同一个 mapper），已不再依赖 cheshire。
-- 部署时各实例与数据库主机用同一个时区（容器里设 `TZ`）。
-
-#### 迁移文件格式
-
-- 一个迁移文件里有多条语句时，语句之间用单独一行 `--;;` 分隔（MySQL 驱动一次只能执行一条语句）；不要留只有注释的分段（MySQL 会报 `Query was empty`）。
-- 每个 `.up.sql` 必须有对应的 `.down.sql`，down 能把 up 完整撤销（`bb db:roundtrip` 会执行 up → down → up 验证）。
-- MySQL 目录不能出现 SQLite 语法（`AUTOINCREMENT`、`DROP INDEX IF EXISTS` 等），反之亦然；`bb lint:migrations` 会检查成对、分隔与方言。
-
-#### 修改后必须双库跑测试
-
-任何 `resources/migrations*` 或 `resources/sql/*.sql` 改动，都要验证两套数据库：
-
-```bash
-bb lint:migrations     # 成对 / 分隔 / 方言
-bb test                # SQLite(独立的 test.db,每次从空库迁移)
-bb test:mysql          # MySQL:自动 docker compose up -d mysql(3308)并清空库;或设置 JDBC_URL 用已有实例
-bb db:roundtrip        # 迁移往返;设 JDBC_URL=jdbc:mysql://… 则检查 MySQL(自动用 migrations 目录)
-```
+- SQLite、MySQL、PostgreSQL 三个迁移目录须同名成对,每个 up 都有可逆 down;多条语句以独立一行 `--;;` 分隔,不留空段。`bb lint:migrations` 守住配对、分隔与方言。
+- 共用 HugSQL 查询只维护 `resources/sql/*.sql` 一份。可空参数的 guard 用 `CAST(:param AS CHAR) IS NULL`,只转换 guard,不要转换实际查询值。字面子串搜索使用 INSTR（PG 迁移创建兼容函数）,不能换成未转义的 LIKE。
+- PostgreSQL 的显式 seed 主键不会推进 identity sequence,含显式插入的 up/down 都须同步 sequence;新主键必须高于既有数据及当前位置。
+- 插入与取生成 ID 必须使用同一事务连接,经 `infra.db/insert-and-get-id!` 选择方言查询。嵌套事务不得提交调用方事务。不要把方言专用元数据语句混进共用查询。
+- 写时间用 `:now`（`infra.clock/with-now` 自动注入 JVM 本地 `yyyy-MM-dd HH:mm:ss`）;查询文件禁止 CURRENT_TIMESTAMP、NOW()、datetime()、字符串 `||`。迁移的默认值只作兜底。
+- JSON/时间响应只走 `infra.json`。MySQL JDBC 返回 Timestamp 等对象,SQLite/PG 返回文本,不要在控制器直接 str。JVM 与数据库会话使用相同时区。
+- 保持业务类型契约:角色严格检查字段是 BOOLEAN,状态及脚手架 bool 是字符 0/1,JSON 是文本;不要随新增方言改接口类型。数字筛选值须在绑定前做类型校验。
+- 配置展开统一用 `config/expand-config`,保留数据库白名单元数据;启动和开发重载都不可绕过已启用子集检查。
+- 改迁移/SQL后必须在独立测试库运行 SQLite `bb test`、MySQL `bb test:mysql`、PG `bb test:postgresql`,并各跑 `bb db:roundtrip`。后两者通过 JDBC_URL 指向测试库;roundtrip 是破坏性 down/up,禁止指向生产。
+- 改脚手架后验证六种字段的读写、分页、迁移往返及前端编译;CI 有 SQLite 与 PG 生成模块任务。生成的集成测试须比对全部字段而非只看 ID 或第一列。
 
 ### Starting Dev Environment
 

@@ -11,7 +11,7 @@
 | 层级 | 技术 |
 |------|------|
 | 后端 | Clojure 1.12.6, Kit 1.0.x, Integrant, Reitit 0.11, Ring 1.15, Undertow, next.jdbc / conman (HugSQL), Migratus, Malli 0.20, HikariCP 7 |
-| 数据库 | SQLite 3.53（默认，零配置）；MySQL 8.4（Connector/J 26.7，切换环境变量即可；`docker-compose.yml` 提供本地实例） |
+| 数据库 | SQLite 3.53（默认，零配置）；MySQL 8.4；PostgreSQL 17（可配置支持子集，见数据库选择） |
 | 安全 | Buddy（JWT + bcrypt）；会话以 `sys_online` 为准（登出/强退/空闲超时即失效）+ 滑动续期；验证码、失败计数、续期宽限存 `sys_kv`，可多实例部署；登录失败限流；验证码开关（生产默认开）；CORS 白名单；上传下载防目录穿越；prod 下强制校验 `JWT_SECRET` / `COOKIE_SECRET` |
 | 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0 (函数组件 + Hooks), re-frame 1.4, React 19.3, Ant Design 6.6；中英文界面切换（`i18n/tr`）、浅色/暗色主题 |
 | 任务调度 | Quartz 2.5（`sys_job` 表驱动，支持暂停/恢复/立即执行） |
@@ -49,13 +49,14 @@
 ├── build.clj                    # tools.build: uberjar
 ├── docker-compose.yml           # 本地 MySQL 8.4(端口 3308),bb test:mysql 自动使用
 ├── Dockerfile                   # 多阶段镜像
-├── .github/workflows/ci.yml     # CI:lint / SQLite / MySQL / E2E / 脚手架冒烟
+├── .github/workflows/ci.yml     # CI:lint / SQLite / MySQL / PostgreSQL / E2E / 脚手架冒烟
 ├── .clj-kondo/ .cljfmt.edn .lsp/ .editorconfig   # 静态检查与格式化配置
 ├── kit.edn                      # 项目命名空间与路径(bb 任务与改名工具从这里读取)
 ├── resources/
 │   ├── system.edn               # Integrant 系统配置（唯一的组件装配点）
 │   ├── migrations-sqlite/       # SQLite 迁移（Migratus）
-│   ├── migrations/              # MySQL 迁移（与 SQLite 目录一一对应）
+│   ├── migrations/              # MySQL 迁移
+│   ├── migrations-postgresql/   # PostgreSQL 迁移（三目录一一对应）
 │   ├── sql/*.sql                # HugSQL 查询
 │   └── public/index.html        # SPA 入口（js/ 由 shadow-cljs 生成）
 ├── src/clj/com/ruoyi/           # 后端
@@ -243,7 +244,7 @@ bb new-module <模块名> [--label 中文名] [--fields "字段规格,..."] [--d
 - **字段规格**：`name:type[:required][:标签]`，逗号分隔；`type` 可选 `string`（前 3 个可搜索字段做模糊查询）、`text`、`int`、`decimal`、`date`（`yyyy-MM-dd`）、`bool`（存 `"0"`/`"1"`）。`id`、`create_by/time`、`update_by/time` 自动生成。
 - `--dry-run` 只列出将要新建和修改的文件。
 
-一条命令生成可直接运行的完整模块：两套迁移（建表 + 共享的「业务管理」目录菜单 + 本模块菜单与查询/新增/修改/删除按钮权限，并授权 admin 角色）、HugSQL 查询、领域服务（Integrant 组件）、控制器、路由（登录校验 + `biz:<模块>:list/query/add/edit/remove` 按钮权限 + Malli 参数校验 + Swagger）、后端集成测试、前端 api / re-frame 事件 / 页面（搜索、分页表格、新增编辑弹窗、删除，按钮按权限显示）、Playwright 用例；并在 `system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs` 的 `;; [new-module] <tag>` 标记处自动登记（标记行请保留，可反复生成多个模块）。生成前会检查文件、前端关键字与 HugSQL 查询名冲突，有冲突一个文件都不写。撤销：`git checkout . && git clean -fd`。
+一条命令生成可直接运行的完整模块：三套迁移（建表 + 共享的「业务管理」目录菜单 + 本模块菜单与查询/新增/修改/删除按钮权限，并授权 admin 角色）、HugSQL 查询、领域服务（Integrant 组件）、控制器、路由（登录校验 + `biz:<模块>:list/query/add/edit/remove` 按钮权限 + Malli 参数校验 + Swagger）、后端集成测试、前端 api / re-frame 事件 / 页面（搜索、分页表格、新增编辑弹窗、删除，按钮按权限显示）、Playwright 用例；并在 `system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs` 的 `;; [new-module] <tag>` 标记处自动登记（标记行请保留，可反复生成多个模块）。生成前会检查文件、前端关键字与 HugSQL 查询名冲突，有冲突一个文件都不写。撤销：`git checkout . && git clean -fd`。
 
 CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模块，并要求 lint、格式、后端测试、迁移往返、前端零 warning 编译与生成的 E2E 全部通过，保证脚手架与模板同步演进。
 
@@ -325,8 +326,8 @@ Swagger UI：http://localhost:3000/api
 - 接口失败由 `api.transport` 统一提示（403、5xx、网络断开、业务码非 200）并复位 loading（`events.common/stop-all-loading` 把 app-db 里各模块的 `:loading?` 清掉，请求失败后表格不会一直转圈），调用方的 `on-error` 只做收尾，不要再各自弹「网络错误」；上传用 `t/request` 的 `:body`，带令牌下载用 `t/download!`。
 - 每个 namespace ≤ 500 行、函数 ≤ 50 行（`bb check` 检查 src / env / test / bb / scripts / mobile）；超限时拆分。
 - clj-kondo 零 warning、cljfmt 格式一致（`bb lint`、`bb fmt:check`，CI 强制）。
-- 时间由应用生成：SQL 里写 `:now`（`infra.clock` 自动注入本地时间），不写 `CURRENT_TIMESTAMP` / `NOW()`（lint 检查）；接口里的时间统一编码为 `yyyy-MM-dd HH:mm:ss`（`infra.json`），两库一致。需要多实例共享的临时状态用 `infra.kv`，不要放 atom。
-- SQL 统一放 `resources/sql/*.sql`；两套迁移目录必须同步（`bb lint:migrations` 检查）；共用 SQL 只写两库都支持的语法（如 `INSTR` 代替 `||`、派生表代替 `DUAL`）。
+- 时间由应用生成：SQL 里写 `:now`（`infra.clock` 自动注入本地时间），不写 `CURRENT_TIMESTAMP` / `NOW()`（lint 检查）；接口里的时间统一编码为 `yyyy-MM-dd HH:mm:ss`（`infra.json`），三库一致。需要多实例共享的临时状态用 `infra.kv`，不要放 atom。
+- SQL 统一放 `resources/sql/*.sql`；三套迁移目录必须同步（`bb lint:migrations` 检查）；共用 SQL 只写三库兼容的语法（如 `INSTR` 代替 `||`、派生表代替 `DUAL`）。
 - 前端状态统一 re-frame；组件局部状态用 Hooks，不用 `reagent/atom`；分页参数固定 `page` / `size`。
 - 列表页一律服务端分页：模块在 app-db 存 `:query-params`（含 `:page` / `:size`），取数走 `events.common/fetch-with-query`，表格的 `:pagination` 只用 `components/pagination` 的 `table-pagination`（服务端）/ `client-pagination`（本地翻页），不要在页面里手写（`bb lint:pagination` 检查）。
 - 前端界面文案用 `(i18n/tr "中文原文")` 包裹、英文译文加到 `i18n.cljs`（外壳与通用组件已完成，业务页面可逐步迁移）；localStorage 只通过 `storage` 命名空间访问；内联样式的颜色用 `var(--app-*)` 变量（见 `resources/public/css/app.css`），暗色主题才能自动适配。
