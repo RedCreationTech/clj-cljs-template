@@ -334,4 +334,3 @@ Swagger UI：http://localhost:3000/api
 `token-present?` 仅表示本地令牌存在，不验证登录有效性；未知字段标为 `:unknown`，未启动为 `:unavailable`，非 dev 后端拒绝读取。
 前端入口仅由 dev preload 加载，release 不含入口。页面 ID 每次整页加载更新，热更保留；后端 ID 是进程身份，系统代际为 `:unknown`，均不证明最新源码已加载。
 目前没有统一 `bb dev:state` 命令：先明确连接目标进程/标签页并核对 `runtime-id`，多标签页不要默认选择；编译成功不代表浏览器已更新。组件内部 React 状态不在摘要内。
-

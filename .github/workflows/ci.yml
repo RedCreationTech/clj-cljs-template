@@ -137,7 +137,9 @@ jobs:
       - name: 安装 Chromium
         run: npx playwright install --with-deps chromium
       - name: 生成的 E2E 用例
-        run: bb e2e tests/e2e/ci-demo.spec.js
+        run: bb e2e tests/e2e/ci-demo.spec.js tests/e2e/dev-state.spec.js
+        env:
+          SNAPSHOT_BUILD: dev
       - name: 上传失败现场
         if: failure()
         uses: actions/upload-artifact@v7

@@ -8,7 +8,7 @@
    [java.lang.management ManagementFactory]
    [java.time Instant]))
 
-(defn- bounded-count [n]
+(defn- capped-count [n]
   (min 1000000 (max 0 n)))
 
 (defn- pool-state [connection]
@@ -20,10 +20,10 @@
         (.isClosed ^HikariDataSource pool) {:status :closed}
         :else (if-let [bean (.getHikariPoolMXBean ^HikariDataSource pool)]
                 {:status :available
-                 :active (bounded-count (.getActiveConnections bean))
-                 :idle (bounded-count (.getIdleConnections bean))
-                 :total (bounded-count (.getTotalConnections bean))
-                 :waiting (bounded-count (.getThreadsAwaitingConnection bean))}
+                 :active (capped-count (.getActiveConnections bean))
+                 :idle (capped-count (.getIdleConnections bean))
+                 :total (capped-count (.getTotalConnections bean))
+                 :waiting (capped-count (.getThreadsAwaitingConnection bean))}
                 {:status :unavailable})))
     (catch Exception _ {:status :error})))
 
@@ -35,7 +35,7 @@
     (not= :dev (:system/env system)) {:status :forbidden :state nil}
     :else {:status :available
            :state {:system-generation :unknown
-                   :component-count (bounded-count (count (dissoc system :system/env :nrepl/server)))
+                   :component-count (capped-count (count (dissoc system :system/env :nrepl/server)))
                    :http-present? (some? (:server/http system))
                    :pool (pool-state (:db.sql/connection system))}}))
 

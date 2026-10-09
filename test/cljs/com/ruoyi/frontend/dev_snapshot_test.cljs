@@ -48,9 +48,13 @@
 
 (deftest non-dev-refuses-before-reading-test
   (let [source (reify IDeref
-                 (-deref [_] (throw (js/Error. "Must not read app-db"))))]
-    (with-redefs [goog.DEBUG false
-                  db/app-db source]
-      (let [result (snapshot/snapshot)]
-        (is (= :forbidden (:status result)))
-        (is (nil? (:state result)))))))
+                 (-deref [_] (throw (js/Error. "Must not read app-db"))))
+        original-debug goog.DEBUG]
+    ;; with-redefs cannot generate a valid local name for the dotted Closure define.
+    (try
+      (set! goog.DEBUG false)
+      (with-redefs [db/app-db source]
+        (let [result (snapshot/snapshot)]
+          (is (= :forbidden (:status result)))
+          (is (nil? (:state result)))))
+      (finally (set! goog.DEBUG original-debug)))))
