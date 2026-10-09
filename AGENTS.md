@@ -11,7 +11,7 @@
 ## 任务入口与质量门禁
 
 - **所有任务走 babashka**：`bb tasks` 列出全部任务；不要再写 Makefile / shell 脚本，新任务加到 `bb.edn`，实现放 `bb/tasks/*.clj`（跨平台，Windows 也能跑）。
-- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`，**不含 `.cljd`**，见「移动端」）、`bb lint:migrations`、`bb check`、`bb lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`，见「Frontend 组件规范」§11b）、`bb lint:scaffold`（`bb new-module` 的 `;; [new-module] <tag>` 登记点自检，不改工作区）、`bb lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 跟得上源码，见「后端热重载」）、`bb lint:e2e`（`tests/e2e/**/*.js`：不许残留 `test.only`/`fixme`、分页参数只用 `page`/`size`、不许 `goto('http…')` 写死绝对地址、`*.spec.js` 不许 `waitForTimeout` 且必须有断言、`playwright.config.js` 必须仍然 `testIgnore` 掉 tour）；这些都是内部步骤，不是独立任务名。格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
+- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test:tasks` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`，**不含 `.cljd`**，见「移动端」）、`bb lint:migrations`、`bb check`、`bb lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`，见「Frontend 组件规范」§11b）、`bb lint:scaffold`（`bb new-module` 的 `;; [new-module] <tag>` 登记点自检，不改工作区）、`bb lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 跟得上源码，见「后端热重载」）、`bb lint:e2e`（`tests/e2e/**/*.js`：不许残留 `test.only`/`fixme`、分页参数只用 `page`/`size`、不许 `goto('http…')` 写死绝对地址、`*.spec.js` 不许 `waitForTimeout` 且必须有断言、`playwright.config.js` 必须仍然 `testIgnore` 掉 tour）；这些检查也都是独立任务，可按改动范围单独运行。格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
 - **移动端不在 `bb ci` 里**：改了 `mobile/` 要单独跑 `bb mobile:compile`（ClojureDart 编译器就是移动端的静态检查）与 `bb mobile:test`；CI 用独立的 `mobile` job 装 Flutter 跑这两条。理由见「移动端（ClojureDart）」。
 - **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟、移动端编译 + 单元测试。改了任务名或参数，要同步改 CI。
 - **新增业务模块用 `bb new-module`**（见 README「新增业务模块」）。源码里的 `;; [new-module] <tag>` 注释是脚手架的登记点（`system.edn` 的 components / route-services / sql-files、`web/routes/api.clj`、`router.cljs` 的 routes / page-names、`menu_data.cljs` 的 menu-keys / breadcrumbs / icons、`page_view.cljs`、`events/common.cljs` 的 tab-meta；`core.clj` 与 `events.cljs` 没有标记行，脚手架按字母序给它们补 require），**不要删除或改写这些标记行**；重构这些文件时把标记保留在对应集合的末尾。改动脚手架模板（`bb/tasks/scaffold/*.clj`）后，至少生成一个模块跑一遍 lint / fmt:check / 生成的测试 / `bb cljs:check`（CI 的 scaffold 任务会做完整检查）。
@@ -545,6 +545,8 @@ bb dev --reset-db      # 先删除 ruoyi.db 再启动
 bb dev --backend-only  # 只起后端(或分别 bb backend / bb frontend)
 # 首次前端编译约 1~3 分钟,之后增量编译几秒;打开 http://localhost:3000
 ```
+
+集成测试的 `system-fixture` 不复用任何已运行的系统（包括 `:test`），也不会替你关闭开发系统。请从独立进程执行 `bb test -n <测试命名空间>`；测试体异常时，夹具仍会清理本次启动的测试系统。
 
 端口被占用时 `bb dev` 会直接报出占用的端口；用 `PORT=3200 NREPL_PORT=7200 bb dev` 换端口。`bb test` 使用独立端口（3100/7100）与独立的 `test.db`，可以和 `bb dev` 同时运行。
 

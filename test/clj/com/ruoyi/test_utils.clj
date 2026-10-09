@@ -13,13 +13,38 @@
   []
   @core/system)
 
+(defn- stop-test-system!
+  []
+  (when-let [system (system-state)]
+    (if (= :test (:system/env system))
+      (core/stop-app)
+      (throw (ex-info "测试期间系统已被替换;拒绝关闭非测试系统"
+                      {:type ::system-replaced})))))
+
 (defn system-fixture
+  "只在空闲进程中拥有测试系统的完整生命周期(包括测试内 halt/init)。
+   已有系统一律拒绝复用,请用独立进程 bb test -n <测试命名空间>。
+   仅支持串行生命周期控制,不要与其他线程并发启动/停止系统。"
   []
   (fn [f]
-    (when (nil? (system-state))
-      (core/start-app {:opts {:profile :test}}))
-    (f)
-    (core/stop-app)))
+    (when (some? (system-state))
+      (throw (ex-info "已有运行中的系统;请在独立进程运行 bb test -n <测试命名空间>"
+                      {:type ::system-already-running})))
+    (core/start-app {:opts {:profile :test}})
+    (let [failure (atom nil)]
+      (try
+        (f)
+        (catch Throwable e
+          (reset! failure e)
+          (throw e))
+        (finally
+          (try
+            (stop-test-system!)
+            (catch Throwable cleanup-error
+              (if-let [original @failure]
+                (when-not (identical? original cleanup-error)
+                  (.addSuppressed original cleanup-error))
+                (throw cleanup-error)))))))))
 
 (defn get-response [ctx]
   (-> ctx
