@@ -76,8 +76,8 @@
   (let [replacement {:system/env :dev}
         failure (ex-info "body failed" {})
         {:keys [error calls state]} (exercise nil {} (fn [system]
-                                                      (reset! system replacement)
-                                                      (throw failure)))]
+                                                       (reset! system replacement)
+                                                       (throw failure)))]
     (is (identical? failure error))
     (is (= [::tu/system-replaced]
            (mapv #(-> % ex-data :type) (.getSuppressed error))))
