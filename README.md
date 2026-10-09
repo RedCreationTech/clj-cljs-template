@@ -323,3 +323,15 @@ Swagger UI：http://localhost:3000/api
 ## 许可
 
 [MIT](LICENSE)。RuoYi 相关设计参考 [RuoYi-Vue](https://gitee.com/y_project/RuoYi-Vue)。
+
+### 只读开发状态（供 LLM）
+
+后端 nREPL：`(require 'com.ruoyi.dev-snapshot)` 后调用 `(com.ruoyi.dev-snapshot/snapshot)`。
+前端在目标标签页控制台调用 `com.ruoyi.frontend.dev_snapshot.snapshot_edn()`；也可在已选定该浏览器 runtime 的 shadow CLJS REPL 调 `(com.ruoyi.frontend.dev-snapshot/snapshot)`。
+
+两端返回同一信封：`schema-version / captured-at / source / runtime-id / status / state`。
+仅输出固定页面枚举、布尔标记、封顶计数和连接池数字；不输出配置、令牌、用户、表单、URL 或行内容，也不发请求/查库。
+`token-present?` 仅表示本地令牌存在，不验证登录有效性；未知字段标为 `:unknown`，未启动为 `:unavailable`，非 dev 后端拒绝读取。
+前端入口仅由 dev preload 加载，release 不含入口。页面 ID 每次整页加载更新，热更保留；后端 ID 是进程身份，系统代际为 `:unknown`，均不证明最新源码已加载。
+目前没有统一 `bb dev:state` 命令：先明确连接目标进程/标签页并核对 `runtime-id`，多标签页不要默认选择；编译成功不代表浏览器已更新。组件内部 React 状态不在摘要内。
+
