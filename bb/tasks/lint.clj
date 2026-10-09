@@ -33,13 +33,13 @@
 ;; ─── 迁移文件 ──────────────────────────────────────────────────────
 
 (def ^:private dirs {:sqlite "resources/migrations-sqlite" :mysql "resources/migrations"
-                    :postgresql "resources/migrations-postgresql"})
+                     :postgresql "resources/migrations-postgresql"})
 
 (def ^:private forbidden
   "每个目录里不应出现的对方方言(出现通常意味着复制粘贴没改)。"
   {:postgresql [[#"(?i)\bAUTO_INCREMENT\b|\bAUTOINCREMENT\b" "PostgreSQL 使用 identity 列"]
-                 [#"(?i)INSERT\s+(?:OR\s+IGNORE|IGNORE)\b" "PostgreSQL 使用 ON CONFLICT"]
-                 [#"(?i)\bENGINE\s*=|\bdatetime\s*\(" "非 PostgreSQL 方言"]]
+                [#"(?i)INSERT\s+(?:OR\s+IGNORE|IGNORE)\b" "PostgreSQL 使用 ON CONFLICT"]
+                [#"(?i)\bENGINE\s*=|\bdatetime\s*\(" "非 PostgreSQL 方言"]]
    :mysql [[#"(?i)\bAUTOINCREMENT\b" "SQLite 的 AUTOINCREMENT(MySQL 用 AUTO_INCREMENT)"]
            [#"(?i)INSERT\s+OR\s+(IGNORE|REPLACE)" "SQLite 的 INSERT OR IGNORE/REPLACE(MySQL 用 INSERT IGNORE)"]
            [#"(?i)CREATE\s+(UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS" "CREATE INDEX IF NOT EXISTS(MySQL 不支持)"]
@@ -91,7 +91,7 @@
    (for [[_ dir] dirs
          f (migration-names dir)
          :let [other (str/replace f #"\.(up|down)\.sql$"
-                                 (if (str/ends-with? f ".up.sql") ".down.sql" ".up.sql"))]
+                                  (if (str/ends-with? f ".up.sql") ".down.sql" ".up.sql"))]
          :when (not (fs/exists? (str dir "/" other)))]
      (str dir "/" f ": 缺少 " other))))
 

@@ -15,15 +15,15 @@
 (defn- queries [ds]
   (let [bound (conman/bind-connection-map ds {} "sql/system.sql" "sql/log.sql" "sql/job.sql")]
     (clock/with-now
-     (fn
-       ([q params] ((:fn (get (:fns bound) q)) ds params))
-       ([conn q params] ((:fn (get (:fns bound) q)) conn params))))))
+      (fn
+        ([q params] ((:fn (get (:fns bound) q)) ds params))
+        ([conn q params] ((:fn (get (:fns bound) q)) conn params))))))
 
 (defn- with-database [f]
   (let [cfg (config/system-config {:profile :test})
         ds (jdbc/get-datasource {:jdbcUrl (get-in cfg [:db.sql/connection :jdbc-url])})]
     (migratus/migrate {:store :database :db {:datasource ds}
-                      :migration-dir (get-in cfg [:db.sql/migrations :migration-dir])})
+                       :migration-dir (get-in cfg [:db.sql/migrations :migration-dir])})
     (jdbc/with-transaction [tx ds {:rollback-only true}]
       (let [q (queries ds)]
         (f tx q (fn [query params] (q tx query params)))))))
@@ -32,16 +32,20 @@
   (let [ctx {:db tx :query-fn q}
         id (post/create-post! ctx {:post_code "contract_%" :post_name "中文_%岗位"
                                    :post_sort 101 :status "0" :create_by "contract"})
+        control (post/create-post! ctx {:post_code "plain" :post_name "plain"
+                                        :post_sort 102 :status "0" :create_by "contract"})
         read-post #(query :find-post-by-id {:post_id id})]
-    (is (pos-int? id))
+    (is (and (integer? id) (pos? id)))
     (is (= "中文_%岗位" (:post_name (read-post))))
     (is (re-matches #"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}" (:create_time (json/read-str (json/write-str (read-post))))))
     (doseq [needle [nil "中文" "_" "%"]]
       (let [filters {:post_code nil :post_name needle :status nil :page_size 1000 :offset 0}]
         (is (some #(= id (:post_id %)) (query :list-posts filters)))
-        (is (pos? (:total (query :count-posts filters))))))
+        (is (pos? (:total (query :count-posts filters))))
+        (when (#{"_" "%"} needle)
+          (is (not-any? #(= control (:post_id %)) (query :list-posts filters))))))
     (is (empty? (query :list-posts {:post_code nil :post_name "contract-missing"
-                                   :status nil :page_size 1 :offset 0})))
+                                    :status nil :page_size 1 :offset 0})))
     (post/update-post! {:query-fn query} {:post_id id :post_name "updated" :update_by "contract"})
     (is (= "updated" (:post_name (read-post))))
     (is (= 101 (:post_sort (read-post))) "COALESCE 的空数字绑定保持原值")
@@ -79,7 +83,7 @@
         (post-contract tx q query))
       (testing "HTTP 字符串数值筛选与日期范围"
         (is (map? (logs/list-oper-logs {:query-fn query}
-                                     {:business_type "1" :status "0"
-                                      :begin_time "2000-01-01" :end_time "2100-01-01"}))))
+                                       {:business_type "1" :status "0"
+                                        :begin_time "2000-01-01" :end_time "2100-01-01"}))))
       (testing "JSON 文本和既有 boolean 语义" (type-contract tx q query))
       (testing "自定义 job 主键查询分支" (job-contract tx q query)))))

@@ -119,7 +119,7 @@
   [ts]
   (let [fmt (java.text.SimpleDateFormat. "yyyyMMddHHmmss")
         used (set (for [dir ["resources/migrations" "resources/migrations-sqlite"
-                          "resources/migrations-postgresql"]
+                             "resources/migrations-postgresql"]
                         f (fs/list-dir dir)]
                     (re-find #"^\d+" (fs/file-name f))))]
     (loop [t ts]

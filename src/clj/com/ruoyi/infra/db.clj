@@ -140,8 +140,8 @@
     (when-not options
       (throw (ex-info "数据库启用配置不可用,请先启动系统" {})))
     (config/with-database-selection
-     {:database/options (select-keys options [:enabled])
-      :db.sql/connection {:jdbc-url jdbc-url}})))
+      {:database/options (select-keys options [:enabled])
+       :db.sql/connection {:jdbc-url jdbc-url}})))
 
 (defn- rebind-queries! [conn]
   (require 'conman.core)

@@ -91,7 +91,7 @@
       (is (= base selected) "旧 JDBC_URL 配置继续工作")
       (is (= db (get-in (meta selected) [::config/database-options :type])))
       (is (= base (config/with-database-selection
-                   (assoc base :database/options {:enabled (name db) :type (name db)}))))
+                    (assoc base :database/options {:enabled (name db) :type (name db)}))))
       (is (= (config/migration-dirs db)
              (get-in (config/with-default-migration-dir base {}) [:db.sql/migrations :migration-dir])))))
   (doseq [options [{:enabled ""} {:enabled "postgres"} {:enabled "sqlite,"}
@@ -103,14 +103,14 @@
   (testing "禁用的方言在创建连接池之前失败,错误不回显凭据"
     (try
       (config/with-database-selection
-       (assoc (cfg "jdbc:postgresql://localhost/test?password=private")
-              :database/options {:enabled "sqlite"}))
+        (assoc (cfg "jdbc:postgresql://localhost/test?password=private")
+               :database/options {:enabled "sqlite"}))
       (is false "should reject")
       (catch clojure.lang.ExceptionInfo e
         (is (not (str/includes? (str (.getMessage e) (ex-data e)) "private")))))))
 
 (deftest expanded-selection-test
   (let [selected (config/with-database-selection
-                  (assoc (cfg "jdbc:postgresql://localhost/test")
-                         :database/options {:enabled "postgresql"}))]
+                   (assoc (cfg "jdbc:postgresql://localhost/test")
+                          :database/options {:enabled "postgresql"}))]
     (is (= (meta selected) (meta (config/expand-config selected))))))
