@@ -53,6 +53,9 @@
   test:cljs        {:doc  "前端单元测试(test/cljs,shadow-cljs :test 构建,Node 运行)"
                     :task (do (u/exec! [(u/npx-cmd) "shadow-cljs" "compile" "test" "--config-merge" u/strict-cljs])
                               (u/exec! ["node" "target/cljs-test/node-tests.js"]))}
+  test:postgresql {:doc "在独立 PostgreSQL 测试库上跑后端测试(必须设置 JDBC_URL,不清空已有库)"
+                   :task (dev/test-postgresql! *command-line-args*)}
+
   test:mysql       {:doc  "在 MySQL 上跑后端测试(docker compose 起 3308 端口;或设置 JDBC_URL 用已有实例)"
                     :task (dev/test-mysql! *command-line-args*)}
   e2e              {:doc  "Playwright 端到端测试(需后端已在 3000 运行)"

@@ -21,7 +21,7 @@
     (is (= :sqlite (db/detect-db-type (fake-db "SQLITE 3.45"))))
     (is (= :mysql  (db/detect-db-type (fake-db "MySQL"))))
     (is (= :unknown (db/detect-db-type (fake-db "MariaDB"))))
-    (is (= :unknown (db/detect-db-type (fake-db "PostgreSQL"))))
+    (is (= :postgresql (db/detect-db-type (fake-db "PostgreSQL"))))
     (is (= :unknown (db/detect-db-type (fake-db ""))))
     (is (= :unknown (db/detect-db-type
                      {:connectable (reify java.sql.Connection

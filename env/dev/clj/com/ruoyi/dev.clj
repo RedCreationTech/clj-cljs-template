@@ -38,7 +38,7 @@
    每次重启都重新读文件,改了配置才生效;这是纯函数,便于单独测试。"
   [profile]
   (-> (config/system-config {:profile profile})
-      (ig/expand)
+      (config/expand-config)
       (dissoc nrepl-key)))
 
 (def keep-keys

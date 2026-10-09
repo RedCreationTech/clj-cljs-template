@@ -1,18 +1,18 @@
 -- :name list-jobs :? :*
 -- :doc 定时任务列表(分页),给管理界面用
 SELECT * FROM sys_job WHERE 1=1
-  AND (:job_name IS NULL OR INSTR(job_name, :job_name) > 0)
-  AND (:job_group IS NULL OR job_group = :job_group)
-  AND (:status IS NULL OR status = :status)
+  AND (CAST(:job_name AS CHAR) IS NULL OR INSTR(job_name, :job_name) > 0)
+  AND (CAST(:job_group AS CHAR) IS NULL OR job_group = :job_group)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
 ORDER BY job_id
 LIMIT :page_size OFFSET :offset
 
 -- :name count-jobs :? :1
 -- :doc 统计定时任务数量(与 list-jobs 同样的筛选条件)
 SELECT COUNT(*) AS total FROM sys_job WHERE 1=1
-  AND (:job_name IS NULL OR INSTR(job_name, :job_name) > 0)
-  AND (:job_group IS NULL OR job_group = :job_group)
-  AND (:status IS NULL OR status = :status)
+  AND (CAST(:job_name AS CHAR) IS NULL OR INSTR(job_name, :job_name) > 0)
+  AND (CAST(:job_group AS CHAR) IS NULL OR job_group = :job_group)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
 
 -- :name all-jobs :? :*
 -- :doc 全部定时任务,不分页:调度器启动时加载、仪表盘统计用
@@ -52,17 +52,17 @@ DELETE FROM sys_job WHERE job_id = :job_id
 
 -- :name list-job-logs :? :*
 SELECT * FROM sys_job_log WHERE 1=1
-  AND (:job_name IS NULL OR INSTR(job_name, :job_name) > 0)
-  AND (:job_group IS NULL OR job_group = :job_group)
-  AND (:status IS NULL OR status = :status)
+  AND (CAST(:job_name AS CHAR) IS NULL OR INSTR(job_name, :job_name) > 0)
+  AND (CAST(:job_group AS CHAR) IS NULL OR job_group = :job_group)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
 ORDER BY job_log_id DESC
 LIMIT :page_size OFFSET :offset
 
 -- :name count-job-logs :? :1
 SELECT COUNT(*) AS total FROM sys_job_log WHERE 1=1
-  AND (:job_name IS NULL OR INSTR(job_name, :job_name) > 0)
-  AND (:job_group IS NULL OR job_group = :job_group)
-  AND (:status IS NULL OR status = :status)
+  AND (CAST(:job_name AS CHAR) IS NULL OR INSTR(job_name, :job_name) > 0)
+  AND (CAST(:job_group AS CHAR) IS NULL OR job_group = :job_group)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
 
 -- :name create-job-log! :! :n
 INSERT INTO sys_job_log (job_name, job_group, invoke_target, job_message, status, exception_info, create_time)
@@ -70,5 +70,8 @@ VALUES (:job_name, :job_group, :invoke_target, :job_message, :status, :exception
 
 -- :name clear-job-logs! :! :n
 DELETE FROM sys_job_log WHERE 1=1
-  AND (:job_name IS NULL OR job_name = :job_name)
-  AND (:job_group IS NULL OR job_group = :job_group)
+  AND (CAST(:job_name AS CHAR) IS NULL OR job_name = :job_name)
+  AND (CAST(:job_group AS CHAR) IS NULL OR job_group = :job_group)
+
+-- :name last-insert-job-id-postgresql :? :1
+SELECT LASTVAL() AS job_id

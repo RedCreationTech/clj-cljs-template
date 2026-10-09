@@ -141,6 +141,13 @@
     (u/exec! (into (u/clojure-cmd) ["-M:dev" "scripts/db.clj" "reset"]) {:extra-env env})
     (u/exec! (into (u/clojure-cmd) (cons "-M:test" args)) {:extra-env env})))
 
+(defn test-postgresql!
+  "使用显式 PostgreSQL 测试库;CI 提供一次性 service,不清空已有库。"
+  [args]
+  (when-not (str/starts-with? (or (System/getenv "JDBC_URL") "") "jdbc:postgresql:")
+    (u/fail! "test:postgresql 需要指向独立测试库的 JDBC_URL(jdbc:postgresql:…)。"))
+  (test! args))
+
 (defn e2e!
   "Playwright 端到端测试;需要后端已在 BASE_URL(默认 http://localhost:3000)运行。"
   [args]

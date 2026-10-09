@@ -140,7 +140,18 @@ docker compose up -d mysql       # 或使用已有实例
 JDBC_URL="jdbc:mysql://127.0.0.1:3308/ruoyi?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true" bb dev
 ```
 
-`JDBC_URL` 是 MySQL 时自动使用 `resources/migrations`（SQLite 用 `migrations-sqlite`）；也可以用 `MIGRATION_DIR` 显式指定。
+数据库选择只在这一处配置：`resources/system.edn` 的 `:database/options` 声明允许的子集，或设置 `DB_ENABLED=sqlite,postgresql`。默认三库可选，仍启动 SQLite；不会裁剪 JDBC 依赖或删除迁移文件。`DB_TYPE` 可省略（由 `JDBC_URL` 推断），设置后必须与 URL 一致。未知、未启用或不一致的选择在建连接池/迁移之前报错；热切换也受启用子集限制。旧的 SQLite/MySQL `JDBC_URL` 用法不变。
+
+PostgreSQL 示例（先准备专用空数据库/schema，用户须有建表、序列及函数权限）：
+
+```bash
+DB_ENABLED=postgresql DB_TYPE=postgresql \
+JDBC_URL="jdbc:postgresql://127.0.0.1:5432/myapp?user=myapp&password=example" bb dev
+```
+
+迁移目录自动选择：SQLite → `migrations-sqlite`，MySQL → `migrations`，PostgreSQL → `migrations-postgresql`；`MIGRATION_DIR` 可显式覆盖。共用查询保留原来的字面子串搜索，PG 迁移添加 `instr(text,text)` 兼容函数。时间/JSON 仍按现有文本契约传输，角色严格检查字段保留 BOOLEAN，状态及脚手架 bool 仍是 `"0"`/`"1"`。JVM 与数据库会话请使用同一时区。
+
+`JDBC_URL=… bb test:postgresql` 在专用测试库跑全部后端测试，不清空已有库；`bb db:roundtrip` 会执行破坏性 down/up，只能指向可丢弃测试库。CI 用一次性 PostgreSQL 17 service 验证全套测试、seed、自增主键、迁移往返及六种字段的生成模块。
 
 `bb test:mysql` 自动使用当前 checkout 独立的 Compose 项目及数据卷；多个模板副本仍需分别设置空闲端口，例如 `MYSQL_TEST_PORT=3318 bb test:mysql`。需要手动管理同一组容器时，先明确设置 `COMPOSE_PROJECT_NAME=ruoyi-test-local`，任务与 `docker compose -p ruoyi-test-local logs/down` 使用同一个项目。显式提供 `JDBC_URL` 时任务直接使用该库并清空测试数据，应指向专用测试库。
 
@@ -171,6 +182,7 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `JWT_SECRET` / `COOKIE_SECRET` | 开发值 | prod 必填，见上 |
+| `DB_ENABLED` / `DB_TYPE` | 三库 / 从 URL 推断 | 支持子集与运行方言，见上文数据库选择 |
 | `JDBC_URL` / `MIGRATION_DIR` | `jdbc:sqlite:ruoyi.db` / 按 URL 推导 | 数据库连接与迁移目录 |
 | `PORT` / `NREPL_PORT` | 3000 / 7000 | HTTP 与 nREPL 端口 |
 | `CAPTCHA_ENABLED` | prod `true`，dev/test `false` | 登录验证码；开启后留空验证码判失败 |
@@ -207,7 +219,7 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | 移动端导览录像 | `bb video:mobile`（需 ffmpeg + Chromium）：重编网页版 → 在 3210 起**独立库**的录屏后端（`target/mobile-demo.db`，写 20 条演示岗位凑成两页）→ 录 `tests/e2e/mobile/` 四段分镜（功能/通讯方式/状态管理/主题设置）→ 拼成 `target/mobile-tour/mobile.mp4` 并配旁白。舞台页自带目录与假鼠标，台词烧在画面里；`--compose-only` 只重新合成，`--no-narrate` 不出音轨。详见 [`mobile/README.md`](mobile/README.md)「网页版与录屏」 |
 | 覆盖率 | `bb coverage` → `target/coverage/index.html` |
 | 移动端（可选） | `bb mobile:doctor`（查工具链与 macOS 网络权限）→ `bb mobile:create`（生成平台工程目录，幂等）→ `bb mobile:compile`（= 移动端的静态检查）→ `bb mobile:run`（编译并热重载运行）/ `bb mobile:test`（`.cljd` 单元测试，不需要后端）/ `bb mobile:clean`。这些不在 `bb ci` 里，改了 `mobile/` 单独跑；详见 [`mobile/README.md`](mobile/README.md) |
-| 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束）+ `lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`）+ `lint:scaffold`（`bb new-module` 的登记点自检）+ `lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 与源码对得上）+ `lint:e2e`（Playwright 用例：不残留 `test.only`/`fixme`、分页只用 `page`/`size`、不写死 `goto('http…')`、`*.spec.js` 不 `waitForTimeout` 且必须有断言、tour与mobile录屏目录被 `testIgnore` 排除） |
+| 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（三套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束）+ `lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`）+ `lint:scaffold`（`bb new-module` 的登记点自检）+ `lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 与源码对得上）+ `lint:e2e`（Playwright 用例：不残留 `test.only`/`fixme`、分页只用 `page`/`size`、不写死 `goto('http…')`、`*.spec.js` 不 `waitForTimeout` 且必须有断言、tour与mobile录屏目录被 `testIgnore` 排除） |
 | 格式化 | `bb fmt`（cljfmt 修改）/ `bb fmt:check`（只检查） |
 | 构建 | `bb release`（前端）、`bb uberjar`（前端 + 后端 jar）、`bb cljs:check`（快速编译检查）、`bb patch:vendor`（给 node_modules 打补丁，见下） |
 | 与 CI 相同的快速检查 | `bb ci`（lint + fmt:check + test + test:cljs） |
@@ -259,6 +271,7 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 | lint | `bb lint`（clj-kondo、迁移检查、规模约束、分页约定、脚手架登记点、开发期约定、E2E 用例约定）+ `bb fmt:check` + `bb test:tasks`（模拟命令的开发任务回归） |
 | test-sqlite | `bb test` + `bb db:roundtrip` |
 | test-mysql | MySQL 8.4 service 上 `bb test:mysql` + `bb db:roundtrip` |
+| test-postgresql | PostgreSQL 17 service 上全后端契约、迁移往返、生成模块全字段与前端编译 |
 | e2e | `bb test:cljs` → `bb release`（warning 即失败）→ 启动后端 → `bb e2e`，失败时上传报告与后端日志 |
 | scaffold | `bb new-module` 生成示例模块后跑 lint、格式、生成的测试、迁移往返、`bb cljs:check`、生成的 E2E |
 | mobile | 装 Flutter 3.35 后 `bb mobile:compile` + `bb mobile:test` + `bb mobile:web`；独立后端运行真实Flutter登录、分页、主题、账号、空态及重试E2E并上传截图。仍不并入 `bb ci` |
