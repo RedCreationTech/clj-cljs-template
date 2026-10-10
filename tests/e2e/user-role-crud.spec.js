@@ -83,6 +83,9 @@ test('用户和角色浏览器 CRUD、双向关联与持久化读回', async ({ 
   let assign = await openRoles(page, userRow, username);
   await assign.getByRole('combobox').fill(updatedRole);
   await page.locator('.ant-select-dropdown:visible').getByText(updatedRole, { exact: true }).click();
+  await expect(assign.locator('.ant-select-selection-item')).toHaveText(updatedRole);
+  await assign.getByRole('combobox').press('Escape');
+  await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0);
   await assign.getByRole('button', { name: confirm }).click();
   await expect(assign).toBeHidden();
   await page.reload();
@@ -106,7 +109,7 @@ test('用户和角色浏览器 CRUD、双向关联与持久化读回', async ({ 
   const detail = page.getByRole('dialog', { name: '用户详情' });
   await expect(detail.getByText(updatedRole, { exact: true })).toBeVisible();
   await expect(detail.getByText('浏览器用户更新', { exact: true })).toBeVisible();
-  await detail.getByRole('button', { name: 'Close', exact: true }).click();
+  await detail.getByRole('button', { name: /^(关闭|Close)$/ }).click();
 
   await page.goto('/system/role');
   roleRow = await search(page, '请输入权限字符', roleKey);
@@ -119,7 +122,7 @@ test('用户和角色浏览器 CRUD、双向关联与持久化读回', async ({ 
   await expect(assignedRow).toContainText(`${nickname}修改`);
   await assignedRow.getByRole('button', { name: '取消授权', exact: true }).click();
   await expect(assignedRow).toHaveCount(0);
-  await allocated.getByRole('button', { name: 'Close', exact: true }).click();
+  await allocated.getByRole('button', { name: /^(关闭|Close)$/ }).click();
 
   await page.goto('/system/user');
   userRow = await search(page, '请输入用户名称', username);
