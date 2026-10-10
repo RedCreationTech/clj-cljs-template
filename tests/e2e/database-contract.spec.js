@@ -16,6 +16,10 @@ test('database identity, version, configuration and migrated admin seed match th
   if (expected) {
     const product = { sqlite: 'SQLite', mysql: 'MySQL', postgresql: 'PostgreSQL' }[expected];
     expect(product).toBeTruthy();
+    expect(process.env.DB_TYPE).toBe(expected);
+    expect(process.env.DB_ENABLED).toBe(expected);
+    expect(info.db_name.split('?')[0]).toBe(process.env.JDBC_URL.replace(/^jdbc:/, '').split('?')[0]);
+    if (expected !== 'sqlite') expect(info.db_name).toContain('/' + process.env.E2E_DB_NAME);
     expect(info.db_version).toMatch(new RegExp(`^${product} \\d`));
     expect(info.db_name).toMatch(new RegExp(`^${expected}:`));
     if (expected === 'mysql') expect(info.db_version).toMatch(/^MySQL 8\.4\./);

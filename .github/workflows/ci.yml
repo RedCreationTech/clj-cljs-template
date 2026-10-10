@@ -30,6 +30,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: ./.github/actions/setup
       - name: clj-kondo + 迁移检查 + 规模约束
         run: bb lint
@@ -44,6 +46,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: ./.github/actions/setup
       - run: bb test
       - name: 迁移往返 up → down → up
@@ -72,6 +76,8 @@ jobs:
       DB_ENABLED: mysql
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: ./.github/actions/setup
       - name: 清空库后跑全部测试
         run: bb test:mysql
@@ -102,6 +108,8 @@ jobs:
       DB_ENABLED: postgresql
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: ./.github/actions/setup
         with:
           node: "true"
@@ -145,6 +153,8 @@ jobs:
       JDBC_URL: ${{ matrix.database == 'mysql' && 'jdbc:mysql://127.0.0.1:3306/ruoyi_test?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true' || matrix.database == 'postgresql' && 'jdbc:postgresql://127.0.0.1:5432/ruoyi_test?user=fixture&password=fixture' || 'jdbc:sqlite:test.db' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: ./.github/actions/setup
         with:
           node: "true"
@@ -201,6 +211,8 @@ jobs:
       JDBC_URL: ${{ matrix.database == 'mysql' && 'jdbc:mysql://127.0.0.1:3306/ruoyi_test?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true' || matrix.database == 'postgresql' && 'jdbc:postgresql://127.0.0.1:5432/ruoyi_test?user=fixture&password=fixture' || 'jdbc:sqlite:test.db' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: ./.github/actions/setup
         with:
           node: "true"
@@ -273,6 +285,8 @@ jobs:
       JDBC_URL: ${{ matrix.database == 'mysql' && 'jdbc:mysql://127.0.0.1:3306/ruoyi_test?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true' || matrix.database == 'postgresql' && 'jdbc:postgresql://127.0.0.1:5432/ruoyi_test?user=fixture&password=fixture' || 'jdbc:sqlite:test.db' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: ./.github/actions/setup
         with:
           node: "true"

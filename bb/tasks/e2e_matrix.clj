@@ -35,40 +35,52 @@
   (when-not (= "sqlite" (get env "EXPECTED_DB"))
     (execute! (into (u/clojure-cmd) ["-M:dev" "scripts/e2e_database.clj" action]) env)))
 
-(defn- start! [env label]
+(defn- await-ready! [proc label]
+  (loop [attempt 0]
+    (cond
+      (u/http-ok? "http://localhost:3000/api/health") proc
+      (or (not (p/alive? proc)) (>= attempt 300))
+      (throw (ex-info "验收后端未能就绪" {:phase label}))
+      :else (do (Thread/sleep 1000) (recur (inc attempt))))))
+
+(defn- start! [process env label]
   (let [proc (u/start! (str "[" label "] ") (dev/backend-cmd) {:extra-env env} nil)]
-    (loop [attempt 0]
-      (cond
-        (u/http-ok? "http://localhost:3000/api/health") proc
-        (or (not (p/alive? proc)) (>= attempt 300))
-        (do (p/destroy-tree proc)
-            (throw (ex-info "验收后端未能就绪" {:phase label})))
-        :else (do (Thread/sleep 1000) (recur (inc attempt)))))))
+    (reset! process proc)
+    (await-ready! proc label)))
 
 (defn- stop! [proc]
   (when proc
     (p/destroy-tree proc)
     (deref proc 30000 nil)
     (loop [attempt 0]
-      (when-not (u/port-free? 3000)
+      (when (or (p/alive? proc) (not (u/port-free? 3000)) (not (u/port-free? 7000)))
         (if (>= attempt 30)
-          (throw (ex-info "自己启动的后端没有停止" {}))
+          (throw (ex-info "自己启动的后端没有停止;保留验收数据库以免删除使用中的文件" {}))
           (do (Thread/sleep 1000) (recur (inc attempt))))))))
+
+(defn- cleanup! [proc created? env directory]
+  ;; 只有确认自己拥有的进程退出后才删除数据库。drop 失败仍删除本轮临时文件。
+  (stop! proc)
+  (try
+    (when created? (database! "drop" env))
+    (finally (fs/delete-tree directory))))
 
 (defn- browser! [args env phase]
   (execute! (into [(u/npx-cmd) "playwright" "test"] args)
-        (assoc env "E2E_REPORT_DIR" (str "playwright-report/" phase))))
+            (assoc env "E2E_REPORT_DIR" (str "playwright-report/" phase)
+                   "E2E_OUTPUT_DIR" (str "test-results/" phase))))
 
 (defn verify! [args]
   (u/require-free-ports! [["HTTP" 3000] ["nREPL" 7000]])
   (let [directory (fs/create-temp-dir {:prefix "ruoyi-e2e-"})
         env (fixture-env directory)
         process (atom nil)
-        created? (atom false)]
+        created? (atom false)
+        failure (atom nil)]
     (try
       (database! "create" env)
       (reset! created? true)
-      (reset! process (start! env "initial"))
+      (start! process env "initial")
       (execute! (into (u/clojure-cmd) ["-M:dev" "scripts/e2e_schema.clj"]) env)
       (browser! ["tests/e2e/database-contract.spec.js"] env "database")
       (browser! args env "business")
@@ -76,10 +88,17 @@
                 (assoc env "E2E_RESTART_PHASE" "create") "before-restart")
       (stop! @process)
       (reset! process nil)
-      (reset! process (start! env "restarted"))
+      (start! process env "restarted")
+      (browser! ["tests/e2e/database-contract.spec.js"] env "database-after-restart")
       (browser! ["--config=playwright.restart.config.js"]
                 (assoc env "E2E_RESTART_PHASE" "verify") "after-restart")
+      (catch Throwable error
+        (reset! failure error)
+        (throw error))
       (finally
-        (stop! @process)
-        (when @created? (database! "drop" env))
-        (fs/delete-tree directory)))))
+        (try
+          (cleanup! @process @created? env directory)
+          (catch Throwable cleanup-error
+            (if-let [original @failure]
+              (.addSuppressed original cleanup-error)
+              (throw cleanup-error))))))))

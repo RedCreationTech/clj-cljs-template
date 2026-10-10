@@ -14,16 +14,20 @@
         dialect (System/getenv "EXPECTED_DB")
         expected ({"sqlite" "SQLite" "mysql" "MySQL" "postgresql" "PostgreSQL"} dialect)
         directory (config/migration-dirs (keyword dialect))
-        migrations (count (filter #(str/ends-with? (.getName %) ".up.sql")
-                                  (file-seq (io/file "resources" directory))))]
+        migrations (->> (file-seq (io/file "resources" directory))
+                        (map #(.getName %))
+                        (filter #(str/ends-with? % ".up.sql"))
+                        (map #(Long/parseLong (first (str/split % #"-"))))
+                        set)]
     (when-not (str/starts-with? (or url "") (str "jdbc:" dialect ":"))
       (throw (ex-info "验收 JDBC 方言不匹配" {})))
     (with-open [connection (jdbc/get-connection (jdbc/get-datasource {:jdbcUrl url}))]
       (let [metadata (.getMetaData connection)
             actual (.getDatabaseProductName metadata)
-            applied (scalar connection "SELECT COUNT(*) FROM schema_migrations")]
+            applied (->> (jdbc/execute! connection ["SELECT id FROM schema_migrations"])
+                         (map (comp long first vals)) set)]
         (assert (= expected actual) "实际 JDBC 产品不匹配")
-        (assert (pos? migrations) "迁移文件缺失")
+        (assert (seq migrations) "迁移文件缺失")
         (assert (= migrations applied) "迁移历史必须包含每个 up 文件")
         (doseq [table ["sys_user" "sys_role" "sys_dept" "sys_menu" "sys_dict_type" "sys_dict_data"]]
           (assert (pos? (scalar connection (str "SELECT COUNT(*) FROM " table)))
@@ -31,7 +35,7 @@
         (assert (= 1 (scalar connection "SELECT COUNT(*) FROM sys_user WHERE user_name='admin'"))
                 "管理员 seed 不唯一或缺失")
         (println "VERIFIED SCHEMA:" actual (.getDatabaseProductVersion metadata)
-                 "migration-count=" applied "seed-tables=6 admin-count=1")))))
+                 "migration-count=" (count applied) "migration-ids=" (sort applied) "seed-tables=6 admin-count=1")))))
 
 (verify!)
 (shutdown-agents)

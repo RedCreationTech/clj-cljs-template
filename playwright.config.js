@@ -6,6 +6,7 @@ const { defineConfig, devices } = require('@playwright/test');
  */
 module.exports = defineConfig({
   testDir: './tests/e2e',
+  outputDir: process.env.E2E_OUTPUT_DIR || 'test-results',
 
   /* 网页/移动导览录像由各自的 tour/mobile 配置运行，
      常规门禁只收业务验收和根目录 mobile-shell.spec.js。 */
