@@ -113,8 +113,7 @@
        "}"))
 
 (defn test-ns [{:keys [ns-root module label fields api-path]}]
-  (let [first-string (:col (first (filter #(= :string (:type %)) fields)))
-        url (str "/api" api-path)]
+  (let [url (str "/api" api-path)]
     (str "(ns " ns-root ".web.controllers." module "-test\n"
          "  \"" label " API 的集成测试(bb new-module 生成):走真实路由、中间件与数据库。\"\n"
          "  (:require\n"
@@ -147,8 +146,9 @@
          "      (is (= id (get-in (call :get (str \"" url "/\" id) {:token t}) [:json :data :id]))))\n"
          "    (testing \"修改\"\n"
          "      (is (= 200 (get-in (call :put (str \"" url "/\" id) {:token t :body " (sample-body fields "b") "}) [:json :code])))"
-         (when first-string
-           (str "\n      (is (= \"示例-b\" (get-in (call :get (str \"" url "/\" id) {:token t}) [:json :data :" first-string "])))"))
+         (str "\n      (is (= " (sample-body fields "b")
+              " (select-keys (get-in (call :get (str \"" url "/\" id) {:token t}) [:json :data]) "
+              "(keys " (sample-body fields "b") "))))")
          ")\n"
          "    (testing \"参数校验\"\n"
          "      (is (= 400 (:status (call :get \"" url "?page=0\" {:token t})))))\n"

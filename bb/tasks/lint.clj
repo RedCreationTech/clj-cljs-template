@@ -32,11 +32,15 @@
 
 ;; ─── 迁移文件 ──────────────────────────────────────────────────────
 
-(def ^:private dirs {:sqlite "resources/migrations-sqlite" :mysql "resources/migrations"})
+(def ^:private dirs {:sqlite "resources/migrations-sqlite" :mysql "resources/migrations"
+                     :postgresql "resources/migrations-postgresql"})
 
 (def ^:private forbidden
   "每个目录里不应出现的对方方言(出现通常意味着复制粘贴没改)。"
-  {:mysql [[#"(?i)\bAUTOINCREMENT\b" "SQLite 的 AUTOINCREMENT(MySQL 用 AUTO_INCREMENT)"]
+  {:postgresql [[#"(?i)\bAUTO_INCREMENT\b|\bAUTOINCREMENT\b" "PostgreSQL 使用 identity 列"]
+                [#"(?i)INSERT\s+(?:OR\s+IGNORE|IGNORE)\b" "PostgreSQL 使用 ON CONFLICT"]
+                [#"(?i)\bENGINE\s*=|\bdatetime\s*\(" "非 PostgreSQL 方言"]]
+   :mysql [[#"(?i)\bAUTOINCREMENT\b" "SQLite 的 AUTOINCREMENT(MySQL 用 AUTO_INCREMENT)"]
            [#"(?i)INSERT\s+OR\s+(IGNORE|REPLACE)" "SQLite 的 INSERT OR IGNORE/REPLACE(MySQL 用 INSERT IGNORE)"]
            [#"(?i)CREATE\s+(UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS" "CREATE INDEX IF NOT EXISTS(MySQL 不支持)"]
            [#"(?i)DROP\s+INDEX\s+IF\s+EXISTS" "DROP INDEX IF EXISTS(MySQL 不支持)"]
@@ -80,16 +84,16 @@
     (str dir "/" f ": " p)))
 
 (defn- pairing-problems []
-  (let [s (base-names (:sqlite dirs)) m (base-names (:mysql dirs))]
-    (concat
-     (for [b (sort (remove m s))] (str "只在 SQLite 目录存在:" b ",MySQL 目录也要加"))
-     (for [b (sort (remove s m))] (str "只在 MySQL 目录存在:" b ",SQLite 目录也要加"))
-     (for [[_ dir] dirs
-           f (migration-names dir)
-           :when (str/ends-with? f ".up.sql")
-           :let [down (str/replace f #"\.up\.sql$" ".down.sql")]
-           :when (not (fs/exists? (str dir "/" down)))]
-       (str dir "/" f ": 缺少 " down)))))
+  (concat
+   (for [[db dir] dirs
+         b (sort (mapcat #(remove (base-names dir) (base-names %)) (vals dirs)))]
+     (str (name db) " 迁移目录缺少:" b))
+   (for [[_ dir] dirs
+         f (migration-names dir)
+         :let [other (str/replace f #"\.(up|down)\.sql$"
+                                  (if (str/ends-with? f ".up.sql") ".down.sql" ".up.sql"))]
+         :when (not (fs/exists? (str dir "/" other)))]
+     (str dir "/" f ": 缺少 " other))))
 
 (def ^:private query-forbidden
   "resources/sql 下的查询两库共用,不能用只在一个库里成立、或两库结果不同的写法。"
@@ -105,16 +109,17 @@
     (str f ": " why)))
 
 (defn migrations!
-  "两套迁移同名成对、各有 down、语句分隔正确、没有混入对方方言;共用查询不含单库写法。"
+  "三套迁移同名成对、各有 down、语句分隔正确、没有混入对方方言;共用查询不含单库写法。"
   []
   (let [problems (concat (pairing-problems)
                          (dialect-problems :sqlite (:sqlite dirs))
                          (dialect-problems :mysql (:mysql dirs))
+                         (dialect-problems :postgresql (:postgresql dirs))
                          (query-problems))]
     (if (seq problems)
       (do (doseq [p problems] (println "  ✖" p))
           (u/fail! "迁移检查未通过(" (count problems) " 处)"))
-      (println "✔ 迁移检查通过:" (count (base-names (:sqlite dirs))) "组迁移,SQLite/MySQL 成对且语法干净;共用查询无单库写法"))))
+      (println "✔ 迁移检查通过:" (count (base-names (:sqlite dirs))) "组迁移,SQLite/MySQL/PostgreSQL 成对且语法干净;共用查询无单库写法"))))
 
 ;; ─── 规模约束 ──────────────────────────────────────────────────────
 

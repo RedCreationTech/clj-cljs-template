@@ -6,22 +6,27 @@
    [clojure.string :as str]))
 
 (def types
-  "字段类型 → 两库 DDL、Malli schema、是否可作为搜索条件、搜索方式。"
-  {:string  {:sqlite "TEXT"       :mysql "VARCHAR(255)"  :malli ":string"          :search :contains :sample "\"示例文本\""}
-   :text    {:sqlite "TEXT"       :mysql "TEXT"          :malli ":string"          :search nil       :sample "\"一段较长的说明\""}
-   :int     {:sqlite "INTEGER"    :mysql "BIGINT"        :malli ":int"             :search :eq       :sample "7"}
-   :decimal {:sqlite "REAL"       :mysql "DECIMAL(18,2)" :malli "number?"          :search nil       :sample "12.5"}
-   :date    {:sqlite "TEXT"       :mysql "VARCHAR(10)"   :malli "[:re #\"^\\d{4}-\\d{2}-\\d{2}$\"]" :search :eq :sample "\"2026-01-01\""}
-   :bool    {:sqlite "CHAR(1)"    :mysql "CHAR(1)"       :malli "[:enum \"0\" \"1\"]" :search :eq     :sample "\"1\""}})
+  "字段类型 → 三库 DDL、Malli schema、是否可作为搜索条件、搜索方式。"
+  {:string  {:sqlite "TEXT"       :mysql "VARCHAR(255)"  :postgresql "VARCHAR(255)"  :malli ":string"          :search :contains :sample "\"示例文本\""}
+   :text    {:sqlite "TEXT"       :mysql "TEXT"          :postgresql "TEXT"          :malli ":string"          :search nil       :sample "\"一段较长的说明\""}
+   :int     {:sqlite "INTEGER"    :mysql "BIGINT"        :postgresql "BIGINT"        :malli ":int"             :search :eq       :sample "7"}
+   :decimal {:sqlite "REAL"       :mysql "DECIMAL(18,2)" :postgresql "DECIMAL(18,2)" :malli "number?"          :search nil       :sample "12.5"}
+   :date    {:sqlite "TEXT"       :mysql "VARCHAR(10)"   :postgresql "VARCHAR(10)"   :malli "[:re #\"^\\d{4}-\\d{2}-\\d{2}$\"]" :search :eq :sample "\"2026-01-01\""}
+   :bool    {:sqlite "CHAR(1)"    :mysql "CHAR(1)"       :postgresql "CHAR(1)"       :malli "[:enum \"0\" \"1\"]" :search :eq     :sample "\"1\""}})
 
 (def reserved-columns #{"id" "create_by" "create_time" "update_by" "update_time"})
 
 (def ^:private sql-keywords
-  "两库里作列名需要转义的常见保留字;生成的 SQL 不加引号,直接拒绝。"
+  "三库里作列名需要转义的常见保留字;生成的 SQL 不加引号,直接拒绝。"
   #{"add" "all" "and" "as" "asc" "between" "by" "case" "check" "column" "condition" "create" "default"
     "delete" "desc" "distinct" "drop" "exists" "from" "group" "having" "in" "index" "insert" "interval"
     "into" "is" "join" "key" "keys" "like" "limit" "match" "not" "null" "or" "order" "range" "rank"
-    "read" "references" "select" "set" "table" "to" "union" "update" "values" "when" "where" "write"})
+    "authorization" "both" "cast" "collate" "constraint" "current_date" "current_role"
+    "current_time" "current_timestamp" "current_user" "except" "false" "fetch" "for" "foreign"
+    "full" "grant" "inner" "intersect" "lateral" "leading" "left" "localtime" "localtimestamp"
+    "natural" "offset" "on" "only" "outer" "overlaps" "placing" "primary"
+    "read" "references" "select" "set" "table" "to" "union" "update" "values" "when" "where" "write" "returning" "right" "session_user" "some" "symmetric" "trailing"
+    "true" "unique" "user" "using" "variadic" "window" "with"})
 
 (defn ->snake [s] (str/replace s "-" "_"))
 

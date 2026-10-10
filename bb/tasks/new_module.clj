@@ -1,7 +1,7 @@
 (ns tasks.new-module
   "bb new-module:生成一个可直接运行的 CRUD 业务模块,并在各登记点自动插入注册代码。
 
-   生成内容:两库迁移(建表 + 「业务管理」菜单并授权 admin)、HugSQL 查询、领域服务
+   生成内容:三库迁移(建表 + 「业务管理」菜单并授权 admin)、HugSQL 查询、领域服务
    (Integrant 组件)、控制器、路由(Malli 校验 + Swagger)、后端集成测试、前端 api /
    re-frame 事件 / 页面、Playwright 用例。
 
@@ -118,7 +118,8 @@
   "迁移 id(时间戳)必须全局唯一:同一秒内连续生成多个模块时顺延到下一个空闲的秒。"
   [ts]
   (let [fmt (java.text.SimpleDateFormat. "yyyyMMddHHmmss")
-        used (set (for [dir ["resources/migrations" "resources/migrations-sqlite"]
+        used (set (for [dir ["resources/migrations" "resources/migrations-sqlite"
+                             "resources/migrations-postgresql"]
                         f (fs/list-dir dir)]
                     (re-find #"^\d+" (fs/file-name f))))]
     (loop [t ts]

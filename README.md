@@ -11,7 +11,7 @@
 | 层级 | 技术 |
 |------|------|
 | 后端 | Clojure 1.12.6, Kit 1.0.x, Integrant, Reitit 0.11, Ring 1.15, Undertow, next.jdbc / conman (HugSQL), Migratus, Malli 0.20, HikariCP 7 |
-| 数据库 | SQLite 3.53（默认，零配置）；MySQL 8.4（Connector/J 26.7，切换环境变量即可；`docker-compose.yml` 提供本地实例） |
+| 数据库 | SQLite 3.53（默认，零配置）；MySQL 8.4；PostgreSQL 17（可配置支持子集，见数据库选择） |
 | 安全 | Buddy（JWT + bcrypt）；会话以 `sys_online` 为准（登出/强退/空闲超时即失效）+ 滑动续期；验证码、失败计数、续期宽限存 `sys_kv`，可多实例部署；登录失败限流；验证码开关（生产默认开）；CORS 白名单；上传下载防目录穿越；prod 下强制校验 `JWT_SECRET` / `COOKIE_SECRET` |
 | 前端 | ClojureScript 1.12, shadow-cljs 3.5, Reagent 2.0 (函数组件 + Hooks), re-frame 1.4, React 19.3, Ant Design 6.6；中英文界面切换（`i18n/tr`）、浅色/暗色主题 |
 | 任务调度 | Quartz 2.5（`sys_job` 表驱动，支持暂停/恢复/立即执行） |
@@ -49,13 +49,14 @@
 ├── build.clj                    # tools.build: uberjar
 ├── docker-compose.yml           # 本地 MySQL 8.4(端口 3308),bb test:mysql 自动使用
 ├── Dockerfile                   # 多阶段镜像
-├── .github/workflows/ci.yml     # CI:lint / SQLite / MySQL / E2E / 脚手架冒烟
+├── .github/workflows/ci.yml     # CI:lint / SQLite / MySQL / PostgreSQL / E2E / 脚手架冒烟
 ├── .clj-kondo/ .cljfmt.edn .lsp/ .editorconfig   # 静态检查与格式化配置
 ├── kit.edn                      # 项目命名空间与路径(bb 任务与改名工具从这里读取)
 ├── resources/
 │   ├── system.edn               # Integrant 系统配置（唯一的组件装配点）
 │   ├── migrations-sqlite/       # SQLite 迁移（Migratus）
-│   ├── migrations/              # MySQL 迁移（与 SQLite 目录一一对应）
+│   ├── migrations/              # MySQL 迁移
+│   ├── migrations-postgresql/   # PostgreSQL 迁移（三目录一一对应）
 │   ├── sql/*.sql                # HugSQL 查询
 │   └── public/index.html        # SPA 入口（js/ 由 shadow-cljs 生成）
 ├── src/clj/com/ruoyi/           # 后端
@@ -140,7 +141,18 @@ docker compose up -d mysql       # 或使用已有实例
 JDBC_URL="jdbc:mysql://127.0.0.1:3308/ruoyi?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true" bb dev
 ```
 
-`JDBC_URL` 是 MySQL 时自动使用 `resources/migrations`（SQLite 用 `migrations-sqlite`）；也可以用 `MIGRATION_DIR` 显式指定。
+数据库选择只在这一处配置：`resources/system.edn` 的 `:database/options` 声明允许的子集，或设置 `DB_ENABLED=sqlite,postgresql`。默认三库可选，仍启动 SQLite；不会裁剪 JDBC 依赖或删除迁移文件。`DB_TYPE` 可省略（由 `JDBC_URL` 推断），设置后必须与 URL 一致。未知、未启用或不一致的选择在建连接池/迁移之前报错；热切换也受启用子集限制。旧的 SQLite/MySQL `JDBC_URL` 用法不变。
+
+PostgreSQL 示例（先准备专用空数据库/schema，用户须有建表、序列及函数权限）：
+
+```bash
+DB_ENABLED=postgresql DB_TYPE=postgresql \
+JDBC_URL="jdbc:postgresql://127.0.0.1:5432/myapp?user=myapp&password=example" bb dev
+```
+
+迁移目录自动选择：SQLite → `migrations-sqlite`，MySQL → `migrations`，PostgreSQL → `migrations-postgresql`；`MIGRATION_DIR` 可显式覆盖。共用查询保留原来的字面子串搜索，PG 迁移添加 `instr(text,text)` 兼容函数。时间/JSON 仍按现有文本契约传输，角色严格检查字段保留 BOOLEAN，状态及脚手架 bool 仍是 `"0"`/`"1"`。JVM 与数据库会话请使用同一时区。
+
+`JDBC_URL=… bb test:postgresql` 在专用测试库跑全部后端测试，不清空已有库；`bb db:roundtrip` 会执行破坏性 down/up，只能指向可丢弃测试库。CI 用一次性 PostgreSQL 17 service 验证全套测试、seed、自增主键、迁移往返及六种字段的生成模块。
 
 `bb test:mysql` 自动使用当前 checkout 独立的 Compose 项目及数据卷；多个模板副本仍需分别设置空闲端口，例如 `MYSQL_TEST_PORT=3318 bb test:mysql`。需要手动管理同一组容器时，先明确设置 `COMPOSE_PROJECT_NAME=ruoyi-test-local`，任务与 `docker compose -p ruoyi-test-local logs/down` 使用同一个项目。显式提供 `JDBC_URL` 时任务直接使用该库并清空测试数据，应指向专用测试库。
 
@@ -171,6 +183,7 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `JWT_SECRET` / `COOKIE_SECRET` | 开发值 | prod 必填，见上 |
+| `DB_ENABLED` / `DB_TYPE` | 三库 / 从 URL 推断 | 支持子集与运行方言，见上文数据库选择 |
 | `JDBC_URL` / `MIGRATION_DIR` | `jdbc:sqlite:ruoyi.db` / 按 URL 推导 | 数据库连接与迁移目录 |
 | `PORT` / `NREPL_PORT` | 3000 / 7000 | HTTP 与 nREPL 端口 |
 | `CAPTCHA_ENABLED` | prod `true`，dev/test `false` | 登录验证码；开启后留空验证码判失败 |
@@ -207,7 +220,7 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 | 移动端导览录像 | `bb video:mobile`（需 ffmpeg + Chromium）：重编网页版 → 在 3210 起**独立库**的录屏后端（`target/mobile-demo.db`，写 20 条演示岗位凑成两页）→ 录 `tests/e2e/mobile/` 四段分镜（功能/通讯方式/状态管理/主题设置）→ 拼成 `target/mobile-tour/mobile.mp4` 并配旁白。舞台页自带目录与假鼠标，台词烧在画面里；`--compose-only` 只重新合成，`--no-narrate` 不出音轨。详见 [`mobile/README.md`](mobile/README.md)「网页版与录屏」 |
 | 覆盖率 | `bb coverage` → `target/coverage/index.html` |
 | 移动端（可选） | `bb mobile:doctor`（查工具链与 macOS 网络权限）→ `bb mobile:create`（生成平台工程目录，幂等）→ `bb mobile:compile`（= 移动端的静态检查）→ `bb mobile:run`（编译并热重载运行）/ `bb mobile:test`（`.cljd` 单元测试，不需要后端）/ `bb mobile:clean`。这些不在 `bb ci` 里，改了 `mobile/` 单独跑；详见 [`mobile/README.md`](mobile/README.md) |
-| 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（两套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束）+ `lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`）+ `lint:scaffold`（`bb new-module` 的登记点自检）+ `lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 与源码对得上）+ `lint:e2e`（Playwright 用例：不残留 `test.only`/`fixme`、分页只用 `page`/`size`、不写死 `goto('http…')`、`*.spec.js` 不 `waitForTimeout` 且必须有断言、tour与mobile录屏目录被 `testIgnore` 排除） |
+| 静态检查 | `bb lint` = `lint:kondo`（warning 即失败）+ `lint:migrations`（三套迁移成对、`--;;` 分隔、无对方方言）+ `check`（规模约束）+ `lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`）+ `lint:scaffold`（`bb new-module` 的登记点自检）+ `lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 与源码对得上）+ `lint:e2e`（Playwright 用例：不残留 `test.only`/`fixme`、分页只用 `page`/`size`、不写死 `goto('http…')`、`*.spec.js` 不 `waitForTimeout` 且必须有断言、tour与mobile录屏目录被 `testIgnore` 排除） |
 | 格式化 | `bb fmt`（cljfmt 修改）/ `bb fmt:check`（只检查） |
 | 构建 | `bb release`（前端）、`bb uberjar`（前端 + 后端 jar）、`bb cljs:check`（快速编译检查）、`bb patch:vendor`（给 node_modules 打补丁，见下） |
 | 与 CI 相同的快速检查 | `bb ci`（lint + fmt:check + test + test:cljs） |
@@ -215,7 +228,8 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 
 **第三方依赖补丁**：公告正文用的富文本编辑器（`react-quill-new` → Quill 2 / Parchment 3）依赖 ES class 静态方法里的 `super.create()`，而 Closure Compiler v20250407 之后会把它编译成 `Parent.create()`、丢掉 `this`，于是静态方法永远拿到父类 Blot 的 `tagName`——轻则 link/image 变成 `<span>`，重则抛 `[Parchment] Blot definition missing tagName`，公告编辑弹窗整个渲染不出来（dev 与 release 都中招）。`bb/tasks/vendor.clj` 在前端编译之前把 `node_modules` 里那 12 处改写成等价的 `Parent.create.call(this, ...)`，编译器就不会再动它。`bb release` / `bb cljs:check` 会自动打，`bb dev` / `bb frontend` / `bb e2e` 通过 `ensure-npm-deps!` 打，也可以手动 `bb patch:vendor`；补丁是幂等的，但 `npm install` 重装依赖后需要重打（所以别绕过 bb 直接跑 shadow-cljs）。命中数量与预期不符时任务会直接失败并提示：要么依赖升级了需要核对补丁表，要么上游已修复可以删掉本补丁。
 
-REPL 助手在 `env/dev/clj/com/ruoyi/dev.clj`，`env/dev/clj/user.clj` 只挂短名字：`(user/rd)` 重载改过的命名空间（待重载集合由 tools.namespace 从文件时间戳派生，没有手抄清单；改到被组件抓住的可变容器时会自动补一次 halt+init），`(user/rr)` 重启系统且 nREPL 不断开（实测 20 个组件 136 ms，重启进程约 40 s），`(user/rs)` 看运行中的 profile/组件/连接池，`(user/q :find-user-by-name {:user_name "admin"})` 在运行中的库上跑命名查询，`(user/req :get "/system/post" :params {:page 1 :size 2})` 在进程内打真实接口（认证、权限、分页、异常中间件全都走），`(user/reset-db)` 重建数据库。详见 `AGENTS.md`「后端热重载」。
+REPL 速查：`(user/rd)` 更新源码与 HTTP 链（检查 `:status`）；`(user/rr)` 重建系统但保留 nREPL；`(user/rs)` 看运行状态；`(user/q …)` 查命名 SQL；`(user/req :get "/system/post")` 在进程内验接口。
+热更边界、追踪阻挡和需重启的情况统一见 [AGENTS.md「后端热重载」](AGENTS.md#后端热重载-nrepl)。
 
 ---
 
@@ -231,7 +245,7 @@ bb new-module <模块名> [--label 中文名] [--fields "字段规格,..."] [--d
 - **字段规格**：`name:type[:required][:标签]`，逗号分隔；`type` 可选 `string`（前 3 个可搜索字段做模糊查询）、`text`、`int`、`decimal`、`date`（`yyyy-MM-dd`）、`bool`（存 `"0"`/`"1"`）。`id`、`create_by/time`、`update_by/time` 自动生成。
 - `--dry-run` 只列出将要新建和修改的文件。
 
-一条命令生成可直接运行的完整模块：两套迁移（建表 + 共享的「业务管理」目录菜单 + 本模块菜单与查询/新增/修改/删除按钮权限，并授权 admin 角色）、HugSQL 查询、领域服务（Integrant 组件）、控制器、路由（登录校验 + `biz:<模块>:list/query/add/edit/remove` 按钮权限 + Malli 参数校验 + Swagger）、后端集成测试、前端 api / re-frame 事件 / 页面（搜索、分页表格、新增编辑弹窗、删除，按钮按权限显示）、Playwright 用例；并在 `system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs` 的 `;; [new-module] <tag>` 标记处自动登记（标记行请保留，可反复生成多个模块）。生成前会检查文件、前端关键字与 HugSQL 查询名冲突，有冲突一个文件都不写。撤销：`git checkout . && git clean -fd`。
+一条命令生成可直接运行的完整模块：三套迁移（建表 + 共享的「业务管理」目录菜单 + 本模块菜单与查询/新增/修改/删除按钮权限，并授权 admin 角色）、HugSQL 查询、领域服务（Integrant 组件）、控制器、路由（登录校验 + `biz:<模块>:list/query/add/edit/remove` 按钮权限 + Malli 参数校验 + Swagger）、后端集成测试、前端 api / re-frame 事件 / 页面（搜索、分页表格、新增编辑弹窗、删除，按钮按权限显示）、Playwright 用例；并在 `system.edn`、`api.clj`、`core.clj`、`user.clj`、`router.cljs`、`menu_data.cljs`、`page_view.cljs`、`events.cljs`、`events/common.cljs` 的 `;; [new-module] <tag>` 标记处自动登记（标记行请保留，可反复生成多个模块）。生成前会检查文件、前端关键字与 HugSQL 查询名冲突，有冲突一个文件都不写。撤销：`git checkout . && git clean -fd`。
 
 CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模块，并要求 lint、格式、后端测试、迁移往返、前端零 warning 编译与生成的 E2E 全部通过，保证脚手架与模板同步演进。
 
@@ -259,6 +273,7 @@ CI 的 `scaffold` 任务每次都会生成一个覆盖全部字段类型的模�
 | lint | `bb lint`（clj-kondo、迁移检查、规模约束、分页约定、脚手架登记点、开发期约定、E2E 用例约定）+ `bb fmt:check` + `bb test:tasks`（模拟命令的开发任务回归） |
 | test-sqlite | `bb test` + `bb db:roundtrip` |
 | test-mysql | MySQL 8.4 service 上 `bb test:mysql` + `bb db:roundtrip` |
+| test-postgresql | PostgreSQL 17 service 上全后端契约、迁移往返、生成模块全字段与前端编译 |
 | e2e | `bb test:cljs` → `bb release`（warning 即失败）→ 启动后端 → `bb e2e`，失败时上传报告与后端日志 |
 | scaffold | `bb new-module` 生成示例模块后跑 lint、格式、生成的测试、迁移往返、`bb cljs:check`、生成的 E2E |
 | mobile | 装 Flutter 3.35 后 `bb mobile:compile` + `bb mobile:test` + `bb mobile:web`；独立后端运行真实Flutter登录、分页、主题、账号、空态及重试E2E并上传截图。仍不并入 `bb ci` |
@@ -312,8 +327,8 @@ Swagger UI：http://localhost:3000/api
 - 接口失败由 `api.transport` 统一提示（403、5xx、网络断开、业务码非 200）并复位 loading（`events.common/stop-all-loading` 把 app-db 里各模块的 `:loading?` 清掉，请求失败后表格不会一直转圈），调用方的 `on-error` 只做收尾，不要再各自弹「网络错误」；上传用 `t/request` 的 `:body`，带令牌下载用 `t/download!`。
 - 每个 namespace ≤ 500 行、函数 ≤ 50 行（`bb check` 检查 src / env / test / bb / scripts / mobile）；超限时拆分。
 - clj-kondo 零 warning、cljfmt 格式一致（`bb lint`、`bb fmt:check`，CI 强制）。
-- 时间由应用生成：SQL 里写 `:now`（`infra.clock` 自动注入本地时间），不写 `CURRENT_TIMESTAMP` / `NOW()`（lint 检查）；接口里的时间统一编码为 `yyyy-MM-dd HH:mm:ss`（`infra.json`），两库一致。需要多实例共享的临时状态用 `infra.kv`，不要放 atom。
-- SQL 统一放 `resources/sql/*.sql`；两套迁移目录必须同步（`bb lint:migrations` 检查）；共用 SQL 只写两库都支持的语法（如 `INSTR` 代替 `||`、派生表代替 `DUAL`）。
+- 时间由应用生成：SQL 里写 `:now`（`infra.clock` 自动注入本地时间），不写 `CURRENT_TIMESTAMP` / `NOW()`（lint 检查）；接口里的时间统一编码为 `yyyy-MM-dd HH:mm:ss`（`infra.json`），三库一致。需要多实例共享的临时状态用 `infra.kv`，不要放 atom。
+- SQL 统一放 `resources/sql/*.sql`；三套迁移目录必须同步（`bb lint:migrations` 检查）；共用 SQL 只写三库兼容的语法（如 `INSTR` 代替 `||`、派生表代替 `DUAL`）。
 - 前端状态统一 re-frame；组件局部状态用 Hooks，不用 `reagent/atom`；分页参数固定 `page` / `size`。
 - 列表页一律服务端分页：模块在 app-db 存 `:query-params`（含 `:page` / `:size`），取数走 `events.common/fetch-with-query`，表格的 `:pagination` 只用 `components/pagination` 的 `table-pagination`（服务端）/ `client-pagination`（本地翻页），不要在页面里手写（`bb lint:pagination` 检查）。
 - 前端界面文案用 `(i18n/tr "中文原文")` 包裹、英文译文加到 `i18n.cljs`（外壳与通用组件已完成，业务页面可逐步迁移）；localStorage 只通过 `storage` 命名空间访问；内联样式的颜色用 `var(--app-*)` 变量（见 `resources/public/css/app.css`），暗色主题才能自动适配。
@@ -323,3 +338,14 @@ Swagger UI：http://localhost:3000/api
 ## 许可
 
 [MIT](LICENSE)。RuoYi 相关设计参考 [RuoYi-Vue](https://gitee.com/y_project/RuoYi-Vue)。
+
+### 只读开发状态（供 LLM）
+
+后端 nREPL：`(require 'com.ruoyi.dev-snapshot)` 后调用 `(com.ruoyi.dev-snapshot/snapshot)`。
+前端在目标标签页控制台调用 `com.ruoyi.frontend.dev_snapshot.snapshot_edn()`；也可在已选定该浏览器 runtime 的 shadow CLJS REPL 调 `(com.ruoyi.frontend.dev-snapshot/snapshot)`。
+
+两端返回同一信封：`schema-version / captured-at / source / runtime-id / status / state`。
+仅输出固定页面枚举、布尔标记、封顶计数和连接池数字；不输出配置、令牌、用户、表单、URL 或行内容，也不发请求/查库。
+`token-present?` 仅表示本地令牌存在，不验证登录有效性；未知字段标为 `:unknown`，未启动为 `:unavailable`，非 dev 后端拒绝读取。
+前端入口仅由 dev preload 加载，release 不含入口。页面 ID 每次整页加载更新，热更保留；后端 ID 是进程身份，系统代际为 `:unknown`，均不证明最新源码已加载。
+目前没有统一 `bb dev:state` 命令：先明确连接目标进程/标签页并核对 `runtime-id`，多标签页不要默认选择；编译成功不代表浏览器已更新。组件内部 React 状态不在摘要内。

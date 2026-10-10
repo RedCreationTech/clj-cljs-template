@@ -11,13 +11,13 @@
 ## 任务入口与质量门禁
 
 - **所有任务走 babashka**：`bb tasks` 列出全部任务；不要再写 Makefile / shell 脚本，新任务加到 `bb.edn`，实现放 `bb/tasks/*.clj`（跨平台，Windows 也能跑）。
-- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`，**不含 `.cljd`**，见「移动端」）、`bb lint:migrations`、`bb check`、`bb lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`，见「Frontend 组件规范」§11b）、`bb lint:scaffold`（`bb new-module` 的 `;; [new-module] <tag>` 登记点自检，不改工作区）、`bb lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 跟得上源码，见「后端热重载」）、`bb lint:e2e`（`tests/e2e/**/*.js`：不许残留 `test.only`/`fixme`、分页参数只用 `page`/`size`、不许 `goto('http…')` 写死绝对地址、`*.spec.js` 不许 `waitForTimeout` 且必须有断言、`playwright.config.js` 必须仍然 `testIgnore` 掉 tour）；这些都是内部步骤，不是独立任务名。格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
+- **提交前**：`bb ci`（= `bb lint` + `bb fmt:check` + `bb test:tasks` + `bb test` + `bb test:cljs`）。`bb lint` 包含 clj-kondo（warning 即失败，配置 `.clj-kondo/config.edn`，**不含 `.cljd`**，见「移动端」）、`bb lint:migrations`、`bb check`、`bb lint:pagination`（列表页表格的 `:pagination` 必须来自 `components/pagination`，见「Frontend 组件规范」§11b）、`bb lint:scaffold`（`bb new-module` 的 `;; [new-module] <tag>` 登记点自检，不改工作区）、`bb lint:dev`（开发期约定：系统状态只有一份、`reload-exclusions` 跟得上源码，见「后端热重载」）、`bb lint:e2e`（`tests/e2e/**/*.js`：不许残留 `test.only`/`fixme`、分页参数只用 `page`/`size`、不许 `goto('http…')` 写死绝对地址、`*.spec.js` 不许 `waitForTimeout` 且必须有断言、`playwright.config.js` 必须仍然 `testIgnore` 掉 tour）；这些检查也都是独立任务，可按改动范围单独运行。格式问题用 `bb fmt` 自动修复（cljfmt，配置 `.cljfmt.edn`）。
 - **移动端不在 `bb ci` 里**：改了 `mobile/` 要单独跑 `bb mobile:compile`（ClojureDart 编译器就是移动端的静态检查）与 `bb mobile:test`；CI 用独立的 `mobile` job 装 Flutter 跑这两条。理由见「移动端（ClojureDart）」。
-- **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟、移动端编译 + 单元测试。改了任务名或参数，要同步改 CI。
+- **CI**（`.github/workflows/ci.yml`）只调用 bb 任务：lint、SQLite 测试 + 迁移往返、MySQL 8.4 / PostgreSQL 17 测试 + 迁移往返、前端 release（warning 即失败）+ E2E、`bb new-module` 脚手架冒烟、移动端编译 + 单元测试。改了任务名或参数，要同步改 CI。
 - **新增业务模块用 `bb new-module`**（见 README「新增业务模块」）。源码里的 `;; [new-module] <tag>` 注释是脚手架的登记点（`system.edn` 的 components / route-services / sql-files、`web/routes/api.clj`、`router.cljs` 的 routes / page-names、`menu_data.cljs` 的 menu-keys / breadcrumbs / icons、`page_view.cljs`、`events/common.cljs` 的 tab-meta；`core.clj` 与 `events.cljs` 没有标记行，脚手架按字母序给它们补 require），**不要删除或改写这些标记行**；重构这些文件时把标记保留在对应集合的末尾。改动脚手架模板（`bb/tasks/scaffold/*.clj`）后，至少生成一个模块跑一遍 lint / fmt:check / 生成的测试 / `bb cljs:check`（CI 的 scaffold 任务会做完整检查）。
 - **生产密钥**：prod profile 下 `JWT_SECRET`（≥32 字符）与 `COOKIE_SECRET`（16 字节）缺失或为内置默认值时拒绝启动（`com.ruoyi.infra.secrets`）；dev/test 用默认值即可，不要把真实密钥写进仓库。
 - **第三方服务密钥同样只走环境变量**：导览旁白的 MiMo TTS 密钥（`bb video:narrate`）只从 `MIMO_API_KEY` 或 gitignore 掉的 `target/tour/mimo.key` 读取，请求失败时不要把密钥写进任何报错、任务参数或仓库文件。
-- **配置只走 `system.edn` + 环境变量，不要在读到配置的代码里再读 `System/getenv`**：环境相关项在 `resources/system.edn` 用 `#env`/`#profile` 声明，跨方言兜底（迁移目录、连接池）与 prod 体检由 `com.ruoyi.config` 的纯函数（`with-default-migration-dir` / `with-dialect-pool` / `prod-warnings`）在 `system-config` 里统一处理后交给 Integrant，新增这类规则请在这里加纯函数并补 `config_test`，不要在控制器里读环境变量。连接池：SQLite 强制单连接，MySQL 默认 10（`DB_MAX_ACTIVE` 可覆盖）；`system.edn` 里 `:db.sql/connection` 的池参数**必须用 HikariCP 的键名**（`:maximum-pool-size` / `:minimum-idle`），写成 `:max-active` / `:init-size` 会被 conman 静默忽略、兜底落空（`config_test` 的 `pool-keys-reach-hikari-test` 会真的建一次池来验证）；数据源监控读的是解包后的 Hikari 池，新增这类组件时要走 `infra.datasource/get-delegate`；定时任务用内存 JobStore，多实例部署时非主实例设 `SCHEDULER_ENABLED=false`；启动迁移可用 `MIGRATE_ON_INIT=false` 关闭。
+- **数据库选择见 README「启动开发环境」：三套迁移须同名成对，共用查询的 nullable guard 用 `CAST(:param AS CHAR) IS NULL` 保证 PG 参数可推断。配置只走 `system.edn` + 环境变量，不要在读到配置的代码里再读 `System/getenv`**：环境相关项在 `resources/system.edn` 用 `#env`/`#profile` 声明，跨方言兜底（迁移目录、连接池）与 prod 体检由 `com.ruoyi.config` 的纯函数（`with-default-migration-dir` / `with-dialect-pool` / `prod-warnings`）在 `system-config` 里统一处理后交给 Integrant，新增这类规则请在这里加纯函数并补 `config_test`，不要在控制器里读环境变量。连接池：SQLite 强制单连接，MySQL 默认 10（`DB_MAX_ACTIVE` 可覆盖）；`system.edn` 里 `:db.sql/connection` 的池参数**必须用 HikariCP 的键名**（`:maximum-pool-size` / `:minimum-idle`），写成 `:max-active` / `:init-size` 会被 conman 静默忽略、兜底落空（`config_test` 的 `pool-keys-reach-hikari-test` 会真的建一次池来验证）；数据源监控读的是解包后的 Hikari 池，新增这类组件时要走 `infra.datasource/get-delegate`；定时任务用内存 JobStore，多实例部署时非主实例设 `SCHEDULER_ENABLED=false`；启动迁移可用 `MIGRATE_ON_INIT=false` 关闭。
 - **5xx 响应不能带内部信息**：`web.middleware.exception/handler` 对 5xx 只回 `{:code :msg}`（通用文案），异常类名、URI、`ex-data`、堆栈只进服务端日志；4xx 才保留异常消息与 `ex-data` 便于前端定位。给响应加字段前先确认不会泄露路径、SQL、依赖版本等。
 - **错误只有一种抛法、响应只有一种形状**：业务规则不通过一律在**领域层** `(errors/fail! "中文原因")`（`com.ruoyi.infra.errors`，抛 `{:type :system.exception/business}` 的 `ex-info`），异常中间件的 `business-handler` 转成 HTTP 200 + `{:code 500 :msg}`，与 RuoYi 前端契约一致；控制器只用 `com.ruoyi.web.response` 的 `ok`（单参是 `:data`，`msg` 固定「操作成功」；`(res/ok code msg)` 才是文案）、`fail`、`deny`（401/403，状态码=业务码），**不要在控制器里 try/catch 把异常拼进响应**，也不要再各自 `defn- ok/fail/deny`。唯一例外：CSV 逐行导入要收集每行结果（`import_export/row-failure-msg` 区分 business 与意外错误）。单元测试直接传带 `:upload-config` 等的 context，用 `test/clj/com/ruoyi/web/controller_test_helper.clj` 的 `call`/`business-msg` 经真实中间件断言响应，别只测裸返回值。写唯一性校验时先加 `find-*-by-key` 查询（共用 SQL），领域层查重后再入库，让重复键错误也有中文提示，而不是 JDBC 的 `Unique constraint` 文本。
 - **函数 docstring 紧跟名字、在参数向量之前**（`(defn f "doc" [args] …)`，`defmacro`/`defmethod` 同理）；写反了 clj-kondo 会报 Misplaced docstring / Unused value。`ns` 的 docstring 若多行，结尾用 `"` 而不是 `")`，否则 `(:require …)` 被挤出 ns 表单、运行期才报 ClassNotFoundException。docstring 里**不要写裸双引号**（例如举例 `(errors/fail! "原因")`），字符串会提前结束、命名空间解析失败而 clj-kondo 只报 "Can't parse"；举例用无反引号的 `errors/fail!`，或用「」。
@@ -58,7 +58,7 @@ macOS 上 7000 被 Control Center 占用时用 `NREPL_PORT=7200 bb dev`）：
 
 | 命令 | 作用 | 实测（2026-10-01，M 系列 macOS，JVM 已起） |
 |------|------|-------------------------------------------|
-| `(user/rd)` | 只重载磁盘上改过的命名空间，不重建组件 | 无改动 0 ns / 12 ms；改一个领域叶子 22 ns / 1.2 s；改 `web.response` 连带 27 个控制器/路由 1.0 s，重载完 `(req …)` 立刻看到新文案 |
+| `(user/rd)` | 重载改过的命名空间后仅重建 HTTP 链，保留数据库、服务器、调度器和领域组件 | 无改动不重建；新实现未做耗时基准，不沿用旧数字 |
 | `(user/rr)` | refresh 源码 → halt（**不 halt nREPL**）→ init | 130~150 ms（20 个组件 halt+init，冷 JVM 后第一次约 200 ms），REPL 和 3000 端口都还在；重启整个进程约 40 s |
 | `(user/rs)` | profile、组件数、连接池实时数字 | 20 个组件 + `sqlite:ruoyi.db` / 驱动版本，不是 unknown |
 | `(user/q :find-user-by-name {:user_name "admin"})` | 在运行中的库上跑一条命名查询 | 打的是原始 SQL，不经领域层脱敏，别把结果直接回给前端 |
@@ -80,8 +80,10 @@ clj-nrepl-eval -p 7200 '(user/migrate)'     # 跑待处理迁移
   （`com.ruoyi.integrant.trace` / `com.ruoyi.integrant.state` / `com.ruoyi.infra.datasource`，
   为什么是这三个见该 var 的 docstring）。新增这类 ns 时 `bb lint:dev` 会要求登记；
   清单里出现不存在的、或已经不再危险的 ns 同样直接失败。
-- `(user/rd)` 如果发现改到的 ns 里有被组件抓住的可变容器（atom / ref / agent / volatile!）换了对象，
-  会自动补一次 halt+init，返回 `{:reloaded n :reset [...]}` —— 不需要手工换成 `(user/rr)`。
+- `(user/rd)` 返回 `:status`：`:http-updated`、`:unchanged`、`:stopped`、`:trace-active` 或 `:restart-required`。`:reloaded` 是本次源码重载数，不能单独当成接口已更新；兼容键 `:reset` 仍是向量，但现在始终为空，不再自动重启全部组件。
+- HTTP 更新只重建 routes/router/handler，完成后原子换入口；已有请求继续用取得的 handler。数据库、服务器端口、调度器和领域组件身份保留。源码刷新本身不是事务，不能保证编译失败前已加载的函数没有改变。
+- 状态容器换身份、非 HTTP 生命周期方法变化或缺少组件时返回 `:restart-required`，需显式 `(user/rr)`；Ring 追踪开启时返回 `:trace-active`，先停止该追踪再 `(user/rd)`。失败/受阻的 HTTP 装配会在下一次 `rd` 重试，即使没有新文件变化。
+- `.sql`、`system.edn` 和组件结构仍用 `rr`。本轮更新涉及受保护的运行期状态和 dev 助手，拉取后先重启开发进程。
 - **何时用 `(user/rr)`**：HugSQL `.sql` 变更、`resources/system.edn` 变更、路由数据 / Integrant 组件结构变更。
 - **何时必须重启进程**（`bb dev` / `bb backend`）：改 `env/dev/clj` 里的助手本身（它们不在扫描目录里，
   免得重载把正在使用的函数换掉而 `user` 的短名字还指着旧那份），或改 `reload-exclusions` 里那三个 ns。
@@ -447,95 +449,20 @@ Database (SQLite)                 — ruoyi.db, auto-migrated on startup
 
 Both frontend and backend share port **3000**. The backend serves both API and static files.
 
-### Database Compatibility (SQLite / MySQL)
+### Database Compatibility
 
-项目同时支持 SQLite 和 MySQL，切换靠两个环境变量：
+配置与运行示例统一见 README「启动开发环境」的数据库选择说明,不要再维护第二份环境变量表。
 
-| 环境变量 | 默认值 | MySQL 用法 |
-|----------|--------|------------|
-| `JDBC_URL` | `jdbc:sqlite:ruoyi.db` | `jdbc:mysql://user:pass@host:port/db?useSSL=false&allowPublicKeyRetrieval=true` |
-| `MIGRATION_DIR` | 按 `JDBC_URL` 推导(MySQL → `migrations`,其它 → `migrations-sqlite`) | 一般不用设 |
-
-#### Migration 必须完全分开
-
-DDL 差异无法兼容，因此有两套目录：
-
-- `resources/migrations-sqlite/` —— SQLite 专用
-- `resources/migrations/` —— MySQL 专用
-
-新增/修改表时，**两个目录必须同步更新**。常见差异：
-
-| 场景 | SQLite | MySQL |
-|------|--------|-------|
-| 自增主键 | `INTEGER PRIMARY KEY` | `BIGINT AUTO_INCREMENT PRIMARY KEY` |
-| 时间字段 | `TEXT`（历史表带 `DEFAULT CURRENT_TIMESTAMP`，只是兜底） | `DATETIME` / `TIMESTAMP` |
-| 布尔/状态 | `CHAR(1)` / `INTEGER` | `CHAR(1)` / `TINYINT` |
-
-#### 查询 SQL 优先共用，必要时分支
-
-业务查询统一放在 `resources/sql/*.sql`，由 `conman` 加载。原则：
-
-1. **优先用两库都支持的语法**
-
-   ```sql
-   -- ✅ 推荐：两库都支持
-   AND (:job_name IS NULL OR INSTR(job_name, :job_name) > 0)
-   LIMIT :page_size OFFSET :offset
-   ```
-
-2. **禁止在共用 SQL 里写 SQLite-only 语法**
-
-   ```sql
-   -- ❌ 错误：|| 在 MySQL 默认 sql_mode 下是逻辑 OR
-   AND (:user_name IS NULL OR user_name LIKE '%' || :user_name || '%')
-
-   -- ✅ 正确
-   AND (:user_name IS NULL OR INSTR(user_name, :user_name) > 0)
-   ```
-
-3. **函数名不同就提供命名变体，在 Clojure 层选择**
-
-   例如 `resources/sql/system.sql`：
-
-   ```sql
-   -- :name last-insert-rowid :? :1
-   SELECT last_insert_rowid() AS last_insert_rowid
-
-   -- :name last-insert-rowid-mysql :? :1
-   SELECT LAST_INSERT_ID() AS last_insert_rowid
-   ```
-
-   由 `com.ruoyi.infra.db/detect-db-type` 判断后调用对应名字。
-
-4. **元数据/动态查询在 Clojure 层分支**
-
-   `com.ruoyi.infra.db` 里对 `paginate-query`、`adapt-sql` 等按 `:sqlite` / `:mysql` 分情况处理，不要把 `PRAGMA`、`sqlite_master`、`information_schema` 混进共用 `.sql`。
-
-#### 时间一律由应用生成（不要在 SQL 里取当前时间）
-
-SQLite 的 `CURRENT_TIMESTAMP` 是 UTC、MySQL 的是会话时区，两库写出来的时间不一致（仪表盘曾显示“8 小时前”）。规则：
-
-- 写时间用参数 `:now`：`create_time = :now`、`update_time = :now`。`infra.clock/with-now` 包在 query-fn 外层，**每次调用自动注入** `:now`（JVM 默认时区的本地时间，`yyyy-MM-dd HH:mm:ss`），不用手动传；需要指定时间时自己传 `:now` 即可覆盖。
-- `resources/sql/*.sql` 里禁止 `CURRENT_TIMESTAMP`、`NOW()`、`datetime(`、`||`，`bb lint:migrations` 会检查（`bb new-module` 生成的 SQL 同样用 `:now`）。
-- 接口返回的时间由 `com.ruoyi.infra.json` 统一编码成本地 `yyyy-MM-dd HH:mm:ss`（日期 `yyyy-MM-dd`）：MySQL 驱动返回的 `Timestamp` / `java.time` 对象与 SQLite 的文本在前端看起来一样。控制器里直接返回时间对象，不要自己 `str`。后端 JSON 编解码只用 `infra.json`（`write-str` / `read-str`，基于 jsonista，与 muuntaja 同一个 mapper），已不再依赖 cheshire。
-- 部署时各实例与数据库主机用同一个时区（容器里设 `TZ`）。
-
-#### 迁移文件格式
-
-- 一个迁移文件里有多条语句时，语句之间用单独一行 `--;;` 分隔（MySQL 驱动一次只能执行一条语句）；不要留只有注释的分段（MySQL 会报 `Query was empty`）。
-- 每个 `.up.sql` 必须有对应的 `.down.sql`，down 能把 up 完整撤销（`bb db:roundtrip` 会执行 up → down → up 验证）。
-- MySQL 目录不能出现 SQLite 语法（`AUTOINCREMENT`、`DROP INDEX IF EXISTS` 等），反之亦然；`bb lint:migrations` 会检查成对、分隔与方言。
-
-#### 修改后必须双库跑测试
-
-任何 `resources/migrations*` 或 `resources/sql/*.sql` 改动，都要验证两套数据库：
-
-```bash
-bb lint:migrations     # 成对 / 分隔 / 方言
-bb test                # SQLite(独立的 test.db,每次从空库迁移)
-bb test:mysql          # MySQL:自动 docker compose up -d mysql(3308)并清空库;或设置 JDBC_URL 用已有实例
-bb db:roundtrip        # 迁移往返;设 JDBC_URL=jdbc:mysql://… 则检查 MySQL(自动用 migrations 目录)
-```
+- SQLite、MySQL、PostgreSQL 三个迁移目录须同名成对,每个 up 都有可逆 down;多条语句以独立一行 `--;;` 分隔,不留空段。`bb lint:migrations` 守住配对、分隔与方言。
+- 共用 HugSQL 查询只维护 `resources/sql/*.sql` 一份。可空参数的 guard 用 `CAST(:param AS CHAR) IS NULL`,只转换 guard,不要转换实际查询值。字面子串搜索使用 INSTR（PG 迁移创建兼容函数）,不能换成未转义的 LIKE。
+- PostgreSQL 的显式 seed 主键不会推进 identity sequence,含显式插入的 up/down 都须同步 sequence;新主键必须高于既有数据及当前位置。
+- 插入与取生成 ID 必须使用同一事务连接,经 `infra.db/insert-and-get-id!` 选择方言查询。嵌套事务不得提交调用方事务。不要把方言专用元数据语句混进共用查询。
+- 写时间用 `:now`（`infra.clock/with-now` 自动注入 JVM 本地 `yyyy-MM-dd HH:mm:ss`）;查询文件禁止 CURRENT_TIMESTAMP、NOW()、datetime()、字符串 `||`。迁移的默认值只作兜底。
+- JSON/时间响应只走 `infra.json`。MySQL JDBC 返回 Timestamp 等对象,SQLite/PG 返回文本,不要在控制器直接 str。JVM 与数据库会话使用相同时区。
+- 保持业务类型契约:角色严格检查字段是 BOOLEAN,状态及脚手架 bool 是字符 0/1,JSON 是文本;不要随新增方言改接口类型。数字筛选值须在绑定前做类型校验。
+- 配置展开统一用 `config/expand-config`,保留数据库白名单元数据;启动和开发重载都不可绕过已启用子集检查。
+- 改迁移/SQL后必须在独立测试库运行 SQLite `bb test`、MySQL `bb test:mysql`、PG `bb test:postgresql`,并各跑 `bb db:roundtrip`。后两者通过 JDBC_URL 指向测试库;roundtrip 是破坏性 down/up,禁止指向生产。
+- 改脚手架后验证六种字段的读写、分页、迁移往返及前端编译;CI 有 SQLite 与 PG 生成模块任务。生成的集成测试须比对全部字段而非只看 ID 或第一列。
 
 ### Starting Dev Environment
 
@@ -546,42 +473,14 @@ bb dev --backend-only  # 只起后端(或分别 bb backend / bb frontend)
 # 首次前端编译约 1~3 分钟,之后增量编译几秒;打开 http://localhost:3000
 ```
 
+集成测试的 `system-fixture` 不复用任何已运行的系统（包括 `:test`），也不会替你关闭开发系统。请从独立进程执行 `bb test -n <测试命名空间>`；测试体异常时，夹具仍会清理本次启动的测试系统。
+
 端口被占用时 `bb dev` 会直接报出占用的端口；用 `PORT=3200 NREPL_PORT=7200 bb dev` 换端口。`bb test` 使用独立端口（3100/7100）与独立的 `test.db`，可以和 `bb dev` 同时运行。
 
 ### Hot-Reload Workflow
 
-#### Backend (Clojure) — nREPL hot-reload, no restart needed
-
-There is **one** Integrant state holder: `com.ruoyi.integrant.state/system` (aliased by
-`com.ruoyi.core/system`). `core/start-app` writes it, the tests and the dev helpers read it; `integrant.repl`
-is no longer a dependency and `bb lint:dev` fails if a second holder comes back.
-
-After editing any `.clj` file, connect to the running nREPL and reload so the live backend uses the new code.
-`(user/rd)` handles everything under `src/clj` (the set is derived from file timestamps, not from a hand-copied
-list); `(user/rr)` additionally rebuilds the components.
-
-| Helper | What it does | Measured cost |
-|--------|--------------|---------------|
-| `(user/rd)` | Reload only the namespaces that changed on disk; no component reset. Automatically does one halt+init extra when a reloaded ns swapped a mutable container (atom / ref / agent / volatile!) that components captured — result reports `{:reloaded n :reset [...]}` (observed for `controllers.system.cache`) | 0 ns / 12 ms idle; 22 ns / 1.2 s for a domain leaf; 27 ns / 1.0 s for `web.response` + every controller that requires it |
-| `(user/ra)` | Same as `rd` (kept as a mnemonic; there is no separate "reload everything" list any more) | |
-| `(user/rr)` | refresh source → halt **all components except `:nrepl/server`** → `ig/init` from a freshly read `system.edn` | 130~150 ms for 20 components (first call after a cold JVM ~200 ms), REPL and port 3000 both stay up (a full process restart is ~40 s) |
-| `(user/rs)` | Live state: profile, component count, Hikari/SQLite pool numbers | |
-| `(user/q :find-user-by-name {:user_name "admin"})` | Named HugSQL query against the running DB (raw SQL row, no domain-layer redaction — don't return it to the browser) | |
-| `(user/req :get "/system/post" :params {:page 1 :size 2})` | In-process request through the real ring handler: auth, perms, exception and pagination middleware all run. Token is really signed and the session is registered in `sys_online` for the duration, so `:perms` actually applies | |
-
-```bash
-clj-nrepl-eval -p 7200 '(user/rd)'          # routine logic changes
-clj-nrepl-eval -p 7200 '(user/rr)'          # .sql / system.edn / route data changes
-clj-nrepl-eval -p 7200 '(user/rs)'          # look at the running system
-```
-
-Do not add hand-copied ns lists back. If a new namespace overrides an Integrant lifecycle method *and* captures
-the upstream implementation (`get-method ig/init-key`), it holds runtime identity that unload/reload would replace:
-register it in `com.ruoyi.dev/reload-exclusions`, and `bb lint:dev` enforces both directions (missing entries,
-entries whose file is gone, entries that are no longer dangerous).
-
-**Note**: if `(user/rr)` fails with `BindException: Address already in use`, Undertow did not release the port —
-stop `bb dev` / `bb backend` and start it again.
+Backend reload commands, nREPL preservation and process-restart boundaries are documented once in
+[后端热重载 (nREPL)](#后端热重载-nrepl). Check `rd`'s `:status` before assuming a change is live.
 
 #### Frontend (ClojureScript) — shadow-cljs auto-compiles
 
@@ -590,21 +489,6 @@ stop `bb dev` / `bb backend` and start it again.
 # Edit .cljs files → watch auto-detects → incremental compile (~5s)
 # Just refresh browser to see changes
 ```
-
-### When to Restart (not just reload)
-
-`(user/rr)` covers these without leaving the JVM:
-
-- HugSQL `.sql` file changes (queries are read again by `rr`)
-- `resources/system.edn` config changes
-- Route data / Integrant component structure changes
-
-Only a process restart (`bb dev` / `bb backend`) covers:
-
-- The dev helpers themselves (`env/dev/clj`: `user.clj`, `dev.clj` — they are deliberately outside the refresh
-  scan dirs, so reloading them while the REPL is using them would leave `rd`/`rr`/`q` pointing at the old code)
-- The three namespaces in `com.ruoyi.dev/reload-exclusions` (`integrant.trace`, `integrant.state`,
-  `infra.datasource`), which hold runtime identity the system keeps referencing
 
 ### Build Uberjar
 

@@ -76,6 +76,49 @@ jobs:
       - name: 迁移往返 up → down → up
         run: bb db:roundtrip
 
+  test-postgresql:
+    name: 后端测试(PostgreSQL 17)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fixture
+          POSTGRES_PASSWORD: fixture
+          POSTGRES_DB: ruoyi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fixture -d ruoyi_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      JDBC_URL: jdbc:postgresql://127.0.0.1:5432/ruoyi_test?user=fixture&password=fixture
+      DB_TYPE: postgresql
+      DB_ENABLED: postgresql
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          node: "true"
+      - name: 全部后端测试及跨数据库契约
+        run: bb test:postgresql
+      - name: 迁移往返 up → down → up
+        run: bb db:roundtrip
+      - name: 生成全部字段类型的模块
+        run: >-
+          bb new-module pg-demo --label PostgreSQL冒烟
+          --fields "title:string:required:标题,qty:int:数量,price:decimal:单价,due_on:date:日期,active:bool:启用,remark:text:备注"
+      - name: 脚手架静态检查及生成代码测试
+        run: |
+          bb lint
+          bb fmt:check
+          bb test:postgresql -r '.*\.pg-demo-test$'
+          bb db:roundtrip
+          bb cljs:check
+
   e2e:
     name: 前端测试、构建 + E2E
     runs-on: ubuntu-latest
@@ -137,7 +180,9 @@ jobs:
       - name: 安装 Chromium
         run: npx playwright install --with-deps chromium
       - name: 生成的 E2E 用例
-        run: bb e2e tests/e2e/ci-demo.spec.js
+        run: bb e2e tests/e2e/ci-demo.spec.js tests/e2e/dev-state.spec.js
+        env:
+          SNAPSHOT_BUILD: dev
       - name: 上传失败现场
         if: failure()
         uses: actions/upload-artifact@v7

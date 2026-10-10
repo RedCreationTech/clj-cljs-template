@@ -3,7 +3,8 @@
   (:require
    [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]
-   [com.ruoyi.infra.db :as db]))
+   [com.ruoyi.infra.db :as db]
+   [com.ruoyi.config :as config]))
 
 (defn- fake-db
   "构造一个带有伪数据库元数据的 db 规格。"
@@ -21,7 +22,7 @@
     (is (= :sqlite (db/detect-db-type (fake-db "SQLITE 3.45"))))
     (is (= :mysql  (db/detect-db-type (fake-db "MySQL"))))
     (is (= :unknown (db/detect-db-type (fake-db "MariaDB"))))
-    (is (= :unknown (db/detect-db-type (fake-db "PostgreSQL"))))
+    (is (= :postgresql (db/detect-db-type (fake-db "PostgreSQL"))))
     (is (= :unknown (db/detect-db-type (fake-db ""))))
     (is (= :unknown (db/detect-db-type
                      {:connectable (reify java.sql.Connection
@@ -64,3 +65,14 @@
     (is (= "SELECT NOW() FROM t" (db/adapt-sql (fake-db "MySQL") "SELECT datetime('now') FROM t")))
     (is (= "SELECT NOW() FROM t" (db/adapt-sql (fake-db "PostgreSQL") "SELECT NOW() FROM t"))
         "未知数据库类型原样返回")))
+
+(deftest disabled-swap-fails-before-connect-test
+  (let [cfg (config/with-database-selection
+              {:database/options {:enabled "sqlite"}
+               :db.sql/connection {:jdbc-url "jdbc:sqlite:test.db"}})
+        connected? (atom false)]
+    (with-redefs [config/active-config (atom cfg)
+                  db/make-hikari-datasource (fn [& _] (reset! connected? true))]
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (db/swap-db! {} "jdbc:postgresql://localhost/test")))
+      (is (false? @connected?)))))

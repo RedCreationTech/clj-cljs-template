@@ -154,28 +154,39 @@
   "开启追踪；可用第二参数的 :sensitive-keys 扩展业务字段脱敏。"
   ([key-str] (start! key-str {}))
   ([key-str snapshot-options]
-   (let [k (kw key-str)
-         f (current-actual k)]
-     (when (fn? f)
-       (swap! registry
-              (fn [reg]
-                (let [entry (or (get reg key-str)
-                                {:original f :wrapper (make-wrapper key-str f) :logs []})]
-                  (assoc reg key-str (assoc entry :active? true
-                                            :snapshot-options snapshot-options)))))
-       (set-actual! k (get-in @registry [key-str :wrapper]))
-       true))))
+   (locking registry
+     (let [k (kw key-str)
+           f (current-actual k)]
+       (when (fn? f)
+         (swap! registry
+                (fn [reg]
+                  (let [entry (or (get reg key-str)
+                                  {:original f :wrapper (make-wrapper key-str f) :logs []})]
+                    (assoc reg key-str (assoc entry :active? true
+                                              :snapshot-options snapshot-options)))))
+         (set-actual! k (get-in @registry [key-str :wrapper]))
+         true)))))
 
 (defn stop!
   "停止追踪并清空日志，恢复原始函数。"
   [key-str]
-  (let [k (kw key-str)
-        rec (get @registry key-str)]
-    (when rec
-      (let [original (:original rec)]
-        (set-actual! k original)
-        (swap! registry dissoc key-str)))
-    true))
+  (locking registry
+    (let [k (kw key-str)
+          rec (get @registry key-str)]
+      (when rec
+        (let [original (:original rec)]
+          (set-actual! k original)
+          (swap! registry dissoc key-str)))
+      true)))
+
+(defn install-ring-handler!
+  "热切换 HTTP 入口。开启中的追踪必须先手动停止,再重试 rd。"
+  [f]
+  (locking registry
+    (when (some #(contains? @registry %) ["handler/ring" :handler/ring])
+      (throw (ex-info "Ring 追踪正在使用旧实现;请先停止 handler/ring 追踪,再运行 (user/rd)"
+                      {:trace-active true})))
+    (reset! state/ring-handler f)))
 
 (defn set-active! [key-str active?]
   (if active?
