@@ -62,6 +62,7 @@
                           (repeatedly 5 #(Object.)))
         system (merge (ig/init (memory-config)) {:system/env :dev} sentinels)
         entry (:handler/ring system)
+        entry-var (ns-resolve 'com.ruoyi.web.handler 'ring-handler)
         controller (io/file root "reload_fixture/controller.clj")
         handler (io/file root "com/ruoyi/web/handler.clj")]
     (reset! core/system system)
@@ -74,6 +75,8 @@
     (changed-source! handler (str (slurp handler) "\n;; reload probe\n"))
     (changed-source! controller (controller-source "v3"))
     (ensure! (pos? (:reloaded (dev/reload))) "真实 handler 文件没有被重载")
+    (ensure! (not (identical? entry-var (ns-resolve 'com.ruoyi.web.handler 'ring-handler)))
+             "handler 命名空间没有真正卸载重建")
     (check-live! entry sentinels "v3")
     (println "REAL-DISK-RELOAD-PASSED")))
 
