@@ -215,7 +215,8 @@ java -jar target/ruoyi-standalone.jar        # 其它配置同样由环境变量
 
 **第三方依赖补丁**：公告正文用的富文本编辑器（`react-quill-new` → Quill 2 / Parchment 3）依赖 ES class 静态方法里的 `super.create()`，而 Closure Compiler v20250407 之后会把它编译成 `Parent.create()`、丢掉 `this`，于是静态方法永远拿到父类 Blot 的 `tagName`——轻则 link/image 变成 `<span>`，重则抛 `[Parchment] Blot definition missing tagName`，公告编辑弹窗整个渲染不出来（dev 与 release 都中招）。`bb/tasks/vendor.clj` 在前端编译之前把 `node_modules` 里那 12 处改写成等价的 `Parent.create.call(this, ...)`，编译器就不会再动它。`bb release` / `bb cljs:check` 会自动打，`bb dev` / `bb frontend` / `bb e2e` 通过 `ensure-npm-deps!` 打，也可以手动 `bb patch:vendor`；补丁是幂等的，但 `npm install` 重装依赖后需要重打（所以别绕过 bb 直接跑 shadow-cljs）。命中数量与预期不符时任务会直接失败并提示：要么依赖升级了需要核对补丁表，要么上游已修复可以删掉本补丁。
 
-REPL 助手在 `env/dev/clj/com/ruoyi/dev.clj`，`env/dev/clj/user.clj` 只挂短名字：`(user/rd)` 重载改过的命名空间（待重载集合由 tools.namespace 从文件时间戳派生，没有手抄清单；改到被组件抓住的可变容器时会自动补一次 halt+init），`(user/rr)` 重启系统且 nREPL 不断开（实测 20 个组件 136 ms，重启进程约 40 s），`(user/rs)` 看运行中的 profile/组件/连接池，`(user/q :find-user-by-name {:user_name "admin"})` 在运行中的库上跑命名查询，`(user/req :get "/system/post" :params {:page 1 :size 2})` 在进程内打真实接口（认证、权限、分页、异常中间件全都走），`(user/reset-db)` 重建数据库。详见 `AGENTS.md`「后端热重载」。
+REPL 速查：`(user/rd)` 更新源码与 HTTP 链（检查 `:status`）；`(user/rr)` 重建系统但保留 nREPL；`(user/rs)` 看运行状态；`(user/q …)` 查命名 SQL；`(user/req :get "/system/post")` 在进程内验接口。
+热更边界、追踪阻挡和需重启的情况统一见 [AGENTS.md「后端热重载」](AGENTS.md#后端热重载-nrepl)。
 
 ---
 
