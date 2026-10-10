@@ -5,7 +5,7 @@ test('database identity, version, configuration and migrated admin seed match th
   await login(page);
   const expected = process.env.EXPECTED_DB;
   const token = await page.evaluate(() => localStorage.getItem('ruoyi_token'));
-  const response = await page.request.get('/api/monitor/datasource', {
+  const response = await page.request.get('/api/system/datasource', {
     headers: { Authorization: `Bearer ${token}` },
   });
   expect(response.status()).toBe(200);
