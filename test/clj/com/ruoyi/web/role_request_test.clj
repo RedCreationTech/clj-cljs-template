@@ -19,7 +19,7 @@
 (deftest browser-role-integer-contract-test
   (let [login (call :post "/api/auth/login" {:username "admin" :password "admin123"} {})
         headers {"authorization" (str "Bearer " (get-in login [:json :data :token]))}
-        unique (str "role-contract-" (random-uuid))
+        unique (str "role-contract-" (subs (str (random-uuid)) 0 12))
         fields {:role_name unique :role_key unique :role_sort "7" :status "0" :menu-ids ["1"]}
         created (call :post "/api/system/role" fields headers)
         id (some->> (get-in created [:json :data]) (re-find #"\d+") parse-long)
@@ -37,7 +37,7 @@
                (select-keys (get-in (call :get path nil headers) [:json :data])
                             [:role_sort :status :role_name])))
         (is (= 200 (get-in (call :put "/api/system/role/dataScope"
-                                    {:role_id id :data_scope "2" :dept_ids "6"} headers)
+                                 {:role_id id :data_scope "2" :dept_ids "6"} headers)
                            [:json :code])))
         (is (= [6] (get-in (call :get (str "/api/system/role/deptTree/" id) nil headers)
                            [:json :data :checked-keys])))

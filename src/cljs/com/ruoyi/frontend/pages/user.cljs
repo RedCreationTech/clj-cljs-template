@@ -11,6 +11,7 @@
    [com.ruoyi.frontend.pages.user.dept-tree :as dept-tree]
    [com.ruoyi.frontend.pages.user.form-modal :as form-modal]
    [com.ruoyi.frontend.pages.user.import-modal :as import-modal]
+   [com.ruoyi.frontend.pages.user.popup :as popup]
    [com.ruoyi.frontend.pages.user.search :as search]
    [re-frame.core :as rf]
    [reagent.hooks :as hooks]))
@@ -146,7 +147,8 @@
         role-options @(rf/subscribe [:users/role-options])
         selected-role-ids @(rf/subscribe [:users/auth-role-ids])]
     (when visible?
-      [:div {:style {:position "fixed" :top 0 :left 0 :right 0 :bottom 0
+      [:div {:data-user-popup-host "true"
+             :style {:position "fixed" :top 0 :left 0 :right 0 :bottom 0
                      :background "rgba(0,0,0,0.45)" :zIndex 1060
                      :display "flex" :justifyContent "center" :alignItems "center"}}
        [:div {:style {:background "var(--ant-color-bg-container, #fff)" :padding 24 :borderRadius 4 :width 520
@@ -163,6 +165,7 @@
          [:span {:style {:fontSize 14 :color "var(--app-text-regular)"}} "角色"]
          [antd/select {:mode "multiple" :optionFilterProp "children"
                        :placeholder "请选择角色"
+                       :getPopupContainer popup/container
                        :allowClear true
                        :value selected-role-ids
                        :style {:width "100%" :minHeight 40}

@@ -153,4 +153,4 @@
     (testing "非法整数返回业务错误而不是数据库异常"
       (doseq [value ["bad" "1.5" 1.5 "2147483648"]]
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"必须是整数"
-                             (role/update-role! service {:role-id 3 :role_sort value})))))))
+                              (role/update-role! service {:role-id 3 :role_sort value})))))))
