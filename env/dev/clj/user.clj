@@ -4,7 +4,7 @@
    bb backend / bb dev 用 `clj -M:dev -e (require 'user) -m com.ruoyi.core` 启动,所以连上
    nREPL(默认 7000,macOS 上常用 NREPL_PORT=7200)就能直接敲这些短名字。
 
-     (rd)   重载改过的命名空间(改到运行期状态才顺带重建组件)
+     (rd)   重载源码并只更新 HTTP 链;看 :status,需要重启时会提示 rr
      (rr)   重启系统:nREPL 留在原地,改 .sql / system.edn / 路由都生效
      (rs)   看运行中的状态:profile、组件、连接池实时数字
      (q :find-user-by-name {:user_name \"admin\"})

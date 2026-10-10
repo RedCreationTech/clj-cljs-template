@@ -53,6 +53,9 @@
   test:cljs        {:doc  "前端单元测试(test/cljs,shadow-cljs :test 构建,Node 运行)"
                     :task (do (u/exec! [(u/npx-cmd) "shadow-cljs" "compile" "test" "--config-merge" u/strict-cljs])
                               (u/exec! ["node" "target/cljs-test/node-tests.js"]))}
+  test:postgresql {:doc "在独立 PostgreSQL 测试库上跑后端测试(必须设置 JDBC_URL,不清空已有库)"
+                   :task (dev/test-postgresql! *command-line-args*)}
+
   test:mysql       {:doc  "在 MySQL 上跑后端测试(docker compose 起 3308 端口;或设置 JDBC_URL 用已有实例)"
                     :task (dev/test-mysql! *command-line-args*)}
   e2e              {:doc  "Playwright 端到端测试(需后端已在 3000 运行)"
@@ -69,7 +72,7 @@
                               ((resolve 'tasks.subtitles/check!))
                               ((resolve 'tasks.dev-check/check!))
                               ((resolve 'tasks.rename-check/check!)))}
-  db:roundtrip     {:doc  "迁移往返检查:up → down → up(默认临时 SQLite;设 JDBC_URL 则用该库,MySQL 自动选 migrations 目录)"
+  db:roundtrip     {:doc  "迁移往返检查:up → down → up(默认临时 SQLite;设 JDBC_URL 则用该库,按方言自动选迁移目录)"
                     :task (dev/roundtrip!)}
   coverage         {:doc  "测试覆盖率(报告在 target/coverage/index.html)"
                     :task (u/exec! (into (u/clojure-cmd) ["-M:coverage"]))}
@@ -87,7 +90,7 @@
                     :task (lint/e2e-conventions!)}
   lint:dev         {:doc  "开发期约定:系统状态只有一份,reload-exclusions 与源码对得上"
                     :task (lint/dev-hygiene!)}
-  lint:migrations  {:doc  "两套迁移成对、有 down、--;; 分隔正确、无对方方言"
+  lint:migrations  {:doc  "三套迁移成对、有 down、--;; 分隔正确、无对方方言"
                     :task (lint/migrations!)}
   check            {:doc  "规模约束:命名空间 ≤500 行、函数 ≤50 行"
                     :task (lint/constraints!)}

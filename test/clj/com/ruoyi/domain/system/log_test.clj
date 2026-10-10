@@ -76,3 +76,14 @@
 (deftest test-delete-online-user
   (testing "踢出在线用户"
     (is (nil? (log/delete-online-user! mock-service "1")))))
+
+(deftest numeric-operation-filters-test
+  (let [calls (atom [])
+        service {:query-fn (fn [q params]
+                             (swap! calls conj params)
+                             (if (= q :count-oper-logs) {:total 0} []))}]
+    (log/list-oper-logs service {:business_type "1" :status "0"})
+    (is (every? #(= 1 (:business_type %)) @calls))
+    (is (every? #(= 0 (:status %)) @calls))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (log/list-oper-logs service {:status "oops"})))))

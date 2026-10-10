@@ -9,6 +9,7 @@
    [clojure.tools.namespace.repl :as tn]
    [com.ruoyi.config :as config]
    [com.ruoyi.core :as core]
+   [com.ruoyi.dev.http :as http]
    [com.ruoyi.infra.json :as json]
    [com.ruoyi.infra.online :as online]
    [com.ruoyi.infra.security :as security]
@@ -38,7 +39,7 @@
    每次重启都重新读文件,改了配置才生效;这是纯函数,便于单独测试。"
   [profile]
   (-> (config/system-config {:profile profile})
-      (ig/expand)
+      (config/expand-config)
       (dissoc nrepl-key)))
 
 (def keep-keys
@@ -64,7 +65,9 @@
   []
   (let [cfg (prepared-config (active-profile))]
     (config/remember-active-config! cfg)
-    (swap! core/system merge (ig/init cfg))
+    (let [initialized (ig/init cfg)]
+      ;; merge 保留第一个 map 的元数据;新 HTTP 装配必须读取本次 init 的配置快照。
+      (swap! core/system #(with-meta (merge % initialized) (meta initialized))))
     (component-count (system))))
 
 (def refresh-dirs
@@ -78,7 +81,7 @@
    - `com.ruoyi.integrant.trace` 覆盖 Integrant 的 `defmethod`,`defonce` 记住 kit-edge 的上游实现;
      重载会先 unmap 符号,于是重新抓取时拿到的是本 ns 自己刚装上的方法,连接池每重载一次多套一层代理
      —— 数据源监控解包解不到 Hikari 只显示 unknown,在线会话继续用已关闭的池,接口全部 401。
-   - `com.ruoyi.integrant.state` 是唯一持有系统 map 的 atom,换了它 `@core/system` 就读到空系统。
+   - `com.ruoyi.integrant.state` 持有系统 map 和稳定 Ring 入口;换身份会让旧服务器看不到新 handler。
    - `com.ruoyi.infra.datasource` 的注册表按 `System/identityHashCode` 索引代理,清空后老代理不再可换。
 
    改了这些文件要重启进程(bb dev / bb backend),其余源码照常热重载。"
@@ -138,6 +141,11 @@
             (when-not (identical? old (get after k)) k))
           before)))
 
+(defn- lifecycle-methods []
+  (into {} (for [[kind methods] {:init (methods ig/init-key) :halt (methods ig/halt-key!)}
+                 [k f] methods]
+             [[kind k] f])))
+
 (defn- refresh-source!
   "扫描并重载改动过的源码,返回 {:reloaded … :stale …}。
    编译不过时 `tn/refresh-scanned` 返回异常,这里原样抛出:调用方(halt+init)不能继续拆系统。"
@@ -146,10 +154,16 @@
   (tn/scan)
   (let [reloaded (pending-reloads)
         before (mutable-holders reloaded)
+        lifecycle-before (lifecycle-methods)
         result (tn/refresh-scanned)]
     (when (instance? Throwable result) (throw result))
-    {:reloaded reloaded
-     :stale (replaced-holders before reloaded)}))
+    (let [after (lifecycle-methods)]
+      {:reloaded reloaded
+       :stale (replaced-holders before reloaded)
+       :changed-components (distinct
+                            (for [[kind k :as key] (distinct (concat (keys lifecycle-before) (keys after)))
+                                  :when (not (identical? (get after [kind k]) (get lifecycle-before key)))]
+                              k))})))
 
 (defn- reset-components!
   "halt(除 nREPL)后重新 init,让组件重新抓到刚重载的那份运行期状态。"
@@ -157,26 +171,47 @@
   (halt!)
   (init!))
 
+(defonce ^:private pending-refresh (atom nil))
+
 (defn init-refresh!
   "启动时调用:设定扫描目录、保护运行期状态,并把当前源码记为已加载。
    bb backend / bb dev 加载 user 时执行一次。"
   []
   (prepare-refresh!)
   (tn/scan {:add-all? true})
-  (drain-tracker!))
+  (drain-tracker!)
+  (reset! pending-refresh nil))
+
+(defn- combine-refresh [old fresh]
+  (merge-with #(vec (distinct (concat %1 %2))) (or old {}) fresh))
+
+(defn- apply-refresh! [{:keys [stale changed-components]}]
+  (let [unsafe (remove http/http-key? changed-components)]
+    (if (or (seq stale) (seq unsafe))
+      (do
+        (log/warn "运行期状态或非 HTTP 组件已变化,请运行 (user/rr):" (vec stale) (vec unsafe))
+        {:status :restart-required :stale (mapv str stale) :components (vec unsafe)})
+      (try
+        (http/rebuild! (system))
+        (reset! pending-refresh nil)
+        {:status :http-updated}
+        (catch Exception e
+          (log/warn e "HTTP 链未替换;停止 Ring 追踪后重试 rd,其它装配问题请运行 (user/rr)")
+          {:status (if (:trace-active (ex-data e)) :trace-active :restart-required)})))))
 
 (defn reload
-  "只重载磁盘上改过的命名空间,不重建组件。日常改逻辑用这个。
-   若改到的命名空间里有被组件抓着的可变容器(atom 等)换了对象,就地补一次 halt+init,
-   返回值里的 :reset 会说明重建的原因。"
+  "刷新改动的源码,成功后只重建 HTTP 链,复用基础设施与领域组件。
+   无改动不重建;状态容器/非 HTTP 生命周期变更要求 rr。失败或追踪阻挡不会替换旧入口,
+   下次 rd 会重试未完成的 HTTP 装配。:reset 保留兼容但不再自动重启全部组件。"
   []
-  (let [{:keys [reloaded stale]} (refresh-source!)
-        n (count reloaded)]
-    (when-let [swapped (seq stale)]
-      (log/info "重载换掉了运行期状态,重建组件:" (vec swapped))
-      (reset-components!))
-    {:reloaded n
-     :reset (vec (map str stale))}))
+  (let [{:keys [reloaded] :as fresh} (refresh-source!)
+        pending (combine-refresh @pending-refresh fresh)
+        result (cond
+                 (zero? (component-count (system))) {:status :stopped}
+                 (empty? (:reloaded pending)) {:status :unchanged}
+                 :else (do (reset! pending-refresh pending)
+                           (apply-refresh! pending)))]
+    (merge {:reloaded (count reloaded) :reset []} result)))
 
 (defn restart!
   "开发期的一键重启:refresh 源码 → halt(除 nREPL)→ 重新 init。
@@ -185,6 +220,7 @@
   []
   (:reloaded (refresh-source!))
   (let [n (reset-components!)]
+    (reset! pending-refresh nil)
     (log/info "system restarted with" n "components")
     n))
 

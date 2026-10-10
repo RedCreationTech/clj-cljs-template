@@ -3,6 +3,10 @@
            :test :test
            :prod :prod}
 
+ :database/options
+ {:enabled #or [#env DB_ENABLED "sqlite,mysql,postgresql"]
+  :type #env DB_TYPE}
+
  ;; test profile 用不同端口,测试时开着 bb dev 也不会冲突
  :nrepl/server
  {:port #long #or [#env NREPL_PORT #profile {:dev 7000 :test 7100 :prod 7000}]

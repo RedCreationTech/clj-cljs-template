@@ -8,21 +8,27 @@
    [clojure.java.io :as io]
    [clojure.string :as str]
    [migratus.core :as migratus]
+   [com.ruoyi.config :as config]
    [next.jdbc :as jdbc]))
 
 (def url (or (System/getenv "JDBC_URL") "jdbc:sqlite:ruoyi.db"))
-(def migration-dir (or (System/getenv "MIGRATION_DIR") "migrations-sqlite"))
+(def migration-dir (or (System/getenv "MIGRATION_DIR")
+                       (config/migration-dirs (config/url-db-type url))))
+(def postgresql? (= :postgresql (config/url-db-type url)))
 (def mysql? (str/starts-with? url "jdbc:mysql"))
 
 (defn- sqlite-file [] (str/replace url #"^jdbc:sqlite:" ""))
 
 (defn- table-names [ds]
-  (->> (jdbc/execute! ds [(if mysql?
-                            "SELECT table_name AS t FROM information_schema.tables WHERE table_schema = DATABASE()"
-                            "SELECT name AS t FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")])
+  (->> (jdbc/execute! ds [(cond
+                            mysql? "SELECT table_name AS t FROM information_schema.tables WHERE table_schema = DATABASE()"
+                            postgresql? "SELECT tablename AS t FROM pg_catalog.pg_tables WHERE schemaname = current_schema()"
+                            :else "SELECT name AS t FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")])
        (map (comp str val first))))
 
 (defn reset-db! []
+  (when postgresql?
+    (throw (ex-info "PostgreSQL 测试使用独立空库;不提供清空已有库的 reset 操作" {})))
   (if mysql?
     (let [ds (jdbc/get-datasource {:jdbcUrl url})
           tables (table-names ds)]

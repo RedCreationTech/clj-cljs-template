@@ -7,10 +7,10 @@ SELECT u.user_id, u.dept_id, u.user_name, u.nick_name, u.user_type, u.email,
 FROM sys_user u
 LEFT JOIN sys_dept d ON u.dept_id = d.dept_id
 WHERE u.del_flag = '0'
-  AND (:user_name IS NULL OR INSTR(u.user_name, :user_name) > 0)
-  AND (:phonenumber IS NULL OR INSTR(u.phonenumber, :phonenumber) > 0)
-  AND (:status IS NULL OR u.status = :status)
-  AND (:dept_id IS NULL OR u.dept_id IN (:v*:dept_ids))
+  AND (CAST(:user_name AS CHAR) IS NULL OR INSTR(u.user_name, :user_name) > 0)
+  AND (CAST(:phonenumber AS CHAR) IS NULL OR INSTR(u.phonenumber, :phonenumber) > 0)
+  AND (CAST(:status AS CHAR) IS NULL OR u.status = :status)
+  AND (CAST(:dept_id AS CHAR) IS NULL OR u.dept_id IN (:v*:dept_ids))
   AND (:scope_all = 1 OR u.dept_id IN (:v*:scope_dept_ids) OR u.user_id = :scope_user_id)
 ORDER BY u.user_id
 LIMIT :page_size OFFSET :offset
@@ -20,10 +20,10 @@ LIMIT :page_size OFFSET :offset
 SELECT COUNT(*) AS total
 FROM sys_user u
 WHERE u.del_flag = '0'
-  AND (:user_name IS NULL OR INSTR(u.user_name, :user_name) > 0)
-  AND (:phonenumber IS NULL OR INSTR(u.phonenumber, :phonenumber) > 0)
-  AND (:status IS NULL OR u.status = :status)
-  AND (:dept_id IS NULL OR u.dept_id IN (:v*:dept_ids))
+  AND (CAST(:user_name AS CHAR) IS NULL OR INSTR(u.user_name, :user_name) > 0)
+  AND (CAST(:phonenumber AS CHAR) IS NULL OR INSTR(u.phonenumber, :phonenumber) > 0)
+  AND (CAST(:status AS CHAR) IS NULL OR u.status = :status)
+  AND (CAST(:dept_id AS CHAR) IS NULL OR u.dept_id IN (:v*:dept_ids))
   AND (:scope_all = 1 OR u.dept_id IN (:v*:scope_dept_ids) OR u.user_id = :scope_user_id)
 
 -- :name find-user-by-id :? :1
@@ -98,8 +98,8 @@ DELETE FROM sys_user_post WHERE user_id = :user_id
 -- :name list-depts :? :*
 -- :doc 查询部门列表
 SELECT * FROM sys_dept WHERE del_flag = '0'
-  AND (:status IS NULL OR status = :status)
-  AND (:dept_name IS NULL OR INSTR(dept_name, :dept_name) > 0)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
+  AND (CAST(:dept_name AS CHAR) IS NULL OR INSTR(dept_name, :dept_name) > 0)
 ORDER BY parent_id, order_num
 
 -- :name find-dept-by-id :? :1
@@ -135,18 +135,18 @@ UPDATE sys_dept SET del_flag = '2', update_time = :now WHERE dept_id = :dept_id
 -- :name list-roles :? :*
 -- :doc 角色列表(分页),:offset / :page_size 由 com.ruoyi.domain.paging/paginate 给出
 SELECT * FROM sys_role WHERE del_flag = '0'
-  AND (:role_name IS NULL OR INSTR(role_name, :role_name) > 0)
-  AND (:role_key IS NULL OR role_key = :role_key)
-  AND (:status IS NULL OR status = :status)
+  AND (CAST(:role_name AS CHAR) IS NULL OR INSTR(role_name, :role_name) > 0)
+  AND (CAST(:role_key AS CHAR) IS NULL OR role_key = :role_key)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
 ORDER BY role_sort
 LIMIT :page_size OFFSET :offset
 
 -- :name count-roles :? :1
 -- :doc 统计角色数量(与 list-roles 同样的筛选条件)
 SELECT COUNT(*) AS total FROM sys_role WHERE del_flag = '0'
-  AND (:role_name IS NULL OR INSTR(role_name, :role_name) > 0)
-  AND (:role_key IS NULL OR role_key = :role_key)
-  AND (:status IS NULL OR status = :status)
+  AND (CAST(:role_name AS CHAR) IS NULL OR INSTR(role_name, :role_name) > 0)
+  AND (CAST(:role_key AS CHAR) IS NULL OR role_key = :role_key)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
 
 -- :name find-role-by-id :? :1
 SELECT * FROM sys_role WHERE role_id = :role_id AND del_flag = '0'
@@ -174,9 +174,9 @@ UPDATE sys_role SET del_flag = '2', update_time = :now WHERE role_id = :role_id
 
 -- :name list-menus :? :*
 SELECT * FROM sys_menu
-WHERE (:menu_name IS NULL OR INSTR(menu_name, :menu_name) > 0)
-  AND (:status IS NULL OR status = :status)
-  AND (:menu_type IS NULL OR menu_type = :menu_type)
+WHERE (CAST(:menu_name AS CHAR) IS NULL OR INSTR(menu_name, :menu_name) > 0)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
+  AND (CAST(:menu_type AS CHAR) IS NULL OR menu_type = :menu_type)
 ORDER BY parent_id, order_num
 
 -- :name find-menu-by-id :? :1
@@ -227,18 +227,18 @@ INSERT INTO sys_role_menu (role_id, menu_id) VALUES (:role_id, :menu_id)
 -- :name list-posts :? :*
 -- :doc 岗位列表(分页)
 SELECT * FROM sys_post WHERE 1=1
-  AND (:post_code IS NULL OR INSTR(post_code, :post_code) > 0)
-  AND (:post_name IS NULL OR INSTR(post_name, :post_name) > 0)
-  AND (:status IS NULL OR status = :status)
+  AND (CAST(:post_code AS CHAR) IS NULL OR INSTR(post_code, :post_code) > 0)
+  AND (CAST(:post_name AS CHAR) IS NULL OR INSTR(post_name, :post_name) > 0)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
 ORDER BY post_sort
 LIMIT :page_size OFFSET :offset
 
 -- :name count-posts :? :1
 -- :doc 统计岗位数量(与 list-posts 同样的筛选条件)
 SELECT COUNT(*) AS total FROM sys_post WHERE 1=1
-  AND (:post_code IS NULL OR INSTR(post_code, :post_code) > 0)
-  AND (:post_name IS NULL OR INSTR(post_name, :post_name) > 0)
-  AND (:status IS NULL OR status = :status)
+  AND (CAST(:post_code AS CHAR) IS NULL OR INSTR(post_code, :post_code) > 0)
+  AND (CAST(:post_name AS CHAR) IS NULL OR INSTR(post_name, :post_name) > 0)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
 
 -- :name find-post-by-id :? :1
 SELECT * FROM sys_post WHERE post_id = :post_id
@@ -267,9 +267,9 @@ DELETE FROM sys_post WHERE post_id = :post_id
 
 -- :name list-dict-types :? :*
 SELECT * FROM sys_dict_type WHERE 1=1
-  AND (:dict_name IS NULL OR INSTR(dict_name, :dict_name) > 0)
-  AND (:dict_type IS NULL OR INSTR(dict_type, :dict_type) > 0)
-  AND (:status IS NULL OR status = :status)
+  AND (CAST(:dict_name AS CHAR) IS NULL OR INSTR(dict_name, :dict_name) > 0)
+  AND (CAST(:dict_type AS CHAR) IS NULL OR INSTR(dict_type, :dict_type) > 0)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
 ORDER BY dict_id
 
 -- :name find-dict-type-by-id :? :1
@@ -297,9 +297,9 @@ DELETE FROM sys_dict_type WHERE dict_id = :dict_id
 
 -- :name list-dict-data :? :*
 SELECT * FROM sys_dict_data WHERE 1=1
-  AND (:dict_type IS NULL OR dict_type = :dict_type)
-  AND (:dict_label IS NULL OR INSTR(dict_label, :dict_label) > 0)
-  AND (:status IS NULL OR status = :status)
+  AND (CAST(:dict_type AS CHAR) IS NULL OR dict_type = :dict_type)
+  AND (CAST(:dict_label AS CHAR) IS NULL OR INSTR(dict_label, :dict_label) > 0)
+  AND (CAST(:status AS CHAR) IS NULL OR status = :status)
 ORDER BY dict_sort
 
 -- :name find-dict-data-by-id :? :1
@@ -330,18 +330,18 @@ DELETE FROM sys_dict_data WHERE dict_code = :dict_code
 -- :name list-configs :? :*
 -- :doc 参数配置列表(分页)
 SELECT * FROM sys_config WHERE 1=1
-  AND (:config_name IS NULL OR INSTR(config_name, :config_name) > 0)
-  AND (:config_key IS NULL OR INSTR(config_key, :config_key) > 0)
-  AND (:config_type IS NULL OR config_type = :config_type)
+  AND (CAST(:config_name AS CHAR) IS NULL OR INSTR(config_name, :config_name) > 0)
+  AND (CAST(:config_key AS CHAR) IS NULL OR INSTR(config_key, :config_key) > 0)
+  AND (CAST(:config_type AS CHAR) IS NULL OR config_type = :config_type)
 ORDER BY config_id
 LIMIT :page_size OFFSET :offset
 
 -- :name count-configs :? :1
 -- :doc 统计参数配置数量(与 list-configs 同样的筛选条件)
 SELECT COUNT(*) AS total FROM sys_config WHERE 1=1
-  AND (:config_name IS NULL OR INSTR(config_name, :config_name) > 0)
-  AND (:config_key IS NULL OR INSTR(config_key, :config_key) > 0)
-  AND (:config_type IS NULL OR config_type = :config_type)
+  AND (CAST(:config_name AS CHAR) IS NULL OR INSTR(config_name, :config_name) > 0)
+  AND (CAST(:config_key AS CHAR) IS NULL OR INSTR(config_key, :config_key) > 0)
+  AND (CAST(:config_type AS CHAR) IS NULL OR config_type = :config_type)
 
 -- :name find-config-by-id :? :1
 SELECT * FROM sys_config WHERE config_id = :config_id
@@ -379,9 +379,9 @@ SELECT current_database() AS db_name, version() AS db_version,
 -- :name list-notices :? :*
 -- :doc 查询通知公告列表
 SELECT * FROM sys_notice
-WHERE (:notice_name IS NULL OR INSTR(notice_name, :notice_name) > 0)
-  AND (:notice_type IS NULL OR notice_type = :notice_type)
-  AND (:create_by IS NULL OR INSTR(create_by, :create_by) > 0)
+WHERE (CAST(:notice_name AS CHAR) IS NULL OR INSTR(notice_name, :notice_name) > 0)
+  AND (CAST(:notice_type AS CHAR) IS NULL OR notice_type = :notice_type)
+  AND (CAST(:create_by AS CHAR) IS NULL OR INSTR(create_by, :create_by) > 0)
 ORDER BY notice_id DESC
 LIMIT :page_size OFFSET :offset
 
@@ -414,9 +414,9 @@ DELETE FROM sys_notice_read WHERE notice_id = :notice_id
 -- :name count-notices :? :1
 -- :doc 统计通知公告数量
 SELECT COUNT(*) AS total FROM sys_notice
-WHERE (:notice_name IS NULL OR INSTR(notice_name, :notice_name) > 0)
-  AND (:notice_type IS NULL OR notice_type = :notice_type)
-  AND (:create_by IS NULL OR INSTR(create_by, :create_by) > 0)
+WHERE (CAST(:notice_name AS CHAR) IS NULL OR INSTR(notice_name, :notice_name) > 0)
+  AND (CAST(:notice_type AS CHAR) IS NULL OR notice_type = :notice_type)
+  AND (CAST(:create_by AS CHAR) IS NULL OR INSTR(create_by, :create_by) > 0)
 
 -- :name find-notice-by-id :? :1
 -- :doc 根据ID查询通知公告
@@ -457,8 +457,8 @@ SELECT u.* FROM sys_user u
 INNER JOIN sys_user_role ur ON u.user_id = ur.user_id
 WHERE ur.role_id = :role_id
   AND u.del_flag = '0'
-  AND (:user_name IS NULL OR INSTR(u.user_name, :user_name) > 0)
-  AND (:phonenumber IS NULL OR INSTR(u.phonenumber, :phonenumber) > 0)
+  AND (CAST(:user_name AS CHAR) IS NULL OR INSTR(u.user_name, :user_name) > 0)
+  AND (CAST(:phonenumber AS CHAR) IS NULL OR INSTR(u.phonenumber, :phonenumber) > 0)
 ORDER BY u.create_time DESC
 
 -- :name list-users-not-in-role :? :*
@@ -466,8 +466,8 @@ ORDER BY u.create_time DESC
 SELECT u.* FROM sys_user u
 WHERE u.del_flag = '0'
   AND u.user_id NOT IN (SELECT user_id FROM sys_user_role WHERE role_id = :role_id)
-  AND (:user_name IS NULL OR INSTR(u.user_name, :user_name) > 0)
-  AND (:phonenumber IS NULL OR INSTR(u.phonenumber, :phonenumber) > 0)
+  AND (CAST(:user_name AS CHAR) IS NULL OR INSTR(u.user_name, :user_name) > 0)
+  AND (CAST(:phonenumber AS CHAR) IS NULL OR INSTR(u.phonenumber, :phonenumber) > 0)
 ORDER BY u.create_time DESC
 
 -- :name delete-user-role! :! :n
@@ -536,8 +536,8 @@ WHERE ur.user_id = :user_id
 -- :name list-form-templates :? :*
 -- :doc 查询表单模板列表
 SELECT * FROM sys_form_template WHERE 1=1
-  AND (:form_name IS NULL OR INSTR(form_name, :form_name) > 0)
-  AND (:form_key IS NULL OR INSTR(form_key, :form_key) > 0)
+  AND (CAST(:form_name AS CHAR) IS NULL OR INSTR(form_name, :form_name) > 0)
+  AND (CAST(:form_key AS CHAR) IS NULL OR INSTR(form_key, :form_key) > 0)
 ORDER BY id DESC
 
 -- :name find-form-template-by-id :? :1
@@ -589,3 +589,6 @@ DELETE FROM sys_kv WHERE k LIKE :pattern
 
 -- :name kv-purge! :! :n
 DELETE FROM sys_kv WHERE expire_at <= :now_ms
+
+-- :name last-insert-rowid-postgresql :? :1
+SELECT LASTVAL() AS last_insert_rowid

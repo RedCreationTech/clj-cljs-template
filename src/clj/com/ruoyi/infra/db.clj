@@ -1,11 +1,13 @@
 (ns com.ruoyi.infra.db
-  "数据库抽象层 — 支持 SQLite 和 MySQL。"
+  "数据库抽象层 — 支持 SQLite、MySQL 和 PostgreSQL。"
   (:require
    [clojure.string :as str]
    [clojure.tools.logging :as log]
    [com.ruoyi.infra.datasource :as ds]
+   [com.ruoyi.config :as config]
    [migratus.core]
-   [next.jdbc :as jdbc]))
+   [next.jdbc :as jdbc]
+   [next.jdbc.transaction :as transaction]))
 
 ;; ─── 数据库类型检测 ──────────────────────────────────────────────────────
 
@@ -22,39 +24,38 @@
         (cond
           (str/includes? (str/lower-case product-name) "sqlite") :sqlite
           (str/includes? (str/lower-case product-name) "mysql") :mysql
+          (str/includes? (str/lower-case product-name) "postgresql") :postgresql
           :else :unknown))
       (catch Exception _ :unknown))))
 
+(defn- id-query-name [db query-name]
+  (case (detect-db-type db)
+    :mysql (keyword (str (name query-name) "-mysql"))
+    :postgresql (keyword (str (name query-name) "-postgresql"))
+    :sqlite query-name
+    (if (nil? db) query-name
+        (throw (ex-info "无法识别数据库方言,不能查询生成主键" {})))))
+
 (defn last-insert-id
-  "获取最近一次插入的自增 ID，自动适配 SQLite/MySQL。
-   默认使用 :last-insert-rowid（SQLite）或 :last-insert-rowid-mysql（MySQL）查询。
-   可通过 result-key 指定返回字段名，例如 :job_id。
-   注意：MySQL 下请传入与插入同一事务的连接，否则可能获取不到 ID。"
+  "查询当前连接最近生成的 ID;必须与插入使用同一事务连接。"
   ([query-fn db]
    (last-insert-id query-fn db :last-insert-rowid :last_insert_rowid))
   ([query-fn db query-name result-key]
-   (let [db-type (detect-db-type db)
-         q (if (= :mysql db-type)
-             (keyword (str (name query-name) "-mysql"))
-             query-name)]
-     (get (query-fn db q {}) result-key))))
+   (get (query-fn db (id-query-name db query-name) {}) result-key)))
 
 (defn insert-and-get-id!
-  "在同一事务中执行插入并返回自增 ID，自动适配 SQLite/MySQL。"
+  "同一事务连接内插入并获取生成 ID,支持 SQLite/MySQL/PostgreSQL。"
   ([query-fn db insert-query params]
    (insert-and-get-id! query-fn db insert-query params :last-insert-rowid :last_insert_rowid))
   ([query-fn db insert-query params id-query id-key]
-   (let [db-type (detect-db-type db)
-         id-q (if (= :mysql db-type)
-                (keyword (str (name id-query) "-mysql"))
-                id-query)]
-     (if (some? db)
+   (if (some? db)
+     (binding [transaction/*nested-tx* :ignore]
        (jdbc/with-transaction [tx db]
          (query-fn tx insert-query params)
-         (get (query-fn tx id-q {}) id-key))
-       (do
-         (query-fn insert-query params)
-         (get (query-fn id-q {}) id-key))))))
+         (last-insert-id query-fn tx id-query id-key)))
+     (do
+       (query-fn insert-query params)
+       (get (query-fn id-query {}) id-key)))))
 
 ;; ─── SQL 方言转换 ──────────────────────────────────────────────────────
 
@@ -134,47 +135,50 @@
                 :migration-dir migration-dir}]
     (migratus.core/migrate config)))
 
+(defn- validate-swap! [jdbc-url]
+  (let [options (::config/database-options (meta @config/active-config))]
+    (when-not options
+      (throw (ex-info "数据库启用配置不可用,请先启动系统" {})))
+    (config/with-database-selection
+      {:database/options (select-keys options [:enabled])
+       :db.sql/connection {:jdbc-url jdbc-url}})))
+
+(defn- rebind-queries! [conn]
+  (require 'conman.core)
+  (let [bind-fn (resolve 'conman.core/bind-connection-map)
+        files @@(resolve 'com.ruoyi.integrant.trace/query-filenames)
+        bound (:fns (apply bind-fn conn {} files))
+        query-fn (fn
+                   ([q params] ((:fn (get bound q)) params))
+                   ([connection q params & opts]
+                    (apply (:fn (get bound q)) connection params opts)))]
+    ((resolve 'com.ruoyi.integrant.trace/set-dynamic!) :db.sql/query-fn query-fn)))
+
 (defn swap-db!
-  "热切换数据库连接池。无需重启 JVM。用法: (swap-db! system jdbc-url opts)"
+  "热切换到已启用数据库。无需重启 JVM。用法: (swap-db! system jdbc-url opts)"
   [system jdbc-url & [{:keys [migration-dir pool-size]}]]
+  (validate-swap! jdbc-url)
   (let [conn (:db.sql/connection system)]
     (when-not (com.ruoyi.infra.datasource/swappable? conn)
       (throw (ex-info "db.sql/connection 不是可热切换的 DataSource，请重启 Integrant 系统。"
                       {:type (type conn)})))
-    (log/info "[swap-db!] 创建新连接池:" jdbc-url)
+    (log/info "[swap-db!] 创建新连接池:" (config/url-db-type jdbc-url))
     (let [new-ds (make-hikari-datasource jdbc-url {:pool-size pool-size})
           migration-dir (or migration-dir
-                            (if (.contains jdbc-url "mysql") "migrations" "migrations-sqlite"))]
+                            (config/migration-dirs (config/url-db-type jdbc-url)))]
       ;; 运行迁移
       (log/info "[swap-db!] 运行迁移 (" migration-dir ")...")
-      (run-migrations! new-ds migration-dir)
+      (try (run-migrations! new-ds migration-dir)
+           (catch Exception e
+             (.close new-ds)
+             (throw e)))
       ;; 替换底层 DataSource
       (let [old-ds (ds/swap-delegate! conn new-ds)]
         (log/info "[swap-db!] 连接池已替换，关闭旧连接池...")
         (try (.close old-ds)
              (catch Exception e
                (log/warn "关闭旧连接池时出错:" (.getMessage e)))))
-      ;; 重新绑定 query-fn
-      (log/info "[swap-db!] 重新加载 query-fn...")
-      (let [set-dynamic! (resolve 'com.ruoyi.integrant.trace/set-dynamic!)
-            load-queries (fn []
-                           (require 'conman.core)
-                           (let [bind-fn (resolve 'conman.core/bind-connection-map)
-                                 files @@(resolve 'com.ruoyi.integrant.trace/query-filenames)]
-                             ;; 与启动时相同的 SQL 文件清单(含 bb new-module 登记的业务模块)
-                             (apply bind-fn conn {} files)))
-            new-qf (fn
-                     ([query params]
-                      (let [f (get (:fns (load-queries)) query)]
-                        (when-not f
-                          (throw (ex-info (str "Query not found: " query) {:query query})))
-                        ((:fn f) params)))
-                     ([conn query params & opts]
-                      (let [f (get (:fns (load-queries)) query)]
-                        (when-not f
-                          (throw (ex-info (str "Query not found: " query) {:query query})))
-                        (apply (:fn f) conn params opts))))]
-        (set-dynamic! :db.sql/query-fn new-qf))
+      (rebind-queries! conn)
       (let [db-type (detect-db-type conn)]
         (log/info "[swap-db!] 完成! 当前数据库类型:" db-type)
         {:db-type db-type :jdbc-url jdbc-url :migration-dir migration-dir}))))

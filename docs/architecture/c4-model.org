@@ -241,7 +241,7 @@ flowchart LR
 - ~operlog~ 在路由器 *外层*,看不到路由级 ~wrap-jwt-auth~ 写入的 ~:identity~,所以它自己从 ~Authorization~ 头解析 JWT 取操作人(缺失/无效记为 ~anonymous~);只记录 ~/api/*~ 下的非 GET 请求,跳过 ~/api/auth/login~ ~/api/health~;写日志失败只打 warn,不影响业务响应。
 - 认证与鉴权挂在 API 顶层、由 *路由数据* 驱动(ADR-010): ~wrap-jwt-auth~ 对所有 ~/api~ 请求解析令牌(有令牌才查会话), ~authorize~ 是 reitit ~:compile~ 中间件,只包装声明了 ~:auth? true~ 或 ~:perms~ 的路由,未声明的匿名接口零开销。 ~/system~ 、 ~/tool~ 、 ~/common~ 路由组与 ~/auth/refresh~ 、 ~/auth/getInfo~ 声明 ~:auth? true~;具体接口在方法上声明 ~:perms "system:user:add"~ (集合表示满足任一,如用户表单的角色/岗位/部门下拉);子路由可用 ~:auth? false~ 覆盖(头像图片)。 ~/api/health~ 、 ~/api/auth/config~ 、 ~/api/auth/login~ 、 ~/api/auth/register~ (默认关闭)、验证码可匿名访问, ~/api/auth/logout~ 不强制登录。
 - 鉴权在参数校验 *之前* :未登录 / 无权限的请求先得到 401 / 403,而不是参数错误;异常中间件在认证之外,认证、鉴权、解码抛出的异常同样转成 ~{:code :msg}~ (5xx 不回传异常消息与 ex-data)。
-- dev 环境下 ~router/core~ 返回一个每次请求都重新构建路由表的函数,所以改完路由数据只要 ~(user/rd)~ 重载到命名空间就生效(组件结构变了用 ~(user/rr)~ );prod 下路由表只构建一次。
+- ~handler/ring~ 装配时调用 ~router/core~ 一次。~(user/rd)~ 成功刷新后仅重建 HTTP 链并原子替换受保护的入口,保留非 HTTP 组件;需检查返回的 ~:status~ 。状态容器或非 HTTP 生命周期变化用 ~(user/rr)~ ,Ring 追踪开启时先停追踪再重试。
 - ~ring-defaults~ 的 cookie session 已配置但业务代码不使用 session(API 全靠 Bearer);CSRF 关闭。
 
 可执行:验证中间件包裹顺序与"哪些路由组要求登录"
@@ -930,7 +930,7 @@ diff <(ls resources/migrations-sqlite | sed 's/\.\(up\|down\)\.sql$//' | sort -u
 ** 9.5 热重载
 系统状态只有一份: ~com.ruoyi.integrant.state/system~ ( ~com.ruoyi.core/system~ 是它的别名), ~integrant.repl~ 已从依赖里移除( ~bb lint:dev~ 拦住再次引入第二份状态)。 ~env/dev/clj/user.clj~ 只挂手敲的短名字:
 
-- ~rd~ (别名 ~ra~ ):按文件时间戳从源码派生待重载集合,只换命名空间的函数定义,不重建组件;若发现改到的 ns 里有被组件抓住的可变容器(atom / ref / agent / volatile!)换了对象,会自动补一次 halt+init。排除表 ~com.ruoyi.dev/reload-exclusions~ 只登记那三个"卸载会换掉运行期身份"的 ns( ~integrant.trace~ / ~integrant.state~ / ~infra.datasource~ )。
+- ~rd~ (别名 ~ra~ ):按文件时间戳派生待重载集合,成功后仅重建 HTTP 链并保留非 HTTP 组件;看 ~:status~ 确认是否发布。可变容器换身份或非 HTTP 生命周期变化要求显式 ~rr~,Ring 追踪开启时先停追踪再重试。排除表 ~com.ruoyi.dev/reload-exclusions~ 只登记那三个"卸载会换掉运行期身份"的 ns( ~integrant.trace~ / ~integrant.state~ / ~infra.datasource~ )。
 - ~rr~ :halt(不 halt nREPL)→ 重新读 ~system.edn~ → ~ig/init~ ,130~150 ms,REPL 与 3000 端口都还在;改 HugSQL ~.sql~ 、 ~system.edn~ 、路由数据 / 组件结构时用它。
 - ~rs~ :打印 profile、组件数与连接池实时数字。 ~q~ :在运行中的库上跑命名查询(返回原始行,不经领域层脱敏)。 ~req~ :进程内打真实接口,完整走认证/权限/异常/分页中间件,令牌真签、会话临时登记进 ~sys_online~ 。
 - ~reset-db~ / ~migrate~ :清空重建开发库、跑待处理迁移。

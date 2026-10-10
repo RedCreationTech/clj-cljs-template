@@ -52,7 +52,7 @@
     ;; prod 下密钥不安全时在创建任何组件之前就失败
     (secrets/verify! (:profile opts) (System/getenv))
     ((or (:start params) (:start defaults) (fn [])))
-    (let [cfg (-> (config/system-config opts) ig/expand)]
+    (let [cfg (-> (config/system-config opts) config/expand-config)]
       ;; 配置体检只提示不阻止启动:SQLite、没设 TZ 这类默认值能跑,但不是给生产用的
       (doseq [warning (config/prod-warnings cfg (System/getenv))]
         (log/warn warning))

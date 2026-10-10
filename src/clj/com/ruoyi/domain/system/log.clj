@@ -1,16 +1,25 @@
 (ns com.ruoyi.domain.system.log
   "日志审计领域服务。列表统一走 com.ruoyi.domain.paging/paginate,返回 {:rows :total}。"
   (:require
-   [com.ruoyi.domain.paging :as paging]))
+   [com.ruoyi.domain.paging :as paging]
+   [com.ruoyi.infra.errors :as errors]))
 
 (def ^:private oper-log-defaults
   {:title nil :oper_name nil :oper_ip nil :business_type nil :status nil
    :begin_time nil :end_time nil})
 
+(defn- numeric-filter [value]
+  (cond
+    (or (nil? value) (= "" value)) nil
+    (integer? value) value
+    (string? value) (or (parse-long value) (errors/fail! "日志筛选参数必须是整数"))
+    :else (errors/fail! "日志筛选参数必须是整数")))
+
 (defn list-oper-logs
   "查询操作日志列表，支持分页。"
   [{:keys [query-fn]} params]
-  (paging/paginate query-fn :list-oper-logs :count-oper-logs oper-log-defaults params))
+  (paging/paginate query-fn :list-oper-logs :count-oper-logs oper-log-defaults
+                   (-> params (update :business_type numeric-filter) (update :status numeric-filter))))
 
 (defn create-oper-log!
   "记录操作日志。"
