@@ -7,6 +7,7 @@
   以显式 props（数据 + 回调）形式接收。"
   (:require
    [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.i18n :as i18n]
    [com.ruoyi.frontend.pages.user.columns :as columns]
    [com.ruoyi.frontend.pages.user.dept-tree :as dept-tree]
    [com.ruoyi.frontend.pages.user.form-modal :as form-modal]
@@ -69,11 +70,15 @@
 
 (defn- detail-drawer []
   (let [visible? @(rf/subscribe [:users/detail-visible?])
-        user @(rf/subscribe [:users/detail-data])]
+        user @(rf/subscribe [:users/detail-data])
+        loading? @(rf/subscribe [:users/detail-loading?])
+        error? @(rf/subscribe [:users/detail-error?])]
     [antd/drawer {:title "用户详情"
                   :open visible?
                   :size "large"
+                  :loading loading?
                   :onClose #(rf/dispatch [:users/close-detail])}
+     (when error? [:div {:role "alert"} (i18n/tr "操作失败")])
      (when user
        [:div {:style {:padding "0 16px"}}
         [antd/descriptions {:column 1 :bordered true :size "small"}

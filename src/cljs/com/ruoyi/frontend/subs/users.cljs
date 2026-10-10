@@ -71,6 +71,14 @@
             (fn [db _]
               (get-in db [:users :detail-data])))
 
+(rf/reg-sub :users/detail-loading?
+            (fn [db _]
+              (get-in db [:users :detail-loading?] false)))
+
+(rf/reg-sub :users/detail-error?
+            (fn [db _]
+              (get-in db [:users :detail-error?] false)))
+
 (rf/reg-sub :users/reset-pwd-visible?
             (fn [db _]
               (get-in db [:users :reset-pwd-visible?] false)))

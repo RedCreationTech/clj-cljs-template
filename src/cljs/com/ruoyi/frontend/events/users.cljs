@@ -6,6 +6,7 @@
    [com.ruoyi.frontend.api.posts :as posts-api]
    [com.ruoyi.frontend.api.roles :as roles-api]
    [com.ruoyi.frontend.api.users :as users-api]
+   [com.ruoyi.frontend.events.user-detail :as user-detail]
    [com.ruoyi.frontend.i18n :as i18n]
    [re-frame.core :as rf]))
 
@@ -217,17 +218,27 @@
                      {:db (assoc-in db [:users :reset-pwd-visible?] false)
                       :api/reset-user-password [user-id new-pwd]})))
 
-(rf/reg-event-db :users/view-detail
-                 (fn [db [_ user-id]]
-                   (let [items (get-in db [:users :items] [])
-                         user (first (filter #(= user-id (:user_id %)) items))]
-                     (-> db
-                         (assoc-in [:users :detail-visible?] true)
-                         (assoc-in [:users :detail-data] user)))))
+(rf/reg-event-fx :users/view-detail
+                 (fn [{:keys [db]} [_ user-id]]
+                   (user-detail/open-effects db user-id (random-uuid))))
 
 (rf/reg-event-db :users/close-detail
                  (fn [db _]
-                   (assoc-in db [:users :detail-visible?] false)))
+                   (user-detail/close-detail db)))
+
+(rf/reg-event-db :users/receive-detail
+                 (fn [db [_ request user]]
+                   (user-detail/receive-detail db request user)))
+
+(rf/reg-fx :api/get-user-detail
+           (fn [{:keys [user-id] :as request}]
+             (users-api/get-user
+              user-id
+              (fn [result]
+                (rf/dispatch [:users/receive-detail request
+                              (when (= 200 (:code result)) (:data result))]))
+              (fn [_]
+                (rf/dispatch [:users/receive-detail request nil])))))
 
 (rf/reg-event-fx :users/auth-role
                  (fn [{:keys [db]} [_ user-id]]
