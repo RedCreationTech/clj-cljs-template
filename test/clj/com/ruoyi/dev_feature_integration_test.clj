@@ -36,7 +36,7 @@
     (is (= options (::config/database-options (meta origin))))
     (is (= options (::config/database-options (meta @config/active-config))))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"DB_ENABLED"
-                         (db/swap-db! (dev/system) "jdbc:sqlite:forbidden.db")))))
+                          (db/swap-db! (dev/system) "jdbc:sqlite:forbidden.db")))))
 
 (defn- exercise-restart-and-reload! [repl]
   (dev/init!)
@@ -47,6 +47,9 @@
     (with-redefs [config/system-config (fn [_] (selected-config "/new"))]
       (dev/restart!))
     (is (identical? repl (get (dev/system) dev/nrepl-key)))
+    (is (= {:fixture true} (get (::ig/origin (meta (dev/system))) dev/nrepl-key)))
+    (doseq [k [::ig/origin ::ig/build]]
+      (is (not (contains? (get (meta (dev/system)) k) ::discarded))))
     (is (= "/new" (get-in (::ig/origin (meta (dev/system))) [::routes :path])))
     (assert-selection!)
     (reset! response-version :v2)
@@ -54,11 +57,18 @@
     (is (= :v2 (:body (entry {:request-method :get :uri "/new"}))))
     (assert-selection!)
     (is (= runtime (:runtime-id (snapshot/snapshot))))
-    (is (= :available (:status (snapshot/snapshot))))))
+    (is (= :available (:status (snapshot/snapshot))))
+    (let [halted (atom {})]
+      (with-redefs [ig/halt-key! (fn [k value] (swap! halted assoc k value))]
+        (core/stop-app))
+      (is (identical? repl (get @halted dev/nrepl-key)) "最终 stop 必须关闭保留的 nREPL")
+      (is (nil? (dev/system))))))
 
 (deftest restart-retains-selection-and-current-http-origin-test
   (let [repl (Object.)
-        system (atom {:system/env :dev dev/nrepl-key repl})]
+        system (atom (with-meta {:system/env :dev dev/nrepl-key repl}
+                       {::ig/origin {dev/nrepl-key {:fixture true} ::discarded {}}
+                        ::ig/build {dev/nrepl-key {:fixture true} ::discarded {}}}))]
     (with-redefs-fn
       {#'core/system system
        #'state/system system

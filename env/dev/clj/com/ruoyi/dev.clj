@@ -57,8 +57,16 @@
   []
   (let [sys (system)]
     (some-> sys (dissoc nrepl-key) (ig/halt!))
-    (reset! core/system (select-keys sys keep-keys))
+    (reset! core/system (with-meta (select-keys sys keep-keys) (meta sys)))
     (component-count (system))))
+
+(defn- merge-initialized-system [sys initialized]
+  (let [retained (fn [k] (select-keys (get (meta sys) k) keep-keys))
+        metadata (-> (meta initialized)
+                     (update ::ig/origin into (retained ::ig/origin))
+                     (update ::ig/build into (retained ::ig/build)))]
+    ;; 新组件用新配置;保留的 nREPL 仍须在最终 halt 时被 Integrant 找到。
+    (with-meta (merge sys initialized) metadata)))
 
 (defn init!
   "重新读配置并 init(不含 nREPL),把组件并回系统;监控页展示的依赖图同步更新。"
@@ -66,8 +74,7 @@
   (let [cfg (prepared-config (active-profile))]
     (config/remember-active-config! cfg)
     (let [initialized (ig/init cfg)]
-      ;; merge 保留第一个 map 的元数据;新 HTTP 装配必须读取本次 init 的配置快照。
-      (swap! core/system #(with-meta (merge % initialized) (meta initialized))))
+      (swap! core/system merge-initialized-system initialized))
     (component-count (system))))
 
 (def refresh-dirs
