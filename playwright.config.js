@@ -9,7 +9,7 @@ module.exports = defineConfig({
 
   /* 网页/移动导览录像由各自的 tour/mobile 配置运行，
      常规门禁只收业务验收和根目录 mobile-shell.spec.js。 */
-  testIgnore: '**/{tour,mobile}/**',
+  testIgnore: '**/{tour,mobile,restart}/**',
 
   /* Run tests in files in serial because they share the local SQLite DB */
   fullyParallel: false,
@@ -26,8 +26,8 @@ module.exports = defineConfig({
   /* Reporter to use */
   reporter: [
     ['list'],
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
-    ['json', { outputFile: 'playwright-report/report.json' }],
+    ['html', { outputFolder: process.env.E2E_REPORT_DIR || 'playwright-report', open: 'never' }],
+    ['json', { outputFile: `${process.env.E2E_REPORT_DIR || 'playwright-report'}/report.json` }],
   ],
 
   /* Shared settings for all the projects below */

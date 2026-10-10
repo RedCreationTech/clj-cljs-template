@@ -68,6 +68,8 @@ jobs:
           --health-retries 30
     env:
       JDBC_URL: jdbc:mysql://127.0.0.1:3306/ruoyi?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true
+      DB_TYPE: mysql
+      DB_ENABLED: mysql
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -107,22 +109,40 @@ jobs:
         run: bb test:postgresql
       - name: 迁移往返 up → down → up
         run: bb db:roundtrip
-      - name: 生成全部字段类型的模块
-        run: >-
-          bb new-module pg-demo --label PostgreSQL冒烟
-          --fields "title:string:required:标题,qty:int:数量,price:decimal:单价,due_on:date:日期,active:bool:启用,remark:text:备注"
-      - name: 脚手架静态检查及生成代码测试
-        run: |
-          bb lint
-          bb fmt:check
-          bb test:postgresql -r '.*\.pg-demo-test$'
-          bb db:roundtrip
-          bb cljs:check
 
   e2e:
-    name: 前端测试、构建 + E2E
+    name: 前端测试、构建 + E2E (${{ matrix.database }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, mysql, postgresql]
+    services:
+      mysql:
+        image: ${{ matrix.database == 'mysql' && 'mysql:8.4' || '' }}
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: ruoyi_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h127.0.0.1 -uroot -ppassword --silent"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+      postgres:
+        image: ${{ matrix.database == 'postgresql' && 'postgres:17' || '' }}
+        env:
+          POSTGRES_USER: fixture
+          POSTGRES_PASSWORD: fixture
+          POSTGRES_DB: ruoyi_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fixture -d ruoyi_test"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      EXPECTED_DB: ${{ matrix.database }}
+      DB_TYPE: ${{ matrix.database }}
+      DB_ENABLED: ${{ matrix.database }}
+      JDBC_URL: ${{ matrix.database == 'mysql' && 'jdbc:mysql://127.0.0.1:3306/ruoyi_test?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true' || matrix.database == 'postgresql' && 'jdbc:postgresql://127.0.0.1:5432/ruoyi_test?user=fixture&password=fixture' || 'jdbc:sqlite:test.db' }}
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -132,18 +152,14 @@ jobs:
         run: bb test:cljs
       - name: 前端生产构建
         run: bb release
-      - name: 启动后端并等待就绪
-        run: |
-          nohup bb backend > backend.log 2>&1 &
-          timeout 300 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 2; done'
       - name: 安装 Chromium
         run: npx playwright install --with-deps chromium
-      - run: bb e2e
-      - name: 上传失败现场
-        if: failure()
+      - run: bb e2e:matrix
+      - name: 上传验收报告
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-report
+          name: e2e-report-${{ matrix.database }}
           path: |
             playwright-report/
             test-results/
@@ -151,9 +167,38 @@ jobs:
           retention-days: 7
 
   scaffold:
-    name: 脚手架冒烟(bb new-module)
+    name: 脚手架冒烟 (${{ matrix.database }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, mysql, postgresql]
+    services:
+      mysql:
+        image: ${{ matrix.database == 'mysql' && 'mysql:8.4' || '' }}
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: ruoyi_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h127.0.0.1 -uroot -ppassword --silent"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+      postgres:
+        image: ${{ matrix.database == 'postgresql' && 'postgres:17' || '' }}
+        env:
+          POSTGRES_USER: fixture
+          POSTGRES_PASSWORD: fixture
+          POSTGRES_DB: ruoyi_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fixture -d ruoyi_test"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      EXPECTED_DB: ${{ matrix.database }}
+      DB_TYPE: ${{ matrix.database }}
+      DB_ENABLED: ${{ matrix.database }}
+      JDBC_URL: ${{ matrix.database == 'mysql' && 'jdbc:mysql://127.0.0.1:3306/ruoyi_test?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true' || matrix.database == 'postgresql' && 'jdbc:postgresql://127.0.0.1:5432/ruoyi_test?user=fixture&password=fixture' || 'jdbc:sqlite:test.db' }}
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -173,21 +218,18 @@ jobs:
         run: bb db:roundtrip
       - name: 前端编译零 warning
         run: bb cljs:check
-      - name: 启动后端并等待就绪
-        run: |
-          nohup bb backend > backend.log 2>&1 &
-          timeout 300 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 2; done'
       - name: 安装 Chromium
         run: npx playwright install --with-deps chromium
       - name: 生成的 E2E 用例
-        run: bb e2e tests/e2e/ci-demo.spec.js tests/e2e/dev-state.spec.js
+        run: bb e2e:matrix tests/e2e/ci-demo.spec.js tests/e2e/dev-state.spec.js
         env:
           SNAPSHOT_BUILD: dev
-      - name: 上传失败现场
-        if: failure()
+          E2E_GENERATED_MODULE: ci-demo
+      - name: 上传验收报告
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: scaffold-report
+          name: scaffold-report-${{ matrix.database }}
           path: |
             playwright-report/
             test-results/
@@ -197,9 +239,38 @@ jobs:
   # 移动端是独立工程(mobile/ 有自己的 deps.edn 与 pubspec.yaml),所以不进 bb ci:
   # 后端与网页端的门禁不应该要求装 Flutter。独立 job 再装 Flutter 与 Chromium。
   mobile:
-    name: 移动端(ClojureDart)
+    name: 移动端 (${{ matrix.database }})
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, mysql, postgresql]
+    services:
+      mysql:
+        image: ${{ matrix.database == 'mysql' && 'mysql:8.4' || '' }}
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: ruoyi_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h127.0.0.1 -uroot -ppassword --silent"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+      postgres:
+        image: ${{ matrix.database == 'postgresql' && 'postgres:17' || '' }}
+        env:
+          POSTGRES_USER: fixture
+          POSTGRES_PASSWORD: fixture
+          POSTGRES_DB: ruoyi_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fixture -d ruoyi_test"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    env:
+      EXPECTED_DB: ${{ matrix.database }}
+      DB_TYPE: ${{ matrix.database }}
+      DB_ENABLED: ${{ matrix.database }}
+      JDBC_URL: ${{ matrix.database == 'mysql' && 'jdbc:mysql://127.0.0.1:3306/ruoyi_test?user=root&password=password&useSSL=false&allowPublicKeyRetrieval=true' || matrix.database == 'postgresql' && 'jdbc:postgresql://127.0.0.1:5432/ruoyi_test?user=fixture&password=fixture' || 'jdbc:sqlite:test.db' }}
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -218,21 +289,19 @@ jobs:
         run: bb mobile:compile
       - name: 单元测试(cljd.test,不连后端)
         run: bb mobile:test
+      - name: 网页生产构建(重启后的业务读回)
+        run: bb release
       - name: Flutter Web构建(Dart类型检查与界面回归)
         run: bb mobile:web
-      - name: 启动独立移动端验收后端
-        run: |
-          nohup bb backend > mobile-backend.log 2>&1 &
-          timeout 300 bash -c 'until curl -sf http://localhost:3000/api/health > /dev/null; do sleep 2; done'
       - name: 安装 Chromium
         run: npx playwright install --with-deps chromium
       - name: 登录、分页、主题、账号、空态与重试
-        run: MOBILE_UI_REQUIRED=1 bb e2e tests/e2e/mobile-shell.spec.js
+        run: MOBILE_UI_REQUIRED=1 bb e2e:matrix tests/e2e/mobile-shell.spec.js
       - name: 上传移动端验收截图与日志
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: mobile-ui-report
+          name: mobile-ui-report-${{ matrix.database }}
           path: |
             test-results/
             playwright-report/

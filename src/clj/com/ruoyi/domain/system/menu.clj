@@ -17,11 +17,11 @@
   "创建菜单。"
   [{:keys [query-fn db]} params]
   (db/insert-and-get-id! query-fn db :create-menu!
-                         (merge {:menu_name nil :parent_id nil :order_num nil :path nil
+                         (merge {:menu_name nil :parent_id 0 :order_num nil :path nil
                                  :component nil :query nil :route_name nil :is_frame nil
                                  :is_cache nil :menu_type nil :visible nil :status nil
                                  :perms nil :icon nil :create_by nil}
-                                params)))
+                                (update params :parent_id #(or % 0)))))
 
 (defn update-menu!
   "更新菜单。"

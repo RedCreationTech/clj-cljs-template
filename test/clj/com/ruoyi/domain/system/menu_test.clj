@@ -67,3 +67,18 @@
     (with-redefs [mock-query-fn (fn [_ _] nil)]
       (let [result (menu/find-menu-by-id {:query-fn mock-query-fn} 999)]
         (is (nil? result))))))
+
+(deftest test-create-menu-default-parent
+  (testing "缺省和显式空父节点都是根菜单，指定父节点保持不变"
+    (doseq [[params expected] [[{:menu_name "根菜单"} 0]
+                               [{:menu_name "根菜单" :parent_id nil} 0]
+                               [{:menu_name "子菜单" :parent_id 3} 3]]]
+      (let [inserted (atom nil)
+            query (fn [operation values]
+                    (case operation
+                      :create-menu! (do (reset! inserted values) [{:menu_id 5}])
+                      :last-insert-rowid {:last_insert_rowid 5}
+                      nil))]
+        (menu/create-menu! {:query-fn query} params)
+        (is (= expected (:parent_id @inserted)))
+        (is (= (:menu_name params) (:menu_name @inserted)))))))
