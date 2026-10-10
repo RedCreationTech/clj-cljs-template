@@ -9,7 +9,7 @@
 
 (deftest user-detail-load-test
   (let [initial {:users {:items [{:user_id 7 :user_name "列表行"}]
-                        :detail-data {:user_id 1}}}
+                         :detail-data {:user_id 1}}}
         effects (detail/open-effects initial 7 :first)
         request (:api/get-user-detail effects)
         loading (:db effects)]
@@ -46,4 +46,4 @@
     (testing "同一用户关闭重开也不能接受上一请求"
       (is (= (:db reopened) (detail/receive-detail (:db reopened) first-request user)))
       (is (= user (get-in (detail/receive-detail (:db reopened) (:api/get-user-detail reopened) user)
-                         [:users :detail-data]))))))
+                          [:users :detail-data]))))))
