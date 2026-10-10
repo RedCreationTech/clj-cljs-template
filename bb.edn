@@ -60,6 +60,9 @@
                     :task (dev/test-mysql! *command-line-args*)}
   e2e              {:doc  "Playwright 端到端测试(需后端已在 3000 运行)"
                     :task (dev/e2e! *command-line-args*)}
+  e2e:matrix       {:doc "独立数据库与真实后端生命周期验收(含停止/重启后浏览器读回)"
+                    :task (do (require 'tasks.e2e-matrix)
+                              ((resolve 'tasks.e2e-matrix/verify!) *command-line-args*))}
   video:tour       {:doc  "录制 tests/e2e/tour 的全部功能导览分镜并合成 target/tour/tour.mp4(左侧常驻目录 + 内嵌章节 + storyboard.md;--compose-only 只重新合成;需要 ffmpeg)"
                     :task (tour/video! *command-line-args*)}
   video:narrate    {:doc  "给 target/tour/tour.mp4 加旁白音轨:按 storyboard 台词逐句合成语音并对齐时间轴(默认小米 MiMo TTS,密钥走 MIMO_API_KEY;离线兜底 --provider say)"
@@ -68,10 +71,11 @@
                     :task (do (require 'tasks.subtitles)
                               ((resolve 'tasks.subtitles/export-args!) *command-line-args*))}
   test:tasks       {:doc "开发任务回归检查，不连接数据库或Docker"
-                    :task (do (require 'tasks.subtitles 'tasks.dev-check 'tasks.rename-check)
+                    :task (do (require 'tasks.subtitles 'tasks.dev-check 'tasks.rename-check 'tasks.scaffold.check)
                               ((resolve 'tasks.subtitles/check!))
                               ((resolve 'tasks.dev-check/check!))
-                              ((resolve 'tasks.rename-check/check!)))}
+                              ((resolve 'tasks.rename-check/check!))
+                              ((resolve 'tasks.scaffold.check/check!)))}
   db:roundtrip     {:doc  "迁移往返检查:up → down → up(默认临时 SQLite;设 JDBC_URL 则用该库,按方言自动选迁移目录)"
                     :task (dev/roundtrip!)}
   coverage         {:doc  "测试覆盖率(报告在 target/coverage/index.html)"

@@ -17,7 +17,7 @@
 (defn- type-form-modal [{:keys [visible? editing on-ok on-cancel]}]
   (let [[form set-form!] (hooks/use-state {})]
     (hooks/use-effect
-     (fn [] (set-form! (or editing {})) js/undefined)
+     (fn [] (set-form! (merge {:status "0"} editing)) js/undefined)
      [visible?])
     [antd/modal {:open visible?
                  :title (if editing "编辑字典类型" "新增字典类型")
@@ -163,7 +163,7 @@
 (defn- data-form-modal [{:keys [visible? editing dict-type on-ok on-cancel]}]
   (let [[form set-form!] (hooks/use-state {})]
     (hooks/use-effect
-     (fn [] (set-form! (or editing {})) js/undefined)
+     (fn [] (set-form! (merge {:status "0" :dict_sort 0} editing)) js/undefined)
      [visible?])
     [antd/modal {:open visible?
                  :title (if editing "编辑字典数据" "新增字典数据")

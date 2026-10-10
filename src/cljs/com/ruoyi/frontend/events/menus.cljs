@@ -4,6 +4,7 @@
    [clojure.string]
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.api.menus :as menus-api]
+   [com.ruoyi.frontend.events.menu-form :as menu-form]
    [re-frame.core :as rf]))
 
 (rf/reg-event-db :menus/set-list
@@ -72,7 +73,7 @@
                        (assoc-in [:menus :modal-visible?] true)
                        (assoc-in [:menus :editing?] false)
                        (assoc-in [:menus :editing] false)
-                       (assoc-in [:menus :form-data] (merge {:menu_type "M" :order_num 0 :status "0" :visible "0" :is_frame "0" :is_cache "0"} initial-data)))))
+                       (assoc-in [:menus :form-data] (merge {:menu_type "M" :parent_id 0 :order_num 0 :status "0" :visible "0" :is_frame "0" :is_cache "0"} initial-data)))))
 
 (rf/reg-event-db :menus/close-modal
                  (fn [db _]
@@ -83,19 +84,12 @@
                    (-> db
                        (assoc-in [:menus :modal-visible?] true)
                        (assoc-in [:menus :editing?] true)
-                       (assoc-in [:menus :editing] true)
-                       (assoc-in [:menus :form-data] data))))
+                       (assoc-in [:menus :editing] (:menu_id data))
+                       (assoc-in [:menus :form-data] (menu-form/form-values data)))))
 
 (rf/reg-event-fx :menus/submit
                  (fn [{:keys [db]} [_ values]]
-                   (let [data (-> values
-                                  (update :order_num #(if (seq (str %)) (js/parseInt % 10) 0)))
-                         editing (get-in db [:menus :editing])]
-                     (if editing
-                       {:db (assoc-in db [:menus :modal-visible?] false)
-                        :api/update-menu [(:menu_id data) data]}
-                       {:db (assoc-in db [:menus :modal-visible?] false)
-                        :api/create-menu data}))))
+                   (menu-form/submit-effects db values)))
 
 (rf/reg-fx :api/create-menu
            (fn [params]

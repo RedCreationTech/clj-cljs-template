@@ -50,5 +50,7 @@ test('数据源监控显示真实的数据库与连接池信息', async ({ page 
   await expect(table).toBeVisible({ timeout: 10000 });
   const text = await table.innerText();
   expect(text).not.toContain('unknown');
-  expect(/SQLite|MySQL/.test(text)).toBe(true);
+  const expected = { sqlite: 'SQLite', mysql: 'MySQL', postgresql: 'PostgreSQL' }[process.env.EXPECTED_DB || 'sqlite'];
+  expect(expected).toBeTruthy();
+  expect(text).toContain(expected);
 });

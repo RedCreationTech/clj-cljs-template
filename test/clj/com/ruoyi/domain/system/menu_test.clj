@@ -67,3 +67,38 @@
     (with-redefs [mock-query-fn (fn [_ _] nil)]
       (let [result (menu/find-menu-by-id {:query-fn mock-query-fn} 999)]
         (is (nil? result))))))
+
+(deftest test-create-menu-default-parent
+  (testing "缺省和显式空父节点都是根菜单，指定父节点保持不变"
+    (doseq [[params expected] [[{:menu_name "根菜单"} 0]
+                               [{:menu_name "根菜单" :parent_id nil} 0]
+                               [{:menu_name "子菜单" :parent_id 3} 3]]]
+      (let [inserted (atom nil)
+            query (fn [operation values]
+                    (case operation
+                      :create-menu! (do (reset! inserted values) [{:menu_id 5}])
+                      :last-insert-rowid {:last_insert_rowid 5}
+                      nil))]
+        (menu/create-menu! {:query-fn query} params)
+        (is (= expected (:parent_id @inserted)))
+        (is (= (:menu_name params) (:menu_name @inserted)))))))
+
+(deftest integer-menu-fields-normalized-before-jdbc-test
+  (let [captured (atom nil)
+        service {:query-fn (fn [operation params]
+                             (case operation
+                               :create-menu! (do (reset! captured params) [{:menu_id 5}])
+                               :last-insert-rowid {:last_insert_rowid 5}
+                               :update-menu! (reset! captured params)
+                               nil))}
+        fields {:menu_id "5" :parent_id "0" :order_num "8" :is_frame "1" :is_cache "0"}
+        expected {:menu_id 5 :parent_id 0 :order_num 8 :is_frame 1 :is_cache 0}]
+    (doseq [operation [menu/create-menu! menu/update-menu!]]
+      (operation service fields)
+      (is (= expected (select-keys @captured (keys expected))))
+      (doseq [field [:menu_id :parent_id :order_num :is_frame :is_cache]]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"必须是整数"
+                              (operation service (assoc fields field "1broken")))))
+      (doseq [field [:is_frame :is_cache]]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"必须是 0 或 1"
+                              (operation service (assoc fields field "2"))))))))

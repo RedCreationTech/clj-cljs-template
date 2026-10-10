@@ -7,10 +7,12 @@
   以显式 props（数据 + 回调）形式接收。"
   (:require
    [com.ruoyi.frontend.antd :as antd]
+   [com.ruoyi.frontend.i18n :as i18n]
    [com.ruoyi.frontend.pages.user.columns :as columns]
    [com.ruoyi.frontend.pages.user.dept-tree :as dept-tree]
    [com.ruoyi.frontend.pages.user.form-modal :as form-modal]
    [com.ruoyi.frontend.pages.user.import-modal :as import-modal]
+   [com.ruoyi.frontend.pages.user.popup :as popup]
    [com.ruoyi.frontend.pages.user.search :as search]
    [re-frame.core :as rf]
    [reagent.hooks :as hooks]))
@@ -68,11 +70,15 @@
 
 (defn- detail-drawer []
   (let [visible? @(rf/subscribe [:users/detail-visible?])
-        user @(rf/subscribe [:users/detail-data])]
+        user @(rf/subscribe [:users/detail-data])
+        loading? @(rf/subscribe [:users/detail-loading?])
+        error? @(rf/subscribe [:users/detail-error?])]
     [antd/drawer {:title "用户详情"
                   :open visible?
                   :size "large"
+                  :loading loading?
                   :onClose #(rf/dispatch [:users/close-detail])}
+     (when error? [:div {:role "alert"} (i18n/tr "操作失败")])
      (when user
        [:div {:style {:padding "0 16px"}}
         [antd/descriptions {:column 1 :bordered true :size "small"}
@@ -146,7 +152,8 @@
         role-options @(rf/subscribe [:users/role-options])
         selected-role-ids @(rf/subscribe [:users/auth-role-ids])]
     (when visible?
-      [:div {:style {:position "fixed" :top 0 :left 0 :right 0 :bottom 0
+      [:div {:data-user-popup-host "true"
+             :style {:position "fixed" :top 0 :left 0 :right 0 :bottom 0
                      :background "rgba(0,0,0,0.45)" :zIndex 1060
                      :display "flex" :justifyContent "center" :alignItems "center"}}
        [:div {:style {:background "var(--ant-color-bg-container, #fff)" :padding 24 :borderRadius 4 :width 520
@@ -161,8 +168,9 @@
           "×"]]
         [:div {:style {:display "flex" :flexDirection "column" :gap 10}}
          [:span {:style {:fontSize 14 :color "var(--app-text-regular)"}} "角色"]
-         [antd/select {:mode "multiple"
+         [antd/select {:mode "multiple" :optionFilterProp "children"
                        :placeholder "请选择角色"
+                       :getPopupContainer popup/container
                        :allowClear true
                        :value selected-role-ids
                        :style {:width "100%" :minHeight 40}

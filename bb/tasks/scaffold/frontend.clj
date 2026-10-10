@@ -222,53 +222,23 @@
 (defn page [ctx]
   (str (page-head ctx) (page-search-part ctx) (page-table-part ctx) (page-form-part ctx)))
 
-(defn- e2e-fill [dialog {:keys [label type]} value-expr]
-  (case type
-    :bool nil
-    (str "  await " dialog ".getByLabel('" label "').fill(" value-expr ");\n")))
-
-(defn- e2e-value [{:keys [type]} stamp-expr]
-  (case type
-    (:string :text) stamp-expr
-    (:int :decimal) "'1'"
-    :date "'2026-01-01'"
-    nil))
-
 (defn e2e
-  "Playwright 用例:新增 → 列表出现 → 修改 → 删除。需要至少一个 string 字段来定位行。"
-  [{:keys [module label fields menu-path]}]
-  (let [key-field (first (filter #(= :string (:type %)) fields))
-        required (filter :required? (remove #{key-field} fields))
-        fills (fn [dialog stamp]
-                (apply str (e2e-fill dialog key-field stamp)
-                       (for [f required] (e2e-fill dialog f (e2e-value f stamp)))))]
-    (str "// " label ":bb new-module 生成的端到端用例(需后端已在 3000 运行:bb e2e)\n"
+  "生成全字段浏览器 CRUD、无效输入、筛选与分页回归。"
+  [{:keys [label fields menu-path api-path]}]
+  (let [field-js (fn [{:keys [col label type required?]}]
+                   (str "{ col: " (pr-str col) ", label: " (pr-str label)
+                        ", type: " (pr-str (name type)) ", required: " (boolean required?) " }"))]
+    (str "// bb new-module:所有字段都必须在真实浏览器与数据库往返。\n"
          "const { test, expect } = require('playwright/test');\n"
-         "const { login } = require('./auth-helper');\n\n"
-         "const OK = /^(确 ?定|OK)$/;\n\n"
-         "test('" label ":新增、修改、删除', async ({ page }) => {\n"
-         "  await login(page);\n"
-         "  await page.goto('/" menu-path "');\n"
-         (if-not key-field
-           "  await expect(page.locator('table')).toBeVisible();\n"
-           (str "  const stamp = `e2e-${Date.now()}`;\n"
-                "  await page.getByRole('button', { name: /新增/ }).first().click();\n"
-                "  const add = page.getByRole('dialog', { name: '新增" label "' });\n"
-                "  await expect(add).toBeVisible();\n"
-                (fills "add" "stamp")
-                "  await add.getByRole('button', { name: OK }).click();\n"
-                "  await expect(add).toBeHidden();\n"
-                "  const row = page.locator('table tbody tr', { hasText: stamp });\n"
-                "  await expect(row).toBeVisible({ timeout: 10000 });\n\n"
-                "  await row.getByRole('button', { name: /编辑/ }).click();\n"
-                "  const edit = page.getByRole('dialog', { name: '修改" label "' });\n"
-                "  await expect(edit).toBeVisible();\n"
-                (e2e-fill "edit" key-field "`${stamp}-2`")
-                "  await edit.getByRole('button', { name: OK }).click();\n"
-                "  await expect(edit).toBeHidden();\n"
-                "  const edited = page.locator('table tbody tr', { hasText: `${stamp}-2` });\n"
-                "  await expect(edited).toBeVisible({ timeout: 10000 });\n\n"
-                "  await edited.getByRole('button', { name: /删除/ }).click();\n"
-                "  await page.getByRole('tooltip').getByRole('button', { name: OK }).click();\n"
-                "  await expect(edited).toBeHidden({ timeout: 10000 });\n"))
-         "});\n")))
+         "const generated = require('./generated-module-helper');\n\n"
+         "test.setTimeout(90000);\n\n"
+         "const config = { label: " (pr-str label) ", menuPath: " (pr-str menu-path)
+         ", apiPath: " (pr-str api-path) ",\n"
+         "  fields: [" (str/join ",\n    " (map field-js fields)) "],\n"
+         "  searchCols: [" (str/join ", " (map #(pr-str (:col %)) (m/searchable fields))) "] };\n\n"
+         "test(" (pr-str (str label ":全字段新增、读回、修改、删除")) ", async ({ page }) => {\n"
+         "  expect(await generated.crud(page, config)).toBe(config.fields.length);\n});\n\n"
+         "test(" (pr-str (str label ":无效输入拒绝且数据不变")) ", async ({ page }) => {\n"
+         "  expect(await generated.invalid(page, config)).toBe(config.fields.length * 2);\n});\n\n"
+         "test(" (pr-str (str label ":筛选与服务端分页")) ", async ({ page }) => {\n"
+         "  expect(await generated.paging(page, config)).toBe(12);\n});\n")))

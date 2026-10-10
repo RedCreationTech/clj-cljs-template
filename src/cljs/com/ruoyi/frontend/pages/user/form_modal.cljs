@@ -3,6 +3,7 @@
   (:require
    [com.ruoyi.frontend.antd :as antd]
    [com.ruoyi.frontend.components.dept-tree-select :refer [dept-tree-select]]
+   [com.ruoyi.frontend.pages.user.popup :as popup]
    [reagent.hooks :as hooks]))
 
 (defn- form-basic-items [form editing]
@@ -10,7 +11,8 @@
                     :rules [{:required true :message "请输入用户昵称"}]}
     [antd/input {:placeholder "请输入用户昵称" :style {:height 42 :borderRadius 4}}]]
    [antd/form-item {:style {:marginBottom 0} :label "归属部门"}
-    [dept-tree-select {:placeholder "请选择归属部门" :allow-clear? true :style {:height 42}
+    [dept-tree-select {:getPopupContainer popup/container
+                       :placeholder "请选择归属部门" :allow-clear? true :style {:height 42}
                        :value (.getFieldValue form "dept_id")
                        :on-change (fn [v] (.setFieldsValue form #js {"dept_id" v}))}]]
    [antd/form-item {:style {:marginBottom 0} :label "手机号码" :name "phonenumber"}
@@ -28,7 +30,8 @@
 
 (defn- form-extra-items [post-options role-options]
   [[antd/form-item {:style {:marginBottom 0} :label "用户性别" :name "sex"}
-    [antd/select {:placeholder "请选择性别" :allowClear true :style {:height 42}}
+    [antd/select {:getPopupContainer popup/container
+                  :placeholder "请选择性别" :allowClear true :style {:height 42}}
      [antd/select-option {:value "0"} "男"]
      [antd/select-option {:value "1"} "女"]
      [antd/select-option {:value "2"} "未知"]]]
@@ -37,11 +40,13 @@
      [antd/radio {:value "0"} "正常"]
      [antd/radio {:value "1"} "停用"]]]
    [antd/form-item {:style {:marginBottom 0} :label "岗位" :name "posts"}
-    [antd/select {:mode "multiple" :placeholder "请选择岗位" :allowClear true :style {:minHeight 42}}
+    [antd/select {:getPopupContainer popup/container
+                  :mode "multiple" :optionFilterProp "children" :placeholder "请选择岗位" :allowClear true :style {:minHeight 42}}
      (for [post post-options]
        ^{:key (:post_id post)} [antd/select-option {:value (:post_id post)} (:post_name post)])]]
    [antd/form-item {:style {:marginBottom 0} :label "角色" :name "roles"}
-    [antd/select {:mode "multiple" :placeholder "请选择角色" :allowClear true :style {:minHeight 42}}
+    [antd/select {:getPopupContainer popup/container
+                  :mode "multiple" :optionFilterProp "children" :placeholder "请选择角色" :allowClear true :style {:minHeight 42}}
      (for [role role-options]
        ^{:key (:role_id role)} [antd/select-option {:value (:role_id role)} (:role_name role)])]]
    [antd/form-item {:style {:gridColumn "1 / -1" :marginBottom 0} :label "备注" :name "remark"}
@@ -90,7 +95,8 @@
        js/undefined)
      [visible? form-data])
     (when visible?
-      [:div {:style {:position "fixed" :top 0 :left 0 :right 0 :bottom 0
+      [:div {:data-user-popup-host "true"
+             :style {:position "fixed" :top 0 :left 0 :right 0 :bottom 0
                      :background "rgba(0,0,0,0.45)" :zIndex 1050
                      :display "flex" :justifyContent "center" :alignItems "flex-start"}}
        [:div {:style {:background "var(--ant-color-bg-container, #fff)" :padding "24px 24px 26px" :borderRadius 4 :width 700 :marginTop 76

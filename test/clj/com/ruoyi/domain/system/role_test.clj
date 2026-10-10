@@ -130,3 +130,27 @@
   (testing "获取角色权限标识"
     (let [result (role/get-role-perms mock-service 1)]
       (is (set? result)))))
+
+(deftest integer-boundaries-test
+  (let [calls (atom [])
+        query (fn [operation params]
+                (swap! calls conj [operation params])
+                (when (= operation :last-insert-rowid) {:last_insert_rowid 3}))
+        service {:query-fn query}]
+    (testing "创建角色的顺序和关联菜单 ID 接受浏览器字符串"
+      (role/create-role! service {:role_name "测试" :role_key "test" :role_sort "7" :menu-ids ["1"]})
+      (is (= 7 (:role_sort (second (first @calls)))))
+      (is (= [:insert-role-menu! {:role_id 3 :menu_id 1}] (last @calls))))
+    (testing "部分更新保留 nil，角色 ID 与关联 ID 规范为整数"
+      (reset! calls [])
+      (role/update-role! service {:role-id "3" :status "1"})
+      (is (= 3 (:role_id (second (first @calls)))))
+      (is (nil? (:role_sort (second (first @calls)))))
+      (role/select-auth-user-all! service {:role-id "3" :user-ids ["8"]})
+      (is (= [:insert-user-role! {:role_id 3 :user_id 8}] (last @calls)))
+      (role/set-data-scope! service "3" "2" ["100"])
+      (is (= [:insert-role-dept! {:role_id 3 :dept_id 100}] (last @calls))))
+    (testing "非法整数返回业务错误而不是数据库异常"
+      (doseq [value ["bad" "1.5" 1.5 "2147483648"]]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"必须是整数"
+                              (role/update-role! service {:role-id 3 :role_sort value})))))))

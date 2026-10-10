@@ -45,6 +45,7 @@
      {:style (merge {:width "100%"} (:style props))
       :placeholder (or placeholder "请选择部门")
       :allowClear (if (false? allow-clear?) false true)
+      :getPopupContainer (:getPopupContainer props)
       :showSearch true
       :treeDefaultExpandAll true
       :loading loading?
