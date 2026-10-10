@@ -34,8 +34,8 @@
 (defn- changed-source! [file content]
   (let [previous (.lastModified ^File file)]
     (spit file content)
-    ;; tools.namespace uses mtimes; do not depend on filesystem clock resolution.
-    (when-not (.setLastModified ^File file (+ previous 2000))
+    ;; Must be newer than the scan, not just the pre-JVM file creation time.
+    (when-not (.setLastModified ^File file (+ (max previous (System/currentTimeMillis)) 2000))
       (throw (ex-info "无法更新临时源码时间戳" {})))))
 
 (defn- ensure! [condition message]
@@ -58,8 +58,8 @@
 (defn- exercise-reloads! [root]
   (require 'reload-fixture.routes)
   (let [sentinels (zipmap [dev/nrepl-key :server/http :db.sql/connection
-                          :cronut/scheduler :fixture/business-state]
-                         (repeatedly 5 #(Object.)))
+                           :cronut/scheduler :fixture/business-state]
+                          (repeatedly 5 #(Object.)))
         system (merge (ig/init (memory-config)) {:system/env :dev} sentinels)
         entry (:handler/ring system)
         controller (io/file root "reload_fixture/controller.clj")
