@@ -161,7 +161,7 @@
           "×"]]
         [:div {:style {:display "flex" :flexDirection "column" :gap 10}}
          [:span {:style {:fontSize 14 :color "var(--app-text-regular)"}} "角色"]
-         [antd/select {:mode "multiple"
+         [antd/select {:mode "multiple" :optionFilterProp "children"
                        :placeholder "请选择角色"
                        :allowClear true
                        :value selected-role-ids

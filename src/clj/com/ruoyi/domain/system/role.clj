@@ -1,8 +1,33 @@
 (ns com.ruoyi.domain.system.role
   "角色领域服务，处理角色 CRUD、菜单授权与数据权限。"
   (:require
+   [clojure.string :as str]
    [com.ruoyi.domain.paging :as paging]
-   [com.ruoyi.infra.db :as db]))
+   [com.ruoyi.infra.db :as db]
+   [com.ruoyi.infra.errors :as errors]))
+
+(defn- integer-field [field value]
+  (when (some? value)
+    (let [number (cond
+                   (integer? value) value
+                   (string? value) (parse-long (str/trim value))
+                   :else nil)
+          [lower upper] (if (= field :role_sort)
+                          [Integer/MIN_VALUE Integer/MAX_VALUE]
+                          [Long/MIN_VALUE Long/MAX_VALUE])]
+      (when-not (and (some? number) (<= lower number upper))
+        (errors/fail! (str "角色字段 " (name field) " 必须是整数")))
+      (long number))))
+
+(defn- normalize-integers [params]
+  (reduce (fn [result field]
+            (if (contains? params field)
+              (assoc result field (integer-field field (get params field)))
+              result))
+          params [:role_id :role_sort :menu_id :user_id :dept_id]))
+
+(defn- role-query [query-fn operation params]
+  (query-fn operation (normalize-integers params)))
 
 (defn list-roles
   "查询角色列表(分页,返回 {:rows :total})。"
@@ -13,8 +38,8 @@
 (defn find-role-by-id
   "根据ID查询角色详情，包含关联菜单ID列表。"
   [{:keys [query-fn]} role-id]
-  (when-let [role (query-fn :find-role-by-id {:role_id role-id})]
-    (assoc role :menu-ids (mapv :menu_id (query-fn :list-menus-by-role-id {:role_id role-id})))))
+  (when-let [role (role-query query-fn :find-role-by-id {:role_id role-id})]
+    (assoc role :menu-ids (mapv :menu_id (role-query query-fn :list-menus-by-role-id {:role_id role-id})))))
 
 (def role-create-defaults
   "创建角色时的默认字段，避免前端未提交隐藏字段导致 HugSQL 参数缺失。"
@@ -41,81 +66,84 @@
 (defn create-role!
   "创建角色并绑定菜单权限。"
   [{:keys [query-fn db]} {:keys [menu-ids] :as params}]
-  (let [role-id (db/insert-and-get-id! query-fn db :create-role! (apply-create-defaults params))]
+  (let [menu-ids (mapv #(integer-field :menu_id %) menu-ids)
+        role-id (db/insert-and-get-id! query-fn db :create-role! (normalize-integers (apply-create-defaults params)))]
     (doseq [m-id menu-ids]
-      (query-fn :insert-role-menu! {:role_id role-id :menu_id m-id}))
+      (role-query query-fn :insert-role-menu! {:role_id role-id :menu_id m-id}))
     role-id))
 
 (defn update-role!
   "更新角色及菜单权限。"
   [{:keys [query-fn]} {:keys [role-id menu-ids] :as params}]
-  ;; 更新角色基本信息（只保留实际字段）
-  (let [role-params (merge {:role_name nil :role_key nil :role_sort nil :data_scope nil
-                            :menu_check_strictly nil :dept_check_strictly nil
-                            :status nil :remark nil}
-                           (select-keys params [:role_name :role_key :role_sort :data_scope
-                                                :menu_check_strictly :dept_check_strictly
-                                                :status :remark])
-                           {:role_id role-id})]
-    (query-fn :update-role! role-params))
-  ;; 更新菜单权限
-  (when menu-ids
-    (query-fn :delete-role-menus! {:role_id role-id})
-    (doseq [m-id menu-ids]
-      (query-fn :insert-role-menu! {:role_id role-id :menu_id (if (string? m-id) (parse-long m-id) m-id)})))
-  role-id)
+  (let [role-id (integer-field :role_id role-id)
+        menu-ids (when menu-ids (mapv #(integer-field :menu_id %) menu-ids))]
+    ;; 更新角色基本信息（只保留实际字段）
+    (let [role-params (merge {:role_name nil :role_key nil :role_sort nil :data_scope nil
+                              :menu_check_strictly nil :dept_check_strictly nil
+                              :status nil :remark nil}
+                             (select-keys params [:role_name :role_key :role_sort :data_scope
+                                                  :menu_check_strictly :dept_check_strictly
+                                                  :status :remark])
+                             {:role_id role-id})]
+      (role-query query-fn :update-role! role-params))
+    ;; 更新菜单权限
+    (when menu-ids
+      (role-query query-fn :delete-role-menus! {:role_id role-id})
+      (doseq [m-id menu-ids]
+        (role-query query-fn :insert-role-menu! {:role_id role-id :menu_id m-id})))
+    role-id))
 
 (defn delete-role!
   "逻辑删除角色。"
   [{:keys [query-fn]} role-id]
-  (query-fn :delete-role! {:role_id role-id}))
+  (role-query query-fn :delete-role! {:role_id role-id}))
 
 (defn list-allocated-users
   "查询已分配该角色的用户列表。"
   [{:keys [query-fn]} {:keys [role-id user-name phonenumber]}]
-  (query-fn :list-users-by-role {:role_id role-id :user_name user-name :phonenumber phonenumber}))
+  (role-query query-fn :list-users-by-role {:role_id role-id :user_name user-name :phonenumber phonenumber}))
 
 (defn list-unallocated-users
   "查询未分配该角色的用户列表。"
   [{:keys [query-fn]} {:keys [role-id user-name phonenumber]}]
-  (query-fn :list-users-not-in-role {:role_id role-id :user_name user-name :phonenumber phonenumber}))
+  (role-query query-fn :list-users-not-in-role {:role_id role-id :user_name user-name :phonenumber phonenumber}))
 
 (defn cancel-auth-user!
   "取消用户角色授权。"
   [{:keys [query-fn]} {:keys [role-id user-id]}]
-  (query-fn :delete-user-role! {:role_id role-id :user_id user-id}))
+  (role-query query-fn :delete-user-role! {:role_id role-id :user_id user-id}))
 
 (defn cancel-auth-user-all!
   "批量取消用户角色授权。"
   [{:keys [query-fn]} {:keys [role-id user-ids]}]
   (doseq [uid user-ids]
-    (query-fn :delete-user-role! {:role_id role-id :user_id uid})))
+    (role-query query-fn :delete-user-role! {:role_id role-id :user_id uid})))
 
 (defn select-auth-user-all!
   "批量授权用户角色（批量插入）。"
   [{:keys [query-fn]} {:keys [role-id user-ids]}]
   (doseq [uid user-ids]
-    (query-fn :insert-user-role! {:role_id role-id :user_id uid})))
+    (role-query query-fn :insert-user-role! {:role_id role-id :user_id uid})))
 
 (defn dept-tree-by-role
   "角色数据权限弹窗用:全部部门(平铺,前端组树)+ 该角色自定义范围里已勾选的部门。"
   [{:keys [query-fn]} role-id]
-  {:depts (query-fn :list-depts {:status nil :dept_name nil})
-   :checked-keys (mapv :dept_id (query-fn :list-role-dept-ids {:role_id role-id}))})
+  {:depts (role-query query-fn :list-depts {:status nil :dept_name nil})
+   :checked-keys (mapv :dept_id (role-query query-fn :list-role-dept-ids {:role_id role-id}))})
 
 (defn set-data-scope!
   "设置角色数据范围(见 domain.system.data-scope);自定义(\"2\")时保存所选部门,其它范围清空自定义部门。"
   [{:keys [query-fn] :as svc} role-id data-scope dept-ids]
   (update-role! svc {:role-id role-id :data_scope data-scope})
-  (query-fn :delete-role-depts! {:role_id role-id})
+  (role-query query-fn :delete-role-depts! {:role_id role-id})
   (when (= "2" data-scope)
     (doseq [dept-id (distinct dept-ids)]
-      (query-fn :insert-role-dept! {:role_id role-id :dept_id dept-id}))))
+      (role-query query-fn :insert-role-dept! {:role_id role-id :dept_id dept-id}))))
 
 (defn get-role-perms
   "获取角色的所有权限标识。"
   [{:keys [query-fn]} role-id]
-  (->> (query-fn :list-menus-by-role-id {:role_id role-id})
+  (->> (role-query query-fn :list-menus-by-role-id {:role_id role-id})
        (map :perms)
        (remove nil?)
        (remove empty?)

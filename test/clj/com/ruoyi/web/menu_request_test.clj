@@ -33,7 +33,7 @@
                (select-keys (get-in (call :get path nil headers) [:json :data])
                             [:parent_id :order_num :is_frame :is_cache])))
         (is (= 200 (get-in (call :put path (assoc fields :order_num "9" :is_frame "1" :is_cache "0") headers)
-                            [:json :code])))
+                           [:json :code])))
         (is (= {:order_num 9 :is_frame 1 :is_cache 0}
                (select-keys (get-in (call :get path nil headers) [:json :data])
                             [:order_num :is_frame :is_cache])))

@@ -61,6 +61,10 @@ test('菜单：UI 新增目录、回显、修改、删除及路由字段读回',
   modal = page.getByRole('dialog', { name: '修改菜单' });
   await expect(modal.getByPlaceholder('请输入路由地址')).toHaveValue(name);
   await expect(modal.getByRole('radio', { name: '隐藏', exact: true })).toBeChecked();
+  await expect(modal.locator('#is_frame').getByRole('radio', { name: '否', exact: true })).toBeChecked();
+  await expect(modal.locator('#is_cache').getByRole('radio', { name: '否', exact: true })).toBeChecked();
+  await modal.locator('#is_frame').getByRole('radio', { name: '是', exact: true }).check();
+  await modal.locator('#is_cache').getByRole('radio', { name: '是', exact: true }).check();
   await modal.getByPlaceholder('请输入菜单名称').fill(updated);
   await modal.getByPlaceholder('请输入路由地址').fill(updated);
   await modal.getByRole('radio', { name: '停用', exact: true }).check();

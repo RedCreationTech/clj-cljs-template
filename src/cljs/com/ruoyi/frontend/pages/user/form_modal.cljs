@@ -37,11 +37,11 @@
      [antd/radio {:value "0"} "正常"]
      [antd/radio {:value "1"} "停用"]]]
    [antd/form-item {:style {:marginBottom 0} :label "岗位" :name "posts"}
-    [antd/select {:mode "multiple" :placeholder "请选择岗位" :allowClear true :style {:minHeight 42}}
+    [antd/select {:mode "multiple" :optionFilterProp "children" :placeholder "请选择岗位" :allowClear true :style {:minHeight 42}}
      (for [post post-options]
        ^{:key (:post_id post)} [antd/select-option {:value (:post_id post)} (:post_name post)])]]
    [antd/form-item {:style {:marginBottom 0} :label "角色" :name "roles"}
-    [antd/select {:mode "multiple" :placeholder "请选择角色" :allowClear true :style {:minHeight 42}}
+    [antd/select {:mode "multiple" :optionFilterProp "children" :placeholder "请选择角色" :allowClear true :style {:minHeight 42}}
      (for [role role-options]
        ^{:key (:role_id role)} [antd/select-option {:value (:role_id role)} (:role_name role)])]]
    [antd/form-item {:style {:gridColumn "1 / -1" :marginBottom 0} :label "备注" :name "remark"}
