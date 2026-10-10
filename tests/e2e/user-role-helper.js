@@ -1,4 +1,4 @@
-const { expect } = require('playwright/test');
+const { test: base, expect, request: playwrightRequest } = require('playwright/test');
 
 async function checked(response) {
   expect(response.ok()).toBeTruthy();
@@ -41,4 +41,30 @@ async function cleanupUserRole(request, headers, username, roleKey) {
   if (failures.length) throw new AggregateError(failures, 'User/role cleanup failed');
 }
 
-module.exports = { checked, adminHeaders, cleanupUserRole };
+// Fixture teardown gets its own timeout and API lifecycle even if the UI test times out.
+const test = base.extend({
+  userRoleCleanup: [async ({ baseURL }, use, testInfo) => {
+    const records = [];
+    await use((headers, username, roleKey) => records.push({ headers, username, roleKey }));
+    if (!records.length) return;
+    const request = await playwrightRequest.newContext({ baseURL, timeout: 10000 });
+    const errors = [];
+    try {
+      for (const { headers, username, roleKey } of records) {
+        try { await cleanupUserRole(request, headers, username, roleKey); }
+        catch (error) { errors.push(error); }
+      }
+    } finally { await request.dispose(); }
+    if (errors.length) {
+      const details = errors.flatMap(error => error.errors || [error])
+        .map(error => error.stack || String(error)).join('\n\n');
+      await testInfo.attach('user-role-cleanup-errors', { body: details, contentType: 'text/plain' });
+      // Keep the original UI failure as the primary diagnosis.
+      if (testInfo.status === testInfo.expectedStatus) {
+        throw new AggregateError(errors, 'User/role cleanup failed');
+      }
+    }
+  }, { timeout: 60000 }],
+});
+
+module.exports = { test, checked, adminHeaders, cleanupUserRole };

@@ -85,7 +85,7 @@
                        (assoc-in [:menus :modal-visible?] true)
                        (assoc-in [:menus :editing?] true)
                        (assoc-in [:menus :editing] (:menu_id data))
-                       (assoc-in [:menus :form-data] data))))
+                       (assoc-in [:menus :form-data] (menu-form/form-values data)))))
 
 (rf/reg-event-fx :menus/submit
                  (fn [{:keys [db]} [_ values]]

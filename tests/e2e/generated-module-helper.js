@@ -84,7 +84,7 @@ async function createInBrowser(page, config, values) {
 async function search(page, config, value) {
   const key = config.fields.find((f) => f.type === 'string' && config.searchCols.includes(f.col));
   if (!key) return;
-  await page.getByPlaceholder('请输入' + key.label, { exact: true }).fill(value);
+  await page.getByPlaceholder('请输入' + key.label, { exact: true }).filter({ visible: true }).fill(value);
   const pending = page.waitForResponse((r) => new URL(r.url()).pathname === endpoint(config)
     && r.request().method() === 'GET' && new URL(r.url()).searchParams.get(key.col) === value);
   await page.getByRole('button', { name: /搜\s*索/ }).first().click();
@@ -182,7 +182,7 @@ async function invalid(page, config) {
 async function typedFilters(page, config, expectedCount) {
   for (const field of config.fields.filter((f) => config.searchCols.includes(f.col)
     && ['int', 'date'].includes(f.type))) {
-    const input = page.getByPlaceholder(field.type === 'int' ? field.label : '请输入' + field.label, { exact: true });
+    const input = page.getByPlaceholder(field.type === 'int' ? field.label : '请输入' + field.label, { exact: true }).filter({ visible: true });
     for (const [value, count] of [[field.type === 'int' ? '7' : '2026-01-09', expectedCount],
       [field.type === 'int' ? '8' : '2026-01-10', 0], ['', expectedCount]]) {
       await input.fill(value);

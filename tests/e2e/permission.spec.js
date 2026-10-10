@@ -1,7 +1,7 @@
-const { test, expect } = require('playwright/test');
+const { expect } = require('playwright/test');
 const { login } = require('./auth-helper');
 const { randomUUID } = require('node:crypto');
-const { checked, adminHeaders, cleanupUserRole } = require('./user-role-helper');
+const { test, checked, adminHeaders } = require('./user-role-helper');
 
 /** 用 admin 建一个只读角色(系统管理 / 用户管理 + 用户查询 / 角色管理)和一个用户。 */
 async function createViewer(request, headers, username) {
@@ -17,10 +17,12 @@ async function createViewer(request, headers, username) {
 }
 
 test.describe('按钮级权限', () => {
-  test('只读用户:列表可见,增删改按钮隐藏;越权接口统一提示', async ({ page, request }) => {
+  test('只读用户:列表可见,增删改按钮隐藏;越权接口统一提示', async ({ page, request, userRoleCleanup }) => {
     const username = `viewer${randomUUID().replaceAll('-', '').slice(0, 12)}`;
     const headers = await adminHeaders(request);
-    try {
+    page.setDefaultTimeout(15000);
+    userRoleCleanup(headers, username, username);
+    {
       await createViewer(request, headers, username);
       await login(page, username, 'viewer123');
       await expect(page.locator('.ant-layout-header').getByText('只读用户')).toBeVisible();
@@ -48,8 +50,6 @@ test.describe('按钮级权限', () => {
       // 未授权的页面:接口 403,统一提示
       await page.goto('/system/post');
       await expect(page.getByText('没有操作权限')).toBeVisible({ timeout: 10000 });
-    } finally {
-      await cleanupUserRole(request, headers, username, username);
     }
   });
 
@@ -63,12 +63,14 @@ test.describe('按钮级权限', () => {
     await expect(adminRow.getByRole('button', { name: /修改/ })).toBeVisible();
   });
 
-  test('角色数据权限:自定义部门可以勾选并保存', async ({ page, request }) => {
+  test('角色数据权限:自定义部门可以勾选并保存', async ({ page, request, userRoleCleanup }) => {
     await login(page);
     // 用新建的角色,保证可重复运行
     const headers = await adminHeaders(request);
     const key = `scope${randomUUID().replaceAll('-', '').slice(0, 12)}`;
-    try {
+    page.setDefaultTimeout(15000);
+    userRoleCleanup(headers, null, key);
+    {
       await checked(await request.post('/api/system/role', {
         headers,
         data: { role_name: `范围${key}`, role_key: key, role_sort: 99, status: '0', 'menu-ids': [] },
@@ -91,8 +93,6 @@ test.describe('按钮级权限', () => {
       await expect(dialog.getByRole('radio', { name: '自定义数据' })).toBeChecked();
       await expect(dialog.locator('.ant-tree-treenode-checkbox-checked', { hasText: '财务部门' })).toBeVisible();
       await dialog.getByRole('button', { name: /^(取 ?消|Cancel)$/ }).click();
-    } finally {
-      await cleanupUserRole(request, headers, null, key);
     }
   });
 });

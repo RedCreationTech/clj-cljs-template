@@ -17,3 +17,9 @@
         (is (= parent-id (get-in effects [:api/create-menu :parent_id])))
         (is (= 0 (get-in effects [:api/create-menu :order_num])))
         (is (nil? (:api/update-menu effects)))))))
+
+(deftest integer-flags-render-in-radio-form-test
+  (is (= {:is_frame "1" :is_cache "0" :parent_id 3}
+         (form/form-values {:is_frame 1 :is_cache 0 :parent_id 3})))
+  (is (= {:is_frame "0" :is_cache "1"}
+         (form/form-values {:is_frame "0" :is_cache "1"}))))
